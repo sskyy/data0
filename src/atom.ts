@@ -1,0 +1,123 @@
+import {
+    activeEffect,
+    shouldTrack,
+    trackEffects,
+    triggerEffects
+} from './effect'
+
+import { TrackOpTypes } from './operations'
+import {createDep, Dep} from "./dep";
+import {def, isStringOrNumber} from "./util";
+import {ReactiveFlags} from "./flags";
+
+export type UpdateFn<T> = (prev: T) => T
+
+export type Atom<T = any> = T & ((newValue?: any| UpdateFn<T>) => any) & { __v_isAtom: boolean }
+
+export type AtomInitialType = any
+
+const refToDepMap = new WeakMap<Atom<any>, Dep>()
+
+export function trackAtomValue(ref: Atom<any>) {
+    if (shouldTrack && activeEffect) {
+        let dep = refToDepMap.get(ref)
+        if (!dep) refToDepMap.set(ref, dep = createDep())
+        if (__DEV__) {
+            trackEffects(dep, {
+                target: ref,
+                type: TrackOpTypes.GET,
+                key: 'value'
+            })
+        } else {
+            trackEffects(dep)
+        }
+    }
+}
+
+export function triggerAtomValue(ref: Atom<any>, newVal?: any) {
+    const dep = refToDepMap.get(ref)
+    if (dep) {
+        triggerEffects(dep, {
+            key: 'value',
+            newValue: newVal
+        })
+    }
+}
+
+
+
+export type AtomInterceptor<T>  = (updater: Updater<T>, h: Handler) => [Updater<T>, Handler]
+
+type Updater<T> = (newValue?: T | UpdateFn<T>) => any
+type Handler = ProxyHandler<object>
+
+export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>)  {
+    let value: typeof initValue|undefined  = initValue
+
+    // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
+    function updater (newValue?: typeof initValue | UpdateFn<typeof initValue>) {
+        if (arguments.length === 0) {
+            trackAtomValue(finalUpdater)
+            return value
+        }
+
+        if(typeof newValue === 'function') {
+            value = newValue!(value)
+        } else {
+            value = newValue
+        }
+
+        triggerAtomValue(finalUpdater, value)
+    }
+
+    const handler:Handler = {
+        get(target, key) {
+            return Reflect.get(typeof value === 'object' ? value : finalUpdater, key)
+        },
+        set(target, key, newValue) {
+            if (typeof value === 'object') {
+                return Reflect.set(value, key, newValue)
+            }
+
+            return false
+        },
+        // TODO 有必要要吗？？？
+        getPrototypeOf(): object | null {
+            if (typeof value === 'object') return Reflect.getPrototypeOf(value as object)
+            return null
+        }
+    }
+
+
+
+    const [finalUpdater, finalHandler] = interceptor ? interceptor(updater, handler) : [updater, handler]
+
+
+    Object.assign( finalUpdater, {
+        [Symbol.toPrimitive](hint: string) {
+            trackAtomValue(finalUpdater)
+            if ((!hint || hint === 'default') && isStringOrNumber(value)) {
+                return value
+            } else if (hint === 'number' && typeof value === 'number' ) {
+                // CAUTION 不支持 string 隐式转 number
+                return value;
+            } else if (hint === 'string'){
+                return isStringOrNumber(value) ? value.toString() : Object.prototype.toString.call(value)
+            }
+
+            return null;
+        }
+    })
+
+
+    def(finalUpdater, ReactiveFlags.IS_ATOM, true)
+
+    return new Proxy(finalUpdater, finalHandler) as Atom<typeof initValue>
+}
+
+export function isAtom<T>(r: Atom<T> | unknown): r is Atom<T>
+export function isAtom(r: any): r is Atom<any> {
+    return !!(r && r.__v_isAtom)
+}
+
+
