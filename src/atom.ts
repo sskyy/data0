@@ -7,7 +7,7 @@ import {
 
 import { TrackOpTypes } from './operations'
 import {createDep, Dep} from "./dep";
-import {def, isStringOrNumber} from "./util";
+import {def, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
 
 export type UpdateFn<T> = (prev: T) => T
@@ -72,7 +72,8 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
     const handler:Handler = {
         get(target, key) {
-            return Reflect.get(typeof value === 'object' ? value : finalUpdater, key)
+            // CAUTION 针对非  class 的对象提供深度的获取的能力
+            return Reflect.get(isPlainObject(value) ? value : finalUpdater, key)
         },
         set(target, key, newValue) {
             if (typeof value === 'object') {

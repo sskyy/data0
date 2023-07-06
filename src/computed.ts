@@ -53,7 +53,16 @@ export class ComputedInternal {
   recomputing = false
   triggerInfos: TriggerInfo[] = []
   onDestroy?: (i: ComputedInternal) => void
-  constructor(public getter: GetterType, public applyPatch?: (computedData: ComputedData, info: TriggerInfo[]) => void,  public dirtyCallback?: DirtyCallback, public callbacks? : CallbacksType) {
+  scheduleRecompute? :DirtyCallback
+  constructor(public getter: GetterType, public applyPatch?: (computedData: ComputedData, info: TriggerInfo[]) => void, scheduleRecompute?: true|DirtyCallback, public callbacks? : CallbacksType) {
+
+    if (typeof scheduleRecompute === 'function') {
+      this.scheduleRecompute = scheduleRecompute
+    } else if(scheduleRecompute === true) {
+      this.immediate = true
+    } else {
+      // CAUTION 完全外部手动控制了
+    }
 
     this.effect = new ReactiveEffect(this.effectRun, (triggerInfo: TriggerInfo) => {
       this.isDirty = true
@@ -63,7 +72,7 @@ export class ComputedInternal {
         this.triggerInfos.push(triggerInfo)
       }
 
-      this.dirtyCallback && this.dirtyCallback(this.recompute)
+      this.scheduleRecompute && this.scheduleRecompute(this.recompute)
     })
     this.effect.computed = this
 
@@ -151,8 +160,8 @@ export class ComputedInternal {
 type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => void
 
 
-export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
-export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) {
+export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: true|DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
+export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: true|DirtyCallback, callbacks? : CallbacksType) {
   const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks)
   return internal.data
 }

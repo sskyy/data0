@@ -104,8 +104,8 @@ export function findIndex() {
 }
 
 
+export function incMap<T>(source: T[], mapFn:(arg0: Atom<T>, index?:Atom<number>) => any) : ReturnType<typeof computed>
 export function incMap<T, U>(source: Map<U, T>, mapFn: (arg0:T, arg1:U) => any) : ReturnType<typeof computed>
-export function incMap<T>(source: T[], mapFn:(arg0: Atom<T>) => any) : ReturnType<typeof computed>
 export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : ReturnType<typeof computed>
 
 
