@@ -1,8 +1,46 @@
-import {UnhandledPlaceholder} from "./DOM";
+import {containerToUnhandled, containerToUnhandledAttr, setAttribute, UnhandledPlaceholder, insertBefore} from "./DOM";
 import {Host} from "./Host";
-import {computed, destroyComputed} from "rata";
-import {renderReactiveChildAndAttr} from "./reactify";
+import {computed, destroyComputed, isAtom, isReactive} from "rata";
+import {createHost} from "./createHost";
 import {removeNodesBetween} from "./util";
+
+
+function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragment) {
+    if (!(result instanceof HTMLElement || result instanceof DocumentFragment)) return
+
+    const unhandledChild = containerToUnhandled.get(result)
+
+    const reactiveHosts:  Host[]=
+        unhandledChild ?
+            unhandledChild.map(({ placeholder, child}) => createHost(child, placeholder)) :
+            []
+
+    const attrComputeds: ReturnType<typeof computed>[] = []
+    const unhandledAttr = containerToUnhandledAttr.get(result)
+    unhandledAttr?.forEach(({ el, key, value}) => {
+        // CAUTION 刚好读 atom 和 function 都是执行函数的写法。
+        if (isAtom(value) || typeof value === 'function') {
+            attrComputeds.push(computed(() => {
+                // if (key === 'value') debugger
+                setAttribute(el, key, value())
+            }, undefined, true))
+
+            // TODO 表单组件，要变成受控的形式，还要考虑值不是 atom 的情况，是不是要写到 DOM 里面？
+            if (key === 'value') {
+
+            }
+
+        } else {
+            throw new Error(`unknown attr ${key}: ${value}`)
+        }
+    })
+
+    return {
+        reactiveHosts,
+        attrComputeds,
+        renderHosts: () => reactiveHosts.forEach(host => host.render())
+    }
+}
 
 export class StaticHost implements Host{
     // CAUTION Component 只因为 props 的引用变化而重新 render。
@@ -19,8 +57,9 @@ export class StaticHost implements Host{
 
     render(): void {
         if (this.element === this.placeholder) {
+            // TODO 这里有问题  fragment 下面第一个 childeNodes 不一定是
             const firstEl = this.source instanceof DocumentFragment ? this.source.childNodes[0] : this.source
-            this.parentElement!.insertBefore(this.source, this.placeholder)
+            insertBefore(this.source, this.placeholder)
             const { reactiveHosts, attrComputeds, renderHosts } = renderReactiveChildAndAttr(this.source)!
             this.reactiveHosts = reactiveHosts
             this.attrComputeds = attrComputeds

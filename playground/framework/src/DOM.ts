@@ -1,4 +1,4 @@
-import { each } from './util'
+import { each, isPlainObject } from './util'
 
 let uuid = 0
 function getId() {
@@ -36,33 +36,34 @@ function eventProxy(this: ExtendedElement, e: Event) {
 
 export type UnhandledPlaceholder = Comment
 
+const selectValueTmp = new WeakMap<ExtendedElement, any>()
+
 
 export function setAttribute(node: ExtendedElement, name: string, value: any, collectUnhandledAttr?: (info: UnhandledAttrInfo) => any, isSvg?: boolean) {
   // 只有 style 允许 object，否则就是不认识的属性
-  if (typeof value === 'object' && name !=='style') {
+  if (isPlainObject(value) && name !=='style') {
     collectUnhandledAttr!({el: node, key: name, value});
     return
   }
 
   // 处理函数
   if (typeof value === 'function' ) {
-    // 只有事件回调允许是函数，否则的话认为是智能节点，外部需要控制
-    if ( !(name[0] === 'o' && name[1] === 'n')){
-      value(node, name, setAttribute)
-    } else {
-      // 事件
-      const useCapture = name !== (name = name.replace(/Capture$/, ''))
-      name = name.toLowerCase().substring(2)
-      if (value) {
-        node.addEventListener(name, eventProxy, useCapture)
-      } else {
-        node.removeEventListener(name, eventProxy, useCapture)
-      }
-
-      (node._listeners || (node._listeners = {}))[name] = value
+    // 只有事件回调允许是函数，否则的话可能是 computed attr/atom，让外部处理
+    if (!(name[0] === 'o' && name[1] === 'n')) {
+      collectUnhandledAttr!({el: node, key: name, value});
+      return
     }
 
-    return
+    // 事件
+    const useCapture = name !== (name = name.replace(/Capture$/, ''))
+    name = name.toLowerCase().substring(2)
+    if (value) {
+      node.addEventListener(name, eventProxy, useCapture)
+    } else {
+      node.removeEventListener(name, eventProxy, useCapture)
+    }
+
+    (node._listeners || (node._listeners = {}))[name] = value
   }
 
   // 剩下的都是能识别的情况了
@@ -72,7 +73,17 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
     // ignore
   } else if (name === 'class' && !isSvg) {
     node.className = value || ''
-  } else if (name === 'style') {
+  } else if(name === 'value') {
+    (node as object).value = value
+    // CAUTION 因为 select 如果 option 还没有渲染（比如 computed 的情况），那么设置 value 就没用，我们这里先存着，
+    //  等 append option children 的时候再 set value 一下
+    if (node.tagName === 'SELECT') {
+      selectValueTmp.set(node, value)
+    } else if (node.tagName === 'OPTION') {
+      // 当 option 的 value 发生变化的时候也要 reset 一下，因为可能这个时候与 select value 相等的 option 才出现
+      resetOptionParentSelectValue(node)
+    }
+  }else if (name === 'style') {
     if (!value || typeof value === 'string') {
       node.style.cssText = value || ''
     }
@@ -155,16 +166,8 @@ export function createElement(type: JSXElementType, props: AttributesArg, ...chi
     return { type, props: { ...props, children }}
   }
 
+
   const unhandledAttr: UnhandledAttrInfo[] = []
-
-
-  if (props) {
-    const collectUnhandledAttr = (info: UnhandledAttrInfo) => {
-      unhandledAttr.push(info)
-    }
-    setAttributes(props, container as HTMLElement, collectUnhandledAttr)
-  }
-
   const unhandledChildren: UnhandledChildInfo[] = []
 
   children && children.forEach((child) => {
@@ -196,19 +199,42 @@ export function createElement(type: JSXElementType, props: AttributesArg, ...chi
     }
   })
 
+
+  // CAUTION 注意这里一定要先处理往 children 再处理自身的 prop，因为像 Select 这样的元素只有在渲染完 option 之后再设置 value 才有效。
+  //  否则会出现  Select value 自动变成 option 第一个的情况。
+  if (props) {
+    const collectUnhandledAttr = (info: UnhandledAttrInfo) => {
+      unhandledAttr.push(info)
+    }
+    setAttributes(props, container as HTMLElement, collectUnhandledAttr)
+  }
+
   // 把 unhandled child/attr 全部收集到顶层的  container 上，等外部处理，这样就不用外部去遍历 jsx 的结果了
   if (unhandledChildren.length) containerToUnhandled.set(container, unhandledChildren)
   if (unhandledAttr) containerToUnhandledAttr.set(container, unhandledAttr)
 
   // TODO props.ref 也改成收集的形式，外部决定合适执行
-
   return container
 }
 
 
 export function Fragment() {}
 
-export default {
-  createElement,
-  Fragment,
+
+function resetOptionParentSelectValue(targetOption: HTMLElement) {
+  const target = targetOption.parentElement
+  if (selectValueTmp.has(target)) {
+    (target as object).value = selectValueTmp.get(target)
+  }
 }
+
+export function insertBefore(newEl: ChildNode|DocumentFragment, refEl: ChildNode|HTMLElement) {
+  const result = refEl.parentElement.insertBefore(newEl, refEl)
+
+  if ((newEl as HTMLElement).tagName === 'OPTION') {
+    resetOptionParentSelectValue(newEl as HTMLElement)
+  }
+
+  return result
+}
+

@@ -1,7 +1,7 @@
-import {UnhandledPlaceholder} from './DOM'
+import {UnhandledPlaceholder, insertBefore} from './DOM'
 import {computed, destroyComputed, TrackOpTypes, TriggerOpTypes} from "rata";
 import { Host } from "./Host";
-import {createHost} from "./reactify";
+import {createHost} from "./createHost";
 
 function getSpliceRemoveLength(argv: any[], length: number) : number {
     // CAUTION 按照 mdn 的定义，splice 第二个参数如果是 undefined 但是后面又有其他参数，就会被转成 0。
@@ -168,7 +168,7 @@ export class FragDOMHandler {
 
         const frag = document.createDocumentFragment()
         frag.replaceChildren(...newEl)
-        this.parentElement.insertBefore(frag, this.placeholder as Node)
+        insertBefore(frag, this.placeholder as ChildNode)
     }
     pop() {
         if (this.placeholder === this.firstEl) return
@@ -194,7 +194,7 @@ export class FragDOMHandler {
 
         const frag = document.createDocumentFragment()
         frag.replaceChildren(...newEl)
-        this.parentElement.insertBefore(frag, this.firstEl)
+        insertBefore(frag, this.firstEl)
 
         this.firstEl = newEl[0]
     }
@@ -221,7 +221,7 @@ export class FragDOMHandler {
 
         const frag = document.createDocumentFragment()
         frag.replaceChildren(...newEl)
-        this.parentElement.insertBefore(frag, pointer)
+        insertBefore(frag, pointer)
 
 
         if (startIndex === 0) {
@@ -240,7 +240,7 @@ export class FragDOMHandler {
             toInsert = newEl
         }
 
-        return this.parentElement.insertBefore(toInsert, refNode.nextSibling!)
+        return insertBefore(toInsert, refNode.nextSibling!)
     }
     insertBefore(newEl:ChildNode|ChildNode[], refNode:ChildNode|Comment) {
         let toInsert: ChildNode|DocumentFragment
@@ -250,7 +250,7 @@ export class FragDOMHandler {
         } else {
             toInsert = newEl
         }
-        return this.parentElement.insertBefore(toInsert, refNode)
+        return insertBefore(toInsert, refNode)
     }
 
     detach() {

@@ -1,5 +1,5 @@
 
-import {createHost} from "./reactify";
+import {createHost} from "./createHost";
 import {ComponentNode} from "../global";
 
 

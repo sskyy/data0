@@ -1,6 +1,6 @@
 import {computed} from "rata";
 import {Host} from "./Host";
-import {createHost} from "./reactify";
+import {createHost} from "./createHost";
 
 // CAUTION 纯粹的动态结构，有变化就重算，未来考虑做 dom diff, 现在不做
 type FunctionNode = () => ChildNode|DocumentFragment|string|number|null|boolean

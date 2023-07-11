@@ -1,10 +1,7 @@
 import {UnhandledPlaceholder} from "./DOM";
 import {Host} from "./Host";
-import {createHost} from "./reactify";
+import {createHost} from "./createHost";
 import {Component, ComponentNode, Props} from "../global";
-
-
-
 
 
 export class ComponentHost implements Host{
@@ -23,6 +20,7 @@ export class ComponentHost implements Host{
     get parentElement() {
         return this.placeholder.parentElement
     }
+    // TODO 需要用 computed 限制一下自己????
     render(): void {
         if (this.element !== this.placeholder) {
             // CAUTION 因为现在没有 diff，所以不可能出现 Component rerender
