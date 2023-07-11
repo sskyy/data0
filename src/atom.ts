@@ -72,10 +72,15 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
     const handler:Handler = {
         get(target, key) {
+            // TODO 是不是也要像 reactive 一样层层包装才行？？？，不然当把这个值传给 dom 元素的时候，它就已经不能被识别出来，也就不能 reactive 了。
+            if (isPlainObject(value)) {
+                trackAtomValue(finalUpdater)
+            }
             // CAUTION 针对非  class 的对象提供深度的获取的能力
             return Reflect.get(isPlainObject(value) ? value : finalUpdater, key)
         },
         set(target, key, newValue) {
+            // CAUTION 注意这里是不 trigger 的
             if (typeof value === 'object') {
                 return Reflect.set(value, key, newValue)
             }

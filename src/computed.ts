@@ -1,18 +1,44 @@
 import {ReactiveEffect, track, TriggerInfo} from './effect'
 import {reactive, ReactiveInterceptor, UnwrapReactive} from './reactive'
 import {Cause} from "./patch";
-import {isReactivableType} from "./util";
+import {isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, AtomInterceptor, isAtom} from "./atom";
 
 
 export function replace(source: any, nextSourceValue: any) {
   if (Array.isArray(source)){
     source.splice(0, source.length, ...nextSourceValue)
-  } else {
+  } else if (isPlainObject(source)){
     const nextKeys = Object.keys(nextSourceValue)
     const keysToDelete = Object.keys(source).filter(k => !nextKeys.includes(k))
-    keysToDelete.forEach(k => delete source[k])
+    // FIXME
+    // @ts-ignore
+    keysToDelete.forEach((k) => delete source[k])
     Object.assign(source, nextSourceValue)
+  } else if (source instanceof Map) {
+
+    for(const key of source.keys()) {
+      if (nextSourceValue.has(key)) {
+        source.set(key, nextSourceValue.get(key))
+      } else {
+        source.delete(key)
+      }
+    }
+
+    for(const key of nextSourceValue.keys()) {
+      if (!source.has(key)) {
+        source.set(key, nextSourceValue.get(key))
+      }
+    }
+
+  } else if (source instanceof Set){
+    source.forEach((item: any) => {
+     if (!nextSourceValue.has(item)) source.delete(item)
+    })
+
+    nextSourceValue.forEach((item: any) => {
+      if (!source.has(item)) source.add(item)
+    })
   }
 }
 
@@ -54,11 +80,11 @@ export class ComputedInternal {
   triggerInfos: TriggerInfo[] = []
   onDestroy?: (i: ComputedInternal) => void
   scheduleRecompute? :DirtyCallback
-  constructor(public getter: GetterType, public applyPatch?: (computedData: ComputedData, info: TriggerInfo[]) => void, scheduleRecompute?: true|DirtyCallback, public callbacks? : CallbacksType) {
+  constructor(public getter: GetterType, public applyPatch?: (computedData: ComputedData, info: TriggerInfo[]) => void, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
 
     if (typeof scheduleRecompute === 'function') {
       this.scheduleRecompute = scheduleRecompute
-    } else if(scheduleRecompute === true) {
+    } else if(scheduleRecompute === undefined) {
       this.immediate = true
     } else {
       // CAUTION 完全外部手动控制了

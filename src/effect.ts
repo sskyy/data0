@@ -317,7 +317,6 @@ export function trigger(
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
   const {key, newValue, oldValue} = info
-
   const depsMap = targetMap.get(target)
   if (!depsMap) {
     // never been tracked

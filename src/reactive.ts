@@ -1,4 +1,4 @@
-import { isObject, toRawType, def } from './util'
+import {isObject, toRawType, def, isPlainObject} from './util'
 import { mutableHandlers} from './baseHandlers'
 import { CollectionTypes, mutableCollectionHandlers,} from './collectionHandlers'
 import type {  Atom } from './atom'
@@ -123,8 +123,9 @@ export function markRaw<T extends object>(
   return value
 }
 
+// FIXME 类型问题
 export const toReactive = <T extends unknown>(value: T): T =>
-  isObject(value) ? reactive(value) : value
+  isPlainObject(value) ? reactive(value) as T: value
 
 
 

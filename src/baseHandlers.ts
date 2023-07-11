@@ -12,10 +12,21 @@ import {ReactiveFlags} from './flags'
 
 import {TrackOpTypes, TriggerOpTypes,} from './operations'
 import {ITERATE_KEY, pauseTracking, resetTracking, track, trigger,} from './effect'
-import {def, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isPlainObject, isSymbol, makeMap} from './util'
+import {
+  def,
+  hasChanged,
+  hasOwn,
+  isArray,
+  isArrayMethod,
+  isIntegerKey,
+  isObject,
+  isPlainObject,
+  isSymbol,
+  makeMap
+} from './util'
 import {Atom, isAtom, UpdateFn} from "./atom";
 
-export const isNonTrackableKeys = /*#__PURE__*/ makeMap(`__proto__,__v_isAtom,${ReactiveFlags.IS_REACTIVE}}`)
+export const isNonTrackableKeys = /*#__PURE__*/ makeMap(`constructor,__proto__,__v_isAtom,${ReactiveFlags.IS_REACTIVE}}`)
 
 export const builtInSymbols = new Set(
   /*#__PURE__*/
@@ -132,12 +143,18 @@ function createGetter(isReadonly = false, shallow = false) {
 
     const res = Reflect.get(target, key, receiver)
 
+
+    if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(key as string))) {
+      if (key === 'length' && window.reading) debugger
+      track(target, TrackOpTypes.GET, key)
+    }
+
     // CAUTION 注意这里对于 !isPlainObject 的对象我们也直接返回，而不包装成 atom 或者 reactive，因为它自己内部可以继续 reactive 化
-    if ((isObject(res) && !isPlainObject(res)) || targetIsArray && (!isIntegerKey(key)) || (isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key))) {
+    if ((isObject(res) && !isPlainObject(res)) || targetIsArray && (!isIntegerKey(key)) || isNonTrackableStringOrSymbolKey(key)) {
       return res
     }
 
-    track(target, TrackOpTypes.GET, key)
+
 
     if (isAtom(res)) {
       return res

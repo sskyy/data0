@@ -2,6 +2,8 @@
 import {computed, ComputedData, destroyComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom} from "./atom";
+import {isReactive} from "./reactive";
+import {pauseTracking, resetTracking} from "./effect";
 
 
 const atomIndexMap = new Map<any[], {depCount:number, computed?: ReturnType<typeof computed>, indexes: Atom<number>[]}>()
@@ -12,6 +14,7 @@ function getSpliceRemoveLength(argv: any[], length: number) : number {
     const argv1 = argv1NotUndefined < 0 ? 0 : argv1NotUndefined
     return argv1 !== Infinity ? argv1: (length - (argv![0] as number))
 }
+
 
 function getAtomIndexOfArray(source: any[]) {
     if (!Array.isArray(source)) throw new Error('only array source can have atom indexes')
@@ -77,9 +80,18 @@ function removeAtomIndexDep(source: any[]) {
 }
 
 
+type PlainObject = {[k: string]: any}
 // 监听增删改
-export function incIndexBy() {
-
+// TODO
+export function incIndexBy<T>(source: T[], propName: string|((arg0: T) => any)) {
+    return computed(() => {
+        const result = new Map<any, T>()
+        source.forEach((item) => {
+            const key = typeof propName === 'function' ? propName(item) : (item as PlainObject)[propName]
+            result.set(key, item)
+        })
+        return result
+    })
 }
 
 
@@ -113,10 +125,26 @@ export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : ReturnType<
 
 export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
 
-    let cache: any
-    // CAUTION 一定要放在这里，因为要比下面的 computed 先建立才会先计算，才能被下面的 computed 依赖。
-    const indexes = Array.isArray(source) ? getAtomIndexOfArray(source) : undefined
+    if (!isReactive(source)) {
+        if (Array.isArray(source)) {
+            return source.map(mapFn)
+        } else if (source instanceof Map){
+            return new Map(Object.entries(source).map(([key, value]) => [key, mapFn(value, key)]))
+        } else if (source instanceof Set) {
+            return new Set(Array.from(source as Set<any>).map(mapFn))
+        } else {
+            throw new Error('unknown source type for incMap')
+        }
+    }
 
+
+    let cache: any
+
+    // CAUTION 一定要放在这里，因为要比下面的 computed 先建立才会先计算，才能被下面的 computed 依赖。
+    // CAUTION 因为 getAtomIndexOfArray 里面读了 source，会使得 track 泄露出去。所以一定要 pauseTracking
+    pauseTracking()
+    const indexes = Array.isArray(source) ? getAtomIndexOfArray(source) : undefined
+    resetTracking()
     return computed(
         function computation(track) {
             // TODO 应该自动写了
@@ -235,5 +263,29 @@ export function incWeakMap() {
 
 
 
+// TODO 要做 incremental 的话还要做每个元素的计数，才能处理 remove 的情况
+export function incUnique(source: any[]) : ReturnType<typeof computed>{
+    return computed(
+        function getUniqueSet() {
+            new Set<any>(source)
+        }
+    )
+}
+
+
+// TODO pick 所有对象的指定属性，相当于封装的 incMap
+export function incPick(source: any[], propName: string) : ReturnType<typeof computed>{
+    return incMap(source, (item) => item[propName])
+}
+
+// TODO
+type AssertFn = (item: any, index: number) => boolean
+export function incEvery(source: any[], assert: AssertFn) : ReturnType<typeof computed>{
+    return computed(() => source.every(assert))
+}
+
+export function incSome(source: any[], assert:AssertFn) : ReturnType<typeof computed>{
+    return computed(() => source.some(assert))
+}
 
 

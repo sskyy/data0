@@ -3,4 +3,4 @@ export  { atom, isAtom, type Atom } from './atom'
 export { computed, type ComputedData, destroyComputed } from './computed'
 export {TrackOpTypes, TriggerOpTypes} from "./operations";
 
-export { incMap} from './incremental'
+export * from './incremental'
