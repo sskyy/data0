@@ -75,6 +75,8 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
     node.className = value || ''
   } else if(name === 'value') {
     (node as object).value = value
+
+
     // CAUTION 因为 select 如果 option 还没有渲染（比如 computed 的情况），那么设置 value 就没用，我们这里先存着，
     //  等 append option children 的时候再 set value 一下
     if (node.tagName === 'SELECT') {
@@ -82,7 +84,25 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
     } else if (node.tagName === 'OPTION') {
       // 当 option 的 value 发生变化的时候也要 reset 一下，因为可能这个时候与 select value 相等的 option 才出现
       resetOptionParentSelectValue(node)
+    } else  if (node.tagName === 'INPUT' && (node as object).type === 'checkbox') {
+      // checkbox 也支持用 value ，这样容易统一 api
+      if (value) {
+        node.setAttribute('checked', 'true')
+      } else {
+        node.removeAttribute('checked')
+      }
+    } else if (node.tagName === 'INPUT' && (node as object).type === 'text' && value === undefined) {
+      // 特殊处理一下 input value 为 undefined 的情况
+      (node as object).value = ''
     }
+  } else if (name === 'checked' && node.tagName === 'INPUT' && (node as object).type === 'checkbox') {
+    // checkbox 的 checked 支持用 boolean 表示
+    if (value) {
+      node.setAttribute('checked', 'true')
+    } else {
+      node.removeAttribute('checked')
+    }
+
   }else if (name === 'style') {
     if (!value || typeof value === 'string') {
       node.style.cssText = value || ''
@@ -121,7 +141,7 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
       node.setAttributeNS('http://www.w3.org/1999/xlink', name.toLowerCase(), value)
 
     } else {
-      console.warn(`unknown attr: ${name}: ${value}`)
+      node.setAttribute(name, value)
     }
   }
 }
@@ -229,7 +249,7 @@ function resetOptionParentSelectValue(targetOption: HTMLElement) {
 }
 
 export function insertBefore(newEl: ChildNode|DocumentFragment, refEl: ChildNode|HTMLElement) {
-  const result = refEl.parentElement.insertBefore(newEl, refEl)
+  const result = refEl.parentElement!.insertBefore!(newEl, refEl)
 
   if ((newEl as HTMLElement).tagName === 'OPTION') {
     resetOptionParentSelectValue(newEl as HTMLElement)
