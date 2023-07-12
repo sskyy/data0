@@ -3,6 +3,7 @@ import { mutableHandlers} from './baseHandlers'
 import { CollectionTypes, mutableCollectionHandlers,} from './collectionHandlers'
 import type {  Atom } from './atom'
 import {ReactiveFlags} from "./flags";
+import {createName} from "./debug";
 
 export interface Target {
   [ReactiveFlags.SKIP]?: boolean
@@ -49,7 +50,6 @@ export type ReactiveInterceptor= (a0: any, a1: any, a2: any, a3: any, a4: any) =
 
 export function reactive<T extends object>(target: T, intercept?: ReactiveInterceptor): UnwrapReactive<T>
 export function reactive(target: object, intercept?: ReactiveInterceptor) {
-
   const args = [
     target,
     false,
@@ -58,11 +58,11 @@ export function reactive(target: object, intercept?: ReactiveInterceptor) {
     reactiveMap
   ] as const
 
-
   const finalArgs: typeof args = intercept ? intercept(...args): args
-
   return createReactiveObject(...finalArgs)
 }
+
+reactive.as = createName(reactive)
 
 
 type Primitive = string | number | boolean | bigint | symbol | undefined | null

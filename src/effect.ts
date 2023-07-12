@@ -9,7 +9,9 @@ import {
   newTracked,
   wasTracked
 } from './dep'
-import {ComputedInternal} from "./computed";
+import {ComputedInternal, getComputedGetter, isComputed} from "./computed";
+import {isAtom} from "./atom";
+import {toRaw} from "./reactive";
 
 // The main WeakMap that stores {target -> key -> dep} connections.
 // Conceptually, it's easier to think of a dependency as a Dep class
@@ -310,6 +312,10 @@ export function trackEffects(
   }
 }
 
+
+export const triggerStack: {type?: string, debugTarget: any, opType?: TriggerOpTypes, key?:unknown, oldValue?: unknown, newValue?: unknown}[] = []
+export type TriggerStack = typeof triggerStack
+
 export function trigger(
   target: object,
   type: TriggerOpTypes,
@@ -322,6 +328,19 @@ export function trigger(
     // never been tracked
     return
   }
+
+  if (__DEV__) {
+    const getter = getComputedGetter(target)
+    triggerStack.push({
+      debugTarget: getter? getter : isAtom(target) ? target: toRaw(target),
+      type: isAtom(target) ? 'atom' : isComputed(target) ? 'computed' : 'reactive',
+      opType: type,
+      key: info.key,
+      newValue: info.newValue,
+      oldValue: info.oldValue
+    })
+  }
+
 
   let deps: (Dep | undefined)[] = []
   if (type === TriggerOpTypes.CLEAR) {
@@ -400,6 +419,10 @@ export function trigger(
     } else {
       triggerEffects(createDep(effects), info)
     }
+  }
+
+  if (__DEV__) {
+    triggerStack.pop()
   }
 }
 

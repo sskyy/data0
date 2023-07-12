@@ -145,7 +145,6 @@ function createGetter(isReadonly = false, shallow = false) {
 
 
     if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(key as string))) {
-      if (key === 'length' && window.reading) debugger
       track(target, TrackOpTypes.GET, key)
     }
 

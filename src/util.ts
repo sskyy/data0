@@ -37,8 +37,8 @@ export const remove = <T>(arr: T[], el: T) => {
     }
 }
 
-export const isArrayMethod = (key: string) => {
-    return Array.prototype.hasOwnProperty(key) && isFunction(Array.prototype[key])
+export const isArrayMethod = (key: string|symbol) => {
+    return Array.prototype.hasOwnProperty(key) && isFunction(Reflect.get(Array.prototype, key))
 }
 
 const hasOwnProperty = Object.prototype.hasOwnProperty

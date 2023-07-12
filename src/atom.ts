@@ -2,13 +2,14 @@ import {
     activeEffect,
     shouldTrack,
     trackEffects,
-    triggerEffects
+    triggerEffects, triggerStack
 } from './effect'
 
 import { TrackOpTypes } from './operations'
 import {createDep, Dep} from "./dep";
 import {def, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
+import { setDebugName} from "./debug";
 
 export type UpdateFn<T> = (prev: T) => T
 
@@ -34,12 +35,15 @@ export function trackAtomValue(ref: Atom<any>) {
     }
 }
 
-export function triggerAtomValue(ref: Atom<any>, newVal?: any) {
+export function triggerAtomValue(ref: Atom<any>, newValue?: any) {
     const dep = refToDepMap.get(ref)
     if (dep) {
+        if (__DEV__) {
+            triggerStack.push({debugTarget: ref, newValue})
+        }
         triggerEffects(dep, {
             key: 'value',
-            newValue: newVal
+            newValue: newValue
         })
     }
 }
@@ -51,7 +55,8 @@ export type AtomInterceptor<T>  = (updater: Updater<T>, h: Handler) => [Updater<
 type Updater<T> = (newValue?: T | UpdateFn<T>) => any
 type Handler = ProxyHandler<object>
 
-export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>)  {
+
+export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
     let value: typeof initValue|undefined  = initValue
 
     // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
@@ -115,11 +120,22 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
         }
     })
 
+    if (name) {
+        setDebugName(finalUpdater, name)
+    }
 
     def(finalUpdater, ReactiveFlags.IS_ATOM, true)
-
     return new Proxy(finalUpdater, finalHandler) as Atom<typeof initValue>
 }
+
+atom.as = new Proxy({}, {
+    get(p, name: string) {
+        return (initialValue: Parameters<typeof atom>[0], interceptor: Parameters<typeof atom>[1]) => {
+            return atom(initialValue, interceptor, name)
+        }
+    }
+})
+
 
 export function isAtom<T>(r: Atom<T> | unknown): r is Atom<T>
 export function isAtom(r: any): r is Atom<any> {

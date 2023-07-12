@@ -1,8 +1,16 @@
-import {ReactiveEffect, track, TriggerInfo} from './effect'
+import {
+  createDebug,
+  createDebugWithName,
+  getDebugName,
+  isDebugTarget,
+  printTriggerStack,
+} from "./debug";
+import {ReactiveEffect, track, TriggerInfo, triggerStack} from './effect'
 import {reactive, ReactiveInterceptor, UnwrapReactive} from './reactive'
 import {Cause} from "./patch";
 import {isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, AtomInterceptor, isAtom} from "./atom";
+
 
 
 export function replace(source: any, nextSourceValue: any) {
@@ -39,6 +47,8 @@ export function replace(source: any, nextSourceValue: any) {
     nextSourceValue.forEach((item: any) => {
       if (!source.has(item)) source.add(item)
     })
+  } else {
+    throw new Error('unknown source type to replace data')
   }
 }
 
@@ -65,9 +75,11 @@ export type ComputedResult<T extends () => any> = ReturnType<T> extends object ?
 
 export type ComputedData = Atom|UnwrapReactive<any>
 
-
 type GetterType = (trackOnce?: typeof track ) => any
 type DirtyCallback = (recompute: (force?: boolean) => void) => void
+
+
+
 
 // TODO 为了进一步提高性能，应该允许用于自定义一个合并 triggerInfo 的函数
 export class ComputedInternal {
@@ -168,6 +180,14 @@ export class ComputedInternal {
   recompute = (forceRecompute = false) => {
     if (!this.isDirty || this.recomputing) return
 
+    if (__DEV__) {
+      if (isDebugTarget(this.getter)) {
+        printTriggerStack(triggerStack)
+        console.log(getDebugName(this.getter))
+        debugger
+      }
+    }
+
     this.recomputing = true
     if (forceRecompute || !this.applyPatch || !this.isPatchable) {
       this.effect.run()
@@ -185,12 +205,14 @@ export class ComputedInternal {
 
 type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => void
 
-
-export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: true|DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
-export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: true|DirtyCallback, callbacks? : CallbacksType) {
+export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
+export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) {
   const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks)
   return internal.data
 }
+
+computed.as = createDebugWithName(computed)
+computed.debug = createDebug(computed)
 
 export function recompute(computedItem: ComputedData, force = false) {
   const internal = computedToInternal.get(computedItem)!
@@ -218,3 +240,12 @@ export function clearCauses(computed: any) {
     causes.length = 0
   }
 }
+
+export function isComputed(target: any) {
+  return !!computedToInternal.get(target)
+}
+
+export function getComputedGetter(target: any) {
+  return computedToInternal.get(target)?.getter
+}
+
