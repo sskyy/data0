@@ -56,14 +56,18 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
 
     // 事件
     const useCapture = name !== (name = name.replace(/Capture$/, ''))
-    name = name.toLowerCase().substring(2)
+    let eventName = name.toLowerCase().substring(2)
+    // CAUTION 体验改成和 react 的一致
+    if (eventName === 'change') eventName = 'input'
     if (value) {
-      node.addEventListener(name, eventProxy, useCapture)
+      node.addEventListener(eventName, eventProxy, useCapture)
     } else {
-      node.removeEventListener(name, eventProxy, useCapture)
+      node.removeEventListener(eventName, eventProxy, useCapture)
     }
 
-    (node._listeners || (node._listeners = {}))[name] = value
+    (node._listeners || (node._listeners = {}))[eventName] = value
+
+    return
   }
 
   // 剩下的都是能识别的情况了
@@ -243,8 +247,8 @@ export function Fragment() {}
 
 function resetOptionParentSelectValue(targetOption: HTMLElement) {
   const target = targetOption.parentElement
-  if (selectValueTmp.has(target)) {
-    (target as object).value = selectValueTmp.get(target)
+  if (selectValueTmp.has(target as ExtendedElement)) {
+    (target as object).value = selectValueTmp.get(target as ExtendedElement)
   }
 }
 
