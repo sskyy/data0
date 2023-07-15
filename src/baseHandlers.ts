@@ -18,8 +18,7 @@ import {
   hasOwn,
   isArray,
   isArrayMethod,
-  isIntegerKey,
-  isObject,
+  isIntegerKey, isObject,
   isPlainObject,
   isSymbol,
   makeMap
@@ -143,27 +142,25 @@ function createGetter(isReadonly = false, shallow = false) {
 
     const res = Reflect.get(target, key, receiver)
 
-
     if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(key as string))) {
       track(target, TrackOpTypes.GET, key)
     }
 
-    // CAUTION 注意这里对于 !isPlainObject 的对象我们也直接返回，而不包装成 atom 或者 reactive，因为它自己内部可以继续 reactive 化
-    if ((isObject(res) && !isPlainObject(res)) || targetIsArray && (!isIntegerKey(key)) || isNonTrackableStringOrSymbolKey(key)) {
+    // CAUTION 注意这里对于 !isPlainObject 的对象我们也直接返回，而不包装成 atom 或者 reactive，因为它自己内部可以继续 reactive 化。
+    //  除非手动指定了要 leafAtom 化，说明它每次更新的时候是想更新 target 上的 key。
+    //  如果用户自己把一个 atom 放了进来。不会再包装一层。
+    if (targetIsArray && (!isIntegerKey(key)) ||
+        (isObject(res) && !isPlainObject(res) && !isTargetLeaf(target, key)) ||
+        isNonTrackableStringOrSymbolKey(key) || isAtom(res)
+    ) {
       return res
     }
 
-
-
-    if (isAtom(res)) {
-      return res
-    }
-
-    if (isObject(res)) {
+    if (isPlainObject(res)) {
       return reactive(res)
     }
 
-    // CAUTION 只有 primitive 的叶子结点要创建 leafAtom，因为它自己没法更新。
+    // CAUTION 只有 primitive  生成的叶子结点都创建 leafAtom，它表示的是更新的时候始终更新的是 target[key] 上的节点，会 trigger key
     // CAUTION 如果是 inCollectionMethodTargets ，说明是内部方法读的，要保证逻辑的正确性所以返回 res。像 splice 等方法
     //  也会访问这个 getter，如果我们放回了 leafAtom，就会导致原本的逻辑不正确了。
     //  不是 inCollectionMethod 说明是用户读的，我们就返回 leafAtom
@@ -171,20 +168,38 @@ function createGetter(isReadonly = false, shallow = false) {
   }
 }
 
+function isTargetLeaf(target: object, key:string|symbol) {
+    return !!leafTargets.get(target)?.has(key)
+}
+
+const leafTargets = new WeakMap<object, Set<string|symbol>>()
+
+export class LeafTarget {
+  constructor(public value:object) {
+  }
+}
+
+export function asLeaf(target: any) {
+  //  primitive 本来就会 leafAtom 化
+  return new LeafTarget(target)
+}
+
 export function isNonTrackableStringOrSymbolKey(key:string |symbol) {
   return isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key)
 }
 
-type LeafType = number | string | undefined | null
+type LeafType = number | string | undefined | null | object
 
 function createLeafAtom(target: Target, key: string|symbol, initValue: LeafType) {
   function getterOrSetter(newValue?: typeof initValue | UpdateFn<typeof initValue>){
+
     if (arguments.length === 0) {
       track(target, TrackOpTypes.GET, key)
       return Reflect.get(target, key)
     }
 
     const oldValue = Reflect.get(target, key)
+    // FIXME 这里没有考虑  leaf 就是 function 的情况？
     if(typeof newValue === 'function') {
       Reflect.set(target, key, newValue(Reflect.get(target, key)))
     } else {
@@ -229,10 +244,18 @@ function createSetter(shallow = false) {
       return false
     }
 
-    value = toRaw(value)
-    if (!isArray(target) && isAtom(oldValue) && !isAtom(value)) {
-      oldValue(value)
-      return true
+    if( isAtom(value)) console.warn(`you are assign an atom to ${key.toString()}`)
+
+    if (value instanceof LeafTarget) {
+      value = value.value
+      let leafOfThisTarget = leafTargets.get(target)
+      if (!leafOfThisTarget) {
+        leafTargets.set(target, (leafOfThisTarget = new Set<string|symbol>()))
+      }
+      leafOfThisTarget.add(key)
+    } else {
+      if (isTargetLeaf(target, key)) throw new Error(`${key} is a leaf, you can only delete it or update it use leafAtom`)
+      value = toRaw(value)
     }
 
     const hadKey =
@@ -264,6 +287,7 @@ function createSetter(shallow = false) {
 }
 
 function deleteProperty(target: object, key: string | symbol): boolean {
+  debugger
   const hadKey = hasOwn(target, key)
   const oldValue = (target as any)[key]
   const result = Reflect.deleteProperty(target, key)

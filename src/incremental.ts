@@ -1,7 +1,7 @@
 // 需要按原来的序，监听增删改
 import {computed, ComputedData, destroyComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {Atom, atom} from "./atom";
+import {Atom, atom, isAtom} from "./atom";
 import {isReactive} from "./reactive";
 import {pauseTracking, resetTracking} from "./effect";
 
@@ -156,7 +156,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 return new Map(Array.from(source.entries()).map(([key, value]) => [key, mapFn(value)]))
             } else if (source instanceof Set) {
                 // CAUTION 这里把每个元素都 atom 化了
-                cache = new WeakMap()
+                cache = new Map()
                 const mappedData = Array.from(source.values()).map((value) => {
                     const data = mapFn(value)
                     cache.set(value, data)
@@ -250,6 +250,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         },
         {
             onDestroy() {
+                cache.clear()
                 removeAtomIndexDep(source)
             }
         }
@@ -265,11 +266,11 @@ export function incWeakMap() {
 
 // TODO 要做 incremental 的话还要做每个元素的计数，才能处理 remove 的情况
 export function incUnique(source: any[]) : ReturnType<typeof computed>{
-    return computed(
-        function getUniqueSet() {
-            new Set<any>(source)
-        }
-    )
+    return computed(() => {
+        return new Set(source.map(item => {
+            return isAtom(item) ? item() : item
+        }))
+    })
 }
 
 
@@ -280,12 +281,14 @@ export function incPick(source: any[], propName: string) : ReturnType<typeof com
 
 // TODO
 type AssertFn = (item: any, index: number) => boolean
-export function incEvery(source: any[], assert: AssertFn) : ReturnType<typeof computed>{
-    return computed(() => source.every(assert))
+export function incEvery(source: Set<any>, assert: AssertFn) : ReturnType<typeof computed>
+export function incEvery(source: any[], assert: AssertFn) : ReturnType<typeof computed>
+export function incEvery(source: any, assert: AssertFn) : ReturnType<typeof computed>{
+    const arr = Array.isArray(source) ? source : Array.from(source)
+    return computed(() => arr.every(assert))
+
 }
 
 export function incSome(source: any[], assert:AssertFn) : ReturnType<typeof computed>{
     return computed(() => source.some(assert))
 }
-
-

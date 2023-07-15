@@ -79,7 +79,7 @@ export const toRawType = (value: unknown): string => {
 
 // CAUTION 这个判断不能识别是不是自己创建的对象
 // export const isPlainObject = (val: unknown): val is object => toTypeString(val) === '[object Object]'
-export const isPlainObject = (val: unknown): val is object => val?.constructor === Object
+export const isPlainObject = (val: unknown): val is object => (val?.constructor === Object || val?.constructor === Array )
 
 export const isIntegerKey = (key: unknown) =>
     isString(key) &&

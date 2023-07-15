@@ -96,10 +96,8 @@ export class ComputedInternal {
 
     if (typeof scheduleRecompute === 'function') {
       this.scheduleRecompute = scheduleRecompute
-    } else if(scheduleRecompute === undefined) {
-      this.immediate = true
     } else {
-      // CAUTION 完全外部手动控制了
+      this.immediate = true
     }
 
     this.effect = new ReactiveEffect(this.effectRun, (triggerInfo: TriggerInfo) => {
@@ -205,6 +203,7 @@ export class ComputedInternal {
 
 type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => void
 
+// export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) {
   const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks)

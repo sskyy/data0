@@ -57,6 +57,8 @@ type Handler = ProxyHandler<object>
 
 
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
+    if (isAtom(initValue)) throw new Error('cant wrap atom inside atom')
+
     let value: typeof initValue|undefined  = initValue
 
     // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
