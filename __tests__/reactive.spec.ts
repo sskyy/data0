@@ -66,3 +66,57 @@ describe('array reactive', () => {
         arr.splice(1,1)
     })
 })
+
+describe('reactive leaf', () => {
+    test('return leaf atom if leaf is primitive', () => {
+        const arr = reactive([1, '2'])
+        expect(typeof arr[0]).toBe('function')
+        expect((arr[0] as Atom<number>)()).toBe(1)
+        expect(typeof arr[1]).toBe('function')
+        expect((arr[1] as Atom<string>)()).toBe('2');
+
+        (arr[0] as Atom<number>)(2);
+        (arr[1] as Atom<string>)('3')
+        expect(typeof arr[0]).toBe('function')
+        expect((arr[0] as Atom<number>)()).toBe(2)
+        expect(typeof arr[1]).toBe('function')
+        expect((arr[1] as Atom<string>)()).toBe('3')
+    })
+
+    test('return origin object if leaf is not plainObject', () => {
+        class Test{}
+        const a = new Test()
+        const arr = reactive([1, a])
+        expect(typeof arr[0]).toBe('function')
+        expect((arr[0] as Atom<number>)()).toBe(1)
+
+        expect( arr[1] instanceof Test).toBe(true)
+        expect( typeof arr[1] ).toBe('object')
+        expect( arr[1].constructor ).toBe(Test)
+    })
+
+    test('Map primitive leaf should be atom too', () => {
+        const map = new Map()
+        map.set('a', 1)
+        map.set('b', '2')
+        const rMap = reactive(map)
+        expect(typeof rMap.get('a')).toBe('function')
+        expect((rMap.get('a') as Atom<number>)()).toBe(1)
+        expect(typeof rMap.get('b')).toBe('function')
+        expect((rMap.get('b') as Atom<string>)()).toBe('2');
+    })
+
+    test('Map primitive leaf should be atom too', () => {
+        class Test{}
+        const a = new Test()
+        const map = new Map()
+        map.set('a', a)
+        map.set('b', '2')
+        const rMap = reactive(map)
+        expect(typeof rMap.get('a')).toBe('object')
+        expect(rMap.get('a').constructor).toBe(Test)
+        expect(typeof rMap.get('b')).toBe('function')
+        expect((rMap.get('b') as Atom<string>)()).toBe('2');
+    })
+
+})
