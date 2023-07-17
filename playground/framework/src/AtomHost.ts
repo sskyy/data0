@@ -30,6 +30,7 @@ export class AtomHost implements Host{
     destroy() {
         destroyComputed(this.computed)
         this.element.remove()
+        this.placeholder.remove()
     }
 
 }

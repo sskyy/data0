@@ -8,7 +8,15 @@ import {FunctionHost} from "./FunctionHost";
 import {StaticHost} from "./StaticHost";
 import {StaticArrayHost} from "./StaticArrayHost";
 
+class EmptyHost implements Host{
+    element: Text|Comment
+    placeholder:Comment
+    render() { return }
+    destroy() {}
+}
+
 export function createHost(source: any, placeholder: UnhandledPlaceholder) {
+    if (!(placeholder instanceof Comment)) throw new Error('incorrect placeholder type')
     let host:Host
     if ( Array.isArray(source)  ) {
         if(isReactive(source) ) {
@@ -17,7 +25,7 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder) {
             host = new StaticArrayHost(source, placeholder)
         }
 
-    } else if( typeof source === 'object' && typeof source.type === 'function') {
+    } else if( typeof source === 'object' && typeof source?.type === 'function') {
         host = new ComponentHost(source, placeholder)
     } else if (isAtom(source)) {
         host = new AtomHost(source, placeholder)
@@ -25,9 +33,10 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder) {
         host  = new FunctionHost(source, placeholder)
     } else if( source instanceof HTMLElement || source instanceof DocumentFragment || Array.isArray(source)){
         host = new StaticHost(source, placeholder)
+    } else if (source === undefined || source === null){
+        host = new EmptyHost()
     } else {
         throw new Error(`unknown child type ${source}`)
-
     }
 
     return host

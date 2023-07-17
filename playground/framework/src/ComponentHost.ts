@@ -45,5 +45,6 @@ export class ComponentHost implements Host{
     destroy() {
         this.innerHost!.destroy()
         this.onDestroy?.()
+        this.placeholder.remove()
     }
 }

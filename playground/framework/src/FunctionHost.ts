@@ -1,6 +1,7 @@
-import {computed} from "rata";
+import {computed, destroyComputed} from "rata";
 import {Host} from "./Host";
 import {createHost} from "./createHost";
+import {insertBefore} from './DOM'
 
 // CAUTION 纯粹的动态结构，有变化就重算，未来考虑做 dom diff, 现在不做
 type FunctionNode = () => ChildNode|DocumentFragment|string|number|null|boolean
@@ -24,8 +25,10 @@ export class FunctionHost implements Host{
                 }
 
                 const node = this.source()
-                // 就用当前 component 的 placeholder
-                this.innerHost = createHost(node, this.placeholder)
+
+                const newPlaceholder = new Comment('computed node')
+                insertBefore(newPlaceholder, this.placeholder)
+                this.innerHost = createHost(node, newPlaceholder)
                 this.innerHost.render()
 
             this.element = this.innerHost.element
@@ -33,7 +36,8 @@ export class FunctionHost implements Host{
         )
     }
     destroy() {
+        destroyComputed(this.computed)
         this.innerHost!.destroy()
-        // 不需要管元素，因为 innerHost 会管，而且用了我们的 placeholder，所以 placeholder 也会一起处理。
+        this.placeholder.remove()
     }
 }

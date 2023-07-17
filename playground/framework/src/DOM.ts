@@ -107,6 +107,13 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
       node.removeAttribute('checked')
     }
 
+  }else if (name === 'disabled') {
+    if (value) {
+      node.setAttribute('disabled', 'true')
+    } else {
+      node.removeAttribute('disabled')
+    }
+
   }else if (name === 'style') {
     if (!value || typeof value === 'string') {
       node.style.cssText = value || ''
@@ -115,12 +122,8 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
     if (value && typeof value === 'object') {
       each(value, (v, k) => {
         if (value[k] === undefined) {
-          // FIXME
-          // @ts-ignore
           node.style[k] = ''
         } else {
-          // FIXME
-          // @ts-ignore
           node.style[k] = typeof v === 'number' ? (`${v}px`) : v
         }
       })

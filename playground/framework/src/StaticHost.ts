@@ -23,7 +23,7 @@ function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragme
             attrComputeds.push(computed(() => {
                 // if (key === 'value') debugger
                 setAttribute(el, key, value())
-            }, undefined, true))
+            }))
 
             // TODO 表单组件，要变成受控的形式，还要考虑值不是 atom 的情况，是不是要写到 DOM 里面？
             if (key === 'value') {
