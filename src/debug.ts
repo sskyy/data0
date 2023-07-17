@@ -91,16 +91,29 @@ export function setDebugName(target: any, name: string) {
 
 
 export function printTriggerStack(stack: TriggerStack) {
-    console.table(stack.map(({ debugTarget, key, type,opType, newValue, oldValue}) => {
+
+    console.table(stack.map(({ debugTarget, key, type,opType, newValue, oldValue, targetLoc}) => {
         return {
-            name: getDebugName(debugTarget),
-            debugTarget,
+            // name: getDebugName(debugTarget),
+            // debugTarget,
             type,
             opType,
-            key,
-            newValue,
-            oldValue,
+            // key,
+            // newValue,
+            // oldValue,
+            location
         }
     }))
+
+
+    stack.forEach(({ targetLoc}) => {
+        console.group()
+        targetLoc.forEach(([fnName, loc]) => {
+            console.log(`${fnName} : ${loc}`)
+        })
+        console.groupEnd()
+    })
+
+
 }
 

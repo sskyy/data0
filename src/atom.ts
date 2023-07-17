@@ -7,7 +7,7 @@ import {
 
 import { TrackOpTypes } from './operations'
 import {createDep, Dep} from "./dep";
-import {def, isPlainObject, isStringOrNumber} from "./util";
+import {def, getStackTrace, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
 import { setDebugName} from "./debug";
 
@@ -39,7 +39,7 @@ export function triggerAtomValue(ref: Atom<any>, newValue?: any) {
     const dep = refToDepMap.get(ref)
     if (dep) {
         if (__DEV__) {
-            triggerStack.push({debugTarget: ref, newValue})
+            triggerStack.push({debugTarget: ref, newValue, targetLoc: getStackTrace()})
         }
         triggerEffects(dep, {
             key: 'value',
@@ -96,7 +96,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
         },
         // TODO 有必要要吗？？？
         getPrototypeOf(): object | null {
-            if (typeof value === 'object') return Reflect.getPrototypeOf(value as object)
+            if (value && typeof value === 'object') return Reflect.getPrototypeOf(value as object)
             return null
         }
     }

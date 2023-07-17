@@ -193,3 +193,16 @@ export function isStringOrNumber(target: any) {
 export function isReactivableType( data: any ) {
     return isPlainObject(data) || isArray(data)  || isMap(data) || isSet(data)
 }
+
+export const getStackTrace = function() {
+    const obj = {};
+    //@ts-ignore
+    Error.captureStackTrace(obj, getStackTrace);
+    //@ts-ignore
+    return obj.stack.split('\n').slice(1, Infinity).map(line => {
+        const nameAndLoc =  line.replace(/^\s+at\s/, '').split(' ')
+        if (nameAndLoc.length === 1) nameAndLoc.unshift('anonymous')
+        nameAndLoc[1] = nameAndLoc[1].slice(1, nameAndLoc[1].length -1)
+        return nameAndLoc
+    });
+};

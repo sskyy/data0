@@ -1,5 +1,5 @@
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import { extend, isArray, isIntegerKey, isMap, toNumber } from './util'
+import {extend, getStackTrace, isArray, isIntegerKey, isMap, toNumber} from './util'
 import { EffectScope, recordEffectScope } from './effectScope'
 import {
   createDep,
@@ -313,7 +313,7 @@ export function trackEffects(
 }
 
 
-export const triggerStack: {type?: string, debugTarget: any, opType?: TriggerOpTypes, key?:unknown, oldValue?: unknown, newValue?: unknown}[] = []
+export const triggerStack: {type?: string, debugTarget: any, opType?: TriggerOpTypes, key?:unknown, oldValue?: unknown, newValue?: unknown, targetLoc: [string, string][]}[] = []
 export type TriggerStack = typeof triggerStack
 
 export function trigger(
@@ -337,7 +337,8 @@ export function trigger(
       opType: type,
       key: info.key,
       newValue: info.newValue,
-      oldValue: info.oldValue
+      oldValue: info.oldValue,
+      targetLoc: getStackTrace()
     })
   }
 

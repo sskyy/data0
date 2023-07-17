@@ -1,9 +1,10 @@
-import {isObject, toRawType, def, isPlainObject} from './util'
+import {isObject, toRawType, def, isReactivableType, isPlainObject} from './util'
 import { mutableHandlers} from './baseHandlers'
 import { CollectionTypes, mutableCollectionHandlers,} from './collectionHandlers'
 import type {  Atom } from './atom'
 import {ReactiveFlags} from "./flags";
 import {createName} from "./debug";
+import {isAtom} from "./atom";
 
 export interface Target {
   [ReactiveFlags.SKIP]?: boolean
@@ -125,7 +126,8 @@ export function markRaw<T extends object>(
 
 // FIXME 类型问题
 export const toReactive = <T extends unknown>(value: T): T =>
-  isPlainObject(value) ? reactive(value) as T: value
+    // @ts-ignore
+    isReactivableType(value) ? reactive(value) as T: value
 
 
 
@@ -146,3 +148,21 @@ export type UnwrapReactiveLeaf<T> = T extends
     ? UnwrapReactive<T>
     : T
 
+export function rawStructureClone(obj: any, modifier?: (res: any) => any ) {
+  let result
+  if (Array.isArray(obj)) {
+    result = obj.map(i => rawStructureClone(i, modifier))
+  } else  if (obj instanceof Map) {
+    result = new Map(Array.from(obj.entries(), ([key, value]) => [key, rawStructureClone(value, modifier)]))
+  } else  if (obj instanceof Set) {
+    result = new Set(Array.from(obj.values(), x => rawStructureClone(x, modifier)))
+  } else  if( isAtom(obj)) {
+    result = obj()
+  } else if (isPlainObject(obj)) {
+    result = Object.fromEntries(Object.entries(obj).map(([k,v]) => [k, rawStructureClone(v, modifier)]))
+  } else {
+    result = obj
+  }
+
+  return modifier? modifier(result) : result
+}

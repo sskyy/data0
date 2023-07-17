@@ -188,23 +188,17 @@ export function isNonTrackableStringOrSymbolKey(key:string |symbol) {
   return isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key)
 }
 
-type LeafType = number | string | undefined | null | object
+export type LeafType = number | string | undefined | null | object
 
 function createLeafAtom(target: Target, key: string|symbol, initValue: LeafType) {
   function getterOrSetter(newValue?: typeof initValue | UpdateFn<typeof initValue>){
-
     if (arguments.length === 0) {
       track(target, TrackOpTypes.GET, key)
       return Reflect.get(target, key)
     }
 
     const oldValue = Reflect.get(target, key)
-    // FIXME 这里没有考虑  leaf 就是 function 的情况？
-    if(typeof newValue === 'function') {
-      Reflect.set(target, key, newValue(Reflect.get(target, key)))
-    } else {
-      Reflect.set(target, key, newValue)
-    }
+    Reflect.set(target, key, newValue)
 
     trigger(target, TriggerOpTypes.SET,  {key, newValue, oldValue })
     if (!inCollectionMethodTargets.has(toRaw(target))) {
@@ -254,7 +248,7 @@ function createSetter(shallow = false) {
       }
       leafOfThisTarget.add(key)
     } else {
-      if (isTargetLeaf(target, key)) throw new Error(`${key} is a leaf, you can only delete it or update it use leafAtom`)
+      if (isTargetLeaf(target, key)) throw new Error(`${key.toString()} is a leaf, you can only delete it or update it use leafAtom`)
       value = toRaw(value)
     }
 

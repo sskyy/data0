@@ -12,7 +12,7 @@ import {isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, AtomInterceptor, isAtom} from "./atom";
 
 
-
+// TODO 不深度 replace 吗？？？
 export function replace(source: any, nextSourceValue: any) {
   if (Array.isArray(source)){
     source.splice(0, source.length, ...nextSourceValue)
