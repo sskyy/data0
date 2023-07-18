@@ -11,7 +11,8 @@ export default {
   },
   resolve: {
     alias: {
-      'rata': fileURLToPath(new URL('../../src/index.ts', import.meta.url))
+      'rata': fileURLToPath(new URL('../../src/index.ts', import.meta.url)),
+      '@framework': fileURLToPath(new URL('./src/index.ts', import.meta.url))
     }
   },
   server: {

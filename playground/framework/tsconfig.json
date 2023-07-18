@@ -19,7 +19,8 @@
     "types": ["jest/globals", "node"],
     "rootDir": ".",
     "paths": {
-      "rata": ["../../src"]
+      "rata": ["../../src"],
+      "@framework": ["./src"]
     },
     "jsx": "react",
     "jsxFactory": "createElement",
@@ -28,6 +29,9 @@
   "include": [
     "global.d.ts",
     "src",
-    "../../src"
+    "__tests__",
+    "component",
+    "../../src",
+    "./er.tsx"
   ]
 }
