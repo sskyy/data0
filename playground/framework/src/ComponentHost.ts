@@ -4,10 +4,10 @@ import {createHost} from "./createHost";
 import {Component, ComponentNode, Props} from "../global";
 
 
-const componentRenderFrame = []
+const componentRenderFrame: ComponentHost[] = []
 
 export function onDestroy(destroyCallback: () => any) {
-    componentRenderFrame.at(-1).onDestory = destroyCallback
+    componentRenderFrame.at(-1)!.onDestroy = destroyCallback
 }
 
 export class ComponentHost implements Host{

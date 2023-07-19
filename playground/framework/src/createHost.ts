@@ -9,8 +9,8 @@ import {StaticHost} from "./StaticHost";
 import {StaticArrayHost} from "./StaticArrayHost";
 
 class EmptyHost implements Host{
-    element: Text|Comment
-    placeholder:Comment
+    element = new Comment('empty')
+    placeholder = this.element
     render() { return }
     destroy() {}
 }
@@ -31,7 +31,7 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder) {
         host = new AtomHost(source, placeholder)
     } else if (typeof source === 'function'){
         host  = new FunctionHost(source, placeholder)
-    } else if( source instanceof HTMLElement || source instanceof DocumentFragment || Array.isArray(source)){
+    } else if( source instanceof HTMLElement || source instanceof DocumentFragment){
         host = new StaticHost(source, placeholder)
     } else if (source === undefined || source === null){
         host = new EmptyHost()

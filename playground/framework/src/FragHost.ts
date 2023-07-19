@@ -1,5 +1,5 @@
 import {UnhandledPlaceholder, insertBefore} from './DOM'
-import {Atom, computed, destroyComputed, TrackOpTypes, TriggerOpTypes} from "rata";
+import {computed, destroyComputed, TrackOpTypes, TriggerOpTypes} from "rata";
 import { Host } from "./Host";
 import {createHost} from "./createHost";
 
@@ -13,12 +13,12 @@ function getSpliceRemoveLength(argv: any[], length: number) : number {
 export class FragHost implements Host{
     handler: FragDOMHandler
     hostsComputed?: Host[]
-    placeholderAndItemComputed?: [any, UnhandledPlaceholder][]
+    placeholderAndItemComputed?: [any, Comment][]
     element: ChildNode|DocumentFragment|Comment = this.placeholder
     constructor(public source: ReturnType<typeof computed>, public placeholder:UnhandledPlaceholder, ) {
         this.handler = new FragDOMHandler(placeholder)
     }
-    createPlaceholder(item: any): [any, UnhandledPlaceholder] {
+    createPlaceholder(item: any): [any, Comment] {
         return [item, new Comment('frag item host')]
     }
     createHost([item, placeholder] : [any, UnhandledPlaceholder]) : Host{
@@ -57,7 +57,7 @@ export class FragHost implements Host{
                         const newPlaceholderAndItems = argv!.map(this.createPlaceholder)
                         const newPlaceholders = newPlaceholderAndItems.map(mapPlaceholderItemPairToPlaceholder)
                         const firstEl = this.hostsComputed?.length ? this.hostsComputed[0].element : this.placeholder
-                        this.handler.insertBefore(newPlaceholders, firstEl as ChildNode|Comment)
+                        this.handler.insertBefore(newPlaceholders, firstEl as HTMLElement|Comment)
                         placeholderAndItems.unshift(...newPlaceholderAndItems)
                     } else if (method === 'splice') {
                         const newPlaceholderAndItems = argv!.slice(2)!.map(this.createPlaceholder)
@@ -72,7 +72,7 @@ export class FragHost implements Host{
                             // 加在头部
                             if (afterIndex < 0) {
                                 const firstEl = this.hostsComputed?.length ? this.hostsComputed[0].element : this.placeholder
-                                this.handler.insertBefore(newPlaceholderAndItems.map(mapPlaceholderItemPairToPlaceholder), firstEl as ChildNode|Comment)
+                                this.handler.insertBefore(newPlaceholderAndItems.map(mapPlaceholderItemPairToPlaceholder), firstEl as HTMLElement|Comment)
                             } else {
                                 // 加在中间了
                                 const afterPlaceholder: UnhandledPlaceholder = placeholderAndItems[afterIndex][1]
@@ -152,23 +152,25 @@ export class FragHost implements Host{
 }
 
 
+type ValidElementType = Comment|HTMLElement|DocumentFragment
+
 export class FragDOMHandler {
     fragmentParent = document.createDocumentFragment()
-    firstEl: ChildNode|Comment = this.placeholder
-    constructor(public placeholder:UnhandledPlaceholder) {
+    firstEl: HTMLElement|Comment = this.placeholder
+    constructor(public placeholder:Comment) {
 
     }
     get parentElement() {
         return this.placeholder.parentElement || this.fragmentParent
     }
-    push(...newEl: ChildNode[]) {
+    push(...newEl: Array<HTMLElement|Comment>) {
         if (!newEl.length) return
 
         if (this.firstEl === this.placeholder) this.firstEl = newEl[0]
 
         const frag = document.createDocumentFragment()
         frag.replaceChildren(...newEl)
-        insertBefore(frag, this.placeholder as ChildNode)
+        insertBefore(frag, this.placeholder)
     }
     pop() {
         if (this.placeholder === this.firstEl) return
@@ -185,27 +187,27 @@ export class FragDOMHandler {
             this.placeholder.previousSibling.remove()
         } else {
             const firstEl = this.firstEl
-            this.firstEl = firstEl.nextSibling!
+            this.firstEl = firstEl.nextSibling! as HTMLElement|Comment
             firstEl.remove()
         }
     }
-    unshift(...newEl: ChildNode[]) {
+    unshift(...newEl: Array<HTMLElement|Comment>) {
         if (!newEl.length) return
 
         const frag = document.createDocumentFragment()
         frag.replaceChildren(...newEl)
-        insertBefore(frag, this.firstEl)
+        insertBefore(frag, this.firstEl as HTMLElement)
 
         this.firstEl = newEl[0]
     }
-    splice(startIndex: number, length?: number, ...newEl: ChildNode[]) {
+    splice(startIndex: number, length?: number, ...newEl: ValidElementType[]) {
         if (length === 0) return
 
 
         let pointer = this.firstEl
         let startCount = 0
         while(startCount < startIndex && pointer !== this.placeholder) {
-            pointer = pointer.nextSibling!
+            pointer = pointer.nextSibling! as HTMLElement|Comment
             startCount++
         }
 
@@ -214,25 +216,25 @@ export class FragDOMHandler {
         let count = 0
         while(pointer !== this.placeholder && count < endLength) {
             const current = pointer
-            pointer = current.nextSibling!
+            pointer = current.nextSibling! as HTMLElement|Comment
             current.remove()
             count++
         }
 
         const frag = document.createDocumentFragment()
         frag.replaceChildren(...newEl)
-        insertBefore(frag, pointer)
+        insertBefore(frag, pointer as HTMLElement)
 
 
         if (startIndex === 0) {
-            this.firstEl = newEl.length ? newEl[0] : pointer
+            this.firstEl = (newEl.length ? newEl[0] : pointer) as HTMLElement|Comment
         }
     }
-    replace(...newEl: ChildNode[]) {
+    replace(...newEl: ValidElementType[]) {
         return this.splice(0, undefined, ...newEl)
     }
-    insertAfter(newEl:ChildNode|ChildNode[], refNode:ChildNode) {
-        let toInsert: ChildNode|DocumentFragment
+    insertAfter(newEl:ValidElementType|ValidElementType[], refNode:ChildNode) {
+        let toInsert: Comment|DocumentFragment|HTMLElement
         if (Array.isArray(newEl) ) {
             toInsert = document.createDocumentFragment()
             toInsert.replaceChildren(...newEl)
@@ -240,24 +242,24 @@ export class FragDOMHandler {
             toInsert = newEl
         }
 
-        return insertBefore(toInsert, refNode.nextSibling!)
+        return insertBefore(toInsert, refNode.nextSibling! as HTMLElement)
     }
-    insertBefore(newEl:ChildNode|ChildNode[], refNode:ChildNode|Comment) {
-        let toInsert: ChildNode|DocumentFragment
+    insertBefore(newEl:ValidElementType|ValidElementType[], refNode:HTMLElement|Comment) {
+        let toInsert: ValidElementType
         if (Array.isArray(newEl) ) {
             toInsert = document.createDocumentFragment()
             toInsert.replaceChildren(...newEl)
         } else {
-            toInsert = newEl
+            toInsert = newEl as HTMLElement
         }
-        return insertBefore(toInsert, refNode)
+        return insertBefore(toInsert, refNode as HTMLElement)
     }
 
     detach() {
         let pointer = this.firstEl
         while(pointer !== this.placeholder) {
             const current = pointer
-            pointer = current.nextSibling!
+            pointer = current.nextSibling! as HTMLElement|Comment
             this.fragmentParent.appendChild(current)
         }
 

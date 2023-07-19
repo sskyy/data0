@@ -78,7 +78,7 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
   } else if (name === 'class' && !isSvg) {
     node.className = value || ''
   } else if(name === 'value') {
-    (node as object).value = value
+    (node as HTMLDataElement).value = value
 
 
     // CAUTION 因为 select 如果 option 还没有渲染（比如 computed 的情况），那么设置 value 就没用，我们这里先存着，
@@ -88,18 +88,18 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
     } else if (node.tagName === 'OPTION') {
       // 当 option 的 value 发生变化的时候也要 reset 一下，因为可能这个时候与 select value 相等的 option 才出现
       resetOptionParentSelectValue(node)
-    } else  if (node.tagName === 'INPUT' && (node as object).type === 'checkbox') {
+    } else  if (node.tagName === 'INPUT' && (node as HTMLObjectElement).type === 'checkbox') {
       // checkbox 也支持用 value ，这样容易统一 api
       if (value) {
         node.setAttribute('checked', 'true')
       } else {
         node.removeAttribute('checked')
       }
-    } else if (node.tagName === 'INPUT' && (node as object).type === 'text' && value === undefined) {
+    } else if (node.tagName === 'INPUT' && (node as HTMLObjectElement).type === 'text' && value === undefined) {
       // 特殊处理一下 input value 为 undefined 的情况
-      (node as object).value = ''
+      (node as HTMLDataElement).value = ''
     }
-  } else if (name === 'checked' && node.tagName === 'INPUT' && (node as object).type === 'checkbox') {
+  } else if (name === 'checked' && node.tagName === 'INPUT' && (node as HTMLObjectElement).type === 'checkbox') {
     // checkbox 的 checked 支持用 boolean 表示
     if (value) {
       node.setAttribute('checked', 'true')
@@ -122,8 +122,10 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
     if (value && typeof value === 'object') {
       each(value, (v, k) => {
         if (value[k] === undefined) {
+          // @ts-ignore
           node.style[k] = ''
         } else {
+          // @ts-ignore
           node.style[k] = typeof v === 'number' ? (`${v}px`) : v
         }
       })
@@ -183,7 +185,7 @@ export const containerToUnhandledAttr = new WeakMap<any, UnhandledAttrInfo[]>()
 
 export function createElement(type: JSXElementType, props: AttributesArg, ...children: any[]) : ChildNode|any{
 
-  let container: ChildNode|DocumentFragment
+  let container: HTMLElement|DocumentFragment
   if (type === Fragment) {
     container = document.createDocumentFragment()
   } else if (typeof type === 'string') {
@@ -251,14 +253,13 @@ export function Fragment() {}
 function resetOptionParentSelectValue(targetOption: HTMLElement) {
   const target = targetOption.parentElement
   if (selectValueTmp.has(target as ExtendedElement)) {
-    (target as object).value = selectValueTmp.get(target as ExtendedElement)
+    (target as HTMLDataElement).value = selectValueTmp.get(target as ExtendedElement)
   }
 }
 
-export function insertBefore(newEl: ChildNode|DocumentFragment, refEl: ChildNode|HTMLElement) {
+export function insertBefore(newEl: Comment|HTMLElement|DocumentFragment, refEl: HTMLElement|Comment) {
   const result = refEl.parentElement!.insertBefore!(newEl, refEl)
-
-  if ((newEl as HTMLElement).tagName === 'OPTION') {
+  if ((newEl as Element).tagName === 'OPTION') {
     resetOptionParentSelectValue(newEl as HTMLElement)
   }
 
