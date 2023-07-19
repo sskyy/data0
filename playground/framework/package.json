@@ -20,8 +20,13 @@
     "vite": "^4.3.9"
   },
   "dependencies": {
+    "@antv/g6": "^4.8.20",
     "@heroicons/react": "^2.0.18",
     "@types/jest": "^29.5.2",
+    "butterfly-dag": "^4.3.26",
+    "chevrotain": "^11.0.1",
+    "jquery": "^3.7.0",
+    "lodash": "^4.17.21",
     "ts-jest": "^29.1.1"
   }
 }

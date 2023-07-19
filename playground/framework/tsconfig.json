@@ -32,6 +32,8 @@
     "__tests__",
     "component",
     "../../src",
-    "./er.tsx"
+    "./er.tsx",
+    "./state.tsx",
+    "./interact.tsx"
   ]
 }
