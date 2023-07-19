@@ -1,9 +1,7 @@
 import {
   reactive,
   reactiveMap,
-  readonlyMap,
   shallowReactiveMap,
-  shallowReadonlyMap,
   Target,
   toRaw,
 
@@ -18,7 +16,7 @@ import {
   hasOwn,
   isArray,
   isArrayMethod,
-  isIntegerKey, isObject,
+  isIntegerKey,
   isPlainObject,
   isSymbol,
   makeMap
@@ -112,21 +110,17 @@ function createArrayInstrumentations() {
 }
 
 function createGetter(isReadonly = false, shallow = false) {
-  return function get(target: Target, key: string | symbol, receiver: object) {
-    if (key === ReactiveFlags.IS_REACTIVE) {
+  return function get(target: Target, rawKey: string | symbol, receiver: object) {
+    if (rawKey === ReactiveFlags.IS_REACTIVE) {
       return !isReadonly
-    } else if (key === ReactiveFlags.IS_READONLY) {
+    } else if (rawKey === ReactiveFlags.IS_READONLY) {
       return isReadonly
-    } else if (key === ReactiveFlags.IS_SHALLOW) {
+    } else if (rawKey === ReactiveFlags.IS_SHALLOW) {
       return shallow
     } else if (
-      key === ReactiveFlags.RAW &&
+      rawKey === ReactiveFlags.RAW &&
       receiver ===
-        (isReadonly
-          ? shallow
-            ? shallowReadonlyMap
-            : readonlyMap
-          : shallow
+        (shallow
           ? shallowReactiveMap
           : reactiveMap
         ).get(target)
@@ -136,22 +130,26 @@ function createGetter(isReadonly = false, shallow = false) {
 
     const targetIsArray = isArray(target)
 
-    if (!isReadonly && targetIsArray && hasOwn(arrayInstrumentations, key)) {
-      return Reflect.get(arrayInstrumentations, key, receiver)
+    if (!isReadonly && targetIsArray && hasOwn(arrayInstrumentations, rawKey)) {
+      return Reflect.get(arrayInstrumentations, rawKey, receiver)
     }
 
+    const isReactiveKey = typeof rawKey === 'string' && rawKey[0] === '$'
+    const key = isReactiveKey ? (rawKey as string).slice(1, Infinity) : rawKey
     const res = Reflect.get(target, key, receiver)
 
     if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(key as string))) {
       track(target, TrackOpTypes.GET, key)
     }
 
-    // CAUTION 注意这里对于 !isPlainObject 的对象我们也直接返回，而不包装成 atom 或者 reactive，因为它自己内部可以继续 reactive 化。
-    //  除非手动指定了要 leafAtom 化，说明它每次更新的时候是想更新 target 上的 key。
-    //  如果用户自己把一个 atom 放了进来。不会再包装一层。
+    if (isReactiveKey) {
+      // TODO computed array method
+      return createLeafAtom(target, key)
+    }
+
     if (targetIsArray && (!isIntegerKey(key)) ||
-        (isObject(res) && !isPlainObject(res) && !isTargetLeaf(target, key)) ||
-        isNonTrackableStringOrSymbolKey(key) || isAtom(res)
+        isNonTrackableStringOrSymbolKey(key) ||
+        isAtom(res)
     ) {
       return res
     }
@@ -160,28 +158,8 @@ function createGetter(isReadonly = false, shallow = false) {
       return reactive(res)
     }
 
-    // CAUTION 只有 primitive  生成的叶子结点都创建 leafAtom，它表示的是更新的时候始终更新的是 target[key] 上的节点，会 trigger key
-    // CAUTION 如果是 inCollectionMethodTargets ，说明是内部方法读的，要保证逻辑的正确性所以返回 res。像 splice 等方法
-    //  也会访问这个 getter，如果我们放回了 leafAtom，就会导致原本的逻辑不正确了。
-    //  不是 inCollectionMethod 说明是用户读的，我们就返回 leafAtom
-    return inCollectionMethodTargets.has(target) ? res : createLeafAtom(target, key, res)
+    return res
   }
-}
-
-function isTargetLeaf(target: object, key:string|symbol) {
-    return !!leafTargets.get(target)?.has(key)
-}
-
-const leafTargets = new WeakMap<object, Set<string|symbol>>()
-
-export class LeafTarget {
-  constructor(public value:object) {
-  }
-}
-
-export function asLeaf(target: any) {
-  //  primitive 本来就会 leafAtom 化
-  return new LeafTarget(target)
 }
 
 export function isNonTrackableStringOrSymbolKey(key:string |symbol) {
@@ -190,8 +168,8 @@ export function isNonTrackableStringOrSymbolKey(key:string |symbol) {
 
 export type LeafType = number | string | undefined | null | object
 
-function createLeafAtom(target: Target, key: string|symbol, initValue: LeafType) {
-  function getterOrSetter(newValue?: typeof initValue | UpdateFn<typeof initValue>){
+function createLeafAtom(target: Target, key: string|symbol) {
+  function getterOrSetter(newValue?: any | UpdateFn<any>){
     if (arguments.length === 0) {
       track(target, TrackOpTypes.GET, key)
       return Reflect.get(target, key)
@@ -221,7 +199,7 @@ function createLeafAtom(target: Target, key: string|symbol, initValue: LeafType)
   def(getterOrSetter, ReactiveFlags.IS_REACTIVE, true)
   def(getterOrSetter, ReactiveFlags.IS_ATOM, true)
 
-  return getterOrSetter as Atom<typeof initValue>
+  return getterOrSetter as Atom
 }
 
 const set = /*#__PURE__*/ createSetter()
@@ -240,17 +218,7 @@ function createSetter(shallow = false) {
 
     if( isAtom(value)) console.warn(`you are assign an atom to ${key.toString()}`)
 
-    if (value instanceof LeafTarget) {
-      value = value.value
-      let leafOfThisTarget = leafTargets.get(target)
-      if (!leafOfThisTarget) {
-        leafTargets.set(target, (leafOfThisTarget = new Set<string|symbol>()))
-      }
-      leafOfThisTarget.add(key)
-    } else {
-      if (isTargetLeaf(target, key)) throw new Error(`${key.toString()} is a leaf, you can only delete it or update it use leafAtom`)
-      value = toRaw(value)
-    }
+    value = toRaw(value)
 
     const hadKey =
         isArray(target) && isIntegerKey(key)

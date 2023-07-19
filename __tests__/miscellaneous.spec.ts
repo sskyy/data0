@@ -62,7 +62,7 @@ describe('computed on computed', () => {
         const value  = reactive({})
         // @ts-ignore
         const properties = reactive([{name: 'a'}].concat(value))
-        const uniqueNames = incUnique(incPick(properties, 'name'))
+        const uniqueNames = incUnique(incPick(properties, '$name'))
         const isNameUnique = computed(() => {
             return uniqueNames.size === properties.length
         })

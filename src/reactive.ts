@@ -128,17 +128,20 @@ export function markRaw<T extends object>(
 export const toReactive = <T extends unknown>(value: T): T =>
     // @ts-ignore
     isReactivableType(value) ? reactive(value) as T: value
-
-
-
 export declare const RawSymbol: unique symbol
 
 
-export type UnwrapReactive<T> = T extends object
-    ? {
-      [P in keyof T]: P extends symbol ? T[P] : UnwrapReactiveLeaf<T[P]>
-    }
-    : T
+export type UnwrapReactive<T> =
+    T extends Map<any, any> ?
+      { [P in keyof T]: P extends symbol ? T[P] : UnwrapReactiveLeaf<T[P]> } &
+      {  $get: (key: Parameters<T['get']>[0]) => Atom<ReturnType<T['get']>> }
+    :
+    T extends object
+    ?
+      { [P in keyof T]: P extends symbol ? T[P] : UnwrapReactiveLeaf<T[P]> } &
+      { [P in keyof T as `$${Exclude<P, symbol>}`]: P extends symbol ? never : Atom<T[P]> }
+    :
+      T
 
 export type UnwrapReactiveLeaf<T> = T extends
     | Builtin

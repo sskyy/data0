@@ -1,8 +1,8 @@
 import {toRaw, toReactive} from './reactive'
 import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import {hasOwn, hasChanged, toRawType, isMap, def, isReactivableType} from './util'
-import {inCollectionMethodTargets, LeafType} from "./baseHandlers";
+import {hasOwn, hasChanged, toRawType, isMap, def} from './util'
+import {inCollectionMethodTargets} from "./baseHandlers";
 import {ReactiveFlags} from "./flags";
 import {Atom, UpdateFn} from "./atom";
 
@@ -21,7 +21,6 @@ function get(
   target: MapTypes,
   key: unknown,
   isReadonly = false,
-  isShallow = false
 ) {
   // #1772: readonly(reactive(Map)) should return readonly + reactive version
   // of the value
@@ -34,12 +33,11 @@ function get(
     }
     track(rawTarget, TrackOpTypes.GET, rawKey)
   }
-  // FIXME 要不要支持 asLeaf ?
   const { has } = getProto(rawTarget)
   if (has.call(rawTarget, key)) {
-    return toAtomLeafOrToReactive(target.get(key), target, key)
+    return toReactive(target.get(key))
   } else if (has.call(rawTarget, rawKey)) {
-    return toAtomLeafOrToReactive(target.get(rawKey), target, key)
+    return toReactive(target.get(rawKey))
   } else if (target !== rawTarget) {
     // #3602 readonly(reactive(Map))
     // ensure that the nested reactive `Map` can do tracking for itself
@@ -47,19 +45,36 @@ function get(
   }
 }
 
-function toAtomLeafOrToReactive(res: any, target: MapTypes, key: any) {
-  if (isReactivableType(res)) {
-    return toReactive(res)
-  } else if (typeof res !== 'object' ) {
-    return createLeafAtom(target, key, res)
+function $get(
+    target: MapTypes,
+    key: unknown,
+    isReadonly = false,
+) {
+  // #1772: readonly(reactive(Map)) should return readonly + reactive version
+  // of the value
+  target = (target as any)[ReactiveFlags.RAW]
+  const rawTarget = toRaw(target)
+  const rawKey = toRaw(key)
+  if (!isReadonly) {
+    // TODO 什么情况下？
+    if (key !== rawKey) {
+      track(rawTarget, TrackOpTypes.GET, key)
+    }
+    track(rawTarget, TrackOpTypes.GET, rawKey)
+  }
+  const { has } = getProto(rawTarget)
+  if (has.call(rawTarget, key)) {
+    return createLeafAtom(target, key)
+  } else if (has.call(rawTarget, rawKey)) {
+    return createLeafAtom(target, rawKey)
   } else {
-    return res
+    throw new Error(`can not find key ${(key as string).toString()}`)
   }
 }
 
 
-function createLeafAtom(target: MapTypes, key: any, initValue: LeafType) {
-  function getterOrSetter(newValue?: typeof initValue | UpdateFn<typeof initValue>){
+function createLeafAtom(target: MapTypes, key: any) {
+  function getterOrSetter(newValue?: any | UpdateFn<any>){
     if (arguments.length === 0) {
       track(target, TrackOpTypes.GET, key)
       return target.get(key)
@@ -89,7 +104,7 @@ function createLeafAtom(target: MapTypes, key: any, initValue: LeafType) {
   def(getterOrSetter, ReactiveFlags.IS_REACTIVE, true)
   def(getterOrSetter, ReactiveFlags.IS_ATOM, true)
 
-  return getterOrSetter as Atom<typeof initValue>
+  return getterOrSetter as Atom
 }
 
 
@@ -286,6 +301,10 @@ function createInstrumentations() {
     get(this: MapTypes, key: unknown) {
       return get(this, key)
     },
+    // 得到一个 leaf atom
+    $get(this: MapTypes, key: unknown) {
+      return $get(this, key)
+    },
     get size() {
       return size(this as unknown as IterableCollections)
     },
@@ -331,8 +350,9 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
       return target
     }
 
+    // CAUTION 为 Map 增加了 $get 方法
     return Reflect.get(
-      hasOwn(mutableInstrumentations, key) && key in target
+      hasOwn(mutableInstrumentations, key) && (key in target || key === '$get' && target instanceof Map)
         ? mutableInstrumentations
         : target,
       key,

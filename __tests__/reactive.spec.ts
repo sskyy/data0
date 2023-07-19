@@ -23,15 +23,15 @@ describe('reactive basic', () => {
     test('initialize & update leaf', () => {
         const obj = reactive({leaf:1})
 
-        expect(obj.leaf).toShallowEqual(1)
+        expect(obj.leaf).toBe(1)
         // @ts-ignore
-        expect(obj.leaf === 1).toBe(false)
+        expect(obj.leaf === 1).toBe(true)
 
-        expect(typeof obj.leaf).toBe('function')
+        expect(typeof obj.$leaf).toBe('function')
 
-        const leaf: Atom = obj.leaf
+        const leaf: Atom = obj.$leaf
         leaf(3)
-        expect(obj.leaf).toShallowEqual(3)
+        expect(obj.$leaf).toShallowEqual(3)
     })
 })
 
@@ -70,25 +70,29 @@ describe('array reactive', () => {
 describe('reactive leaf', () => {
     test('return leaf atom if leaf is primitive', () => {
         const arr = reactive([1, '2'])
-        expect(typeof arr[0]).toBe('function')
-        expect((arr[0] as Atom<number>)()).toBe(1)
-        expect(typeof arr[1]).toBe('function')
-        expect((arr[1] as Atom<string>)()).toBe('2');
+        expect(typeof arr[0]).toBe('number')
+        expect(typeof arr.$0).toBe('function')
+        expect(arr.$0()).toBe(1)
+        expect(typeof arr[1]).toBe('string')
+        expect(typeof arr.$1).toBe('function')
+        expect(arr.$1()).toBe('2');
 
-        (arr[0] as Atom<number>)(2);
-        (arr[1] as Atom<string>)('3')
-        expect(typeof arr[0]).toBe('function')
-        expect((arr[0] as Atom<number>)()).toBe(2)
-        expect(typeof arr[1]).toBe('function')
-        expect((arr[1] as Atom<string>)()).toBe('3')
+        arr.$0(2);
+        arr.$1('3')
+        expect(typeof arr[0]).toBe('number')
+        expect(typeof arr.$0).toBe('function')
+        expect(typeof arr[1]).toBe('string')
+        expect(typeof arr.$1).toBe('function')
+        expect(arr.$0()).toBe(2)
+        expect(arr.$1()).toBe('3');
     })
 
     test('return origin object if leaf is not plainObject', () => {
         class Test{}
         const a = new Test()
         const arr = reactive([1, a])
-        expect(typeof arr[0]).toBe('function')
-        expect((arr[0] as Atom<number>)()).toBe(1)
+        expect(typeof arr[0]).toBe('number')
+        expect(arr.$0()).toBe(1)
 
         expect( arr[1] instanceof Test).toBe(true)
         expect( typeof arr[1] ).toBe('object')
@@ -100,13 +104,14 @@ describe('reactive leaf', () => {
         map.set('a', 1)
         map.set('b', '2')
         const rMap = reactive(map)
-        expect(typeof rMap.get('a')).toBe('function')
-        expect((rMap.get('a') as Atom<number>)()).toBe(1)
-        expect(typeof rMap.get('b')).toBe('function')
-        expect((rMap.get('b') as Atom<string>)()).toBe('2');
+        expect(typeof rMap.get('a')).toBe('number')
+        expect(typeof rMap.$get('a')).toBe('function')
+        expect(rMap.$get('a')()).toBe(1)
+        expect(typeof rMap.get('b')).toBe('string')
+        expect(rMap.$get('b')()).toBe('2');
     })
 
-    test('Map primitive leaf should be atom too', () => {
+    test('Map Class leaf should origin too', () => {
         class Test{}
         const a = new Test()
         const map = new Map()
@@ -115,8 +120,10 @@ describe('reactive leaf', () => {
         const rMap = reactive(map)
         expect(typeof rMap.get('a')).toBe('object')
         expect(rMap.get('a').constructor).toBe(Test)
-        expect(typeof rMap.get('b')).toBe('function')
-        expect((rMap.get('b') as Atom<string>)()).toBe('2');
+        expect(rMap.$get('a')()).toBe(a)
+
+        expect(typeof rMap.get('b')).toBe('string')
+        expect(rMap.$get('b')()).toBe('2')
     })
 
 })
