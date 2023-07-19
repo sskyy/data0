@@ -1,5 +1,5 @@
 import {createElement, onDestroy} from "@framework";
-import {atom, Atom, asLeaf, computed, destroyComputed, incEvery, incIndexBy, incMap, reactive, isAtom} from "rata";
+import {atom, Atom, computed, destroyComputed, incEvery, incIndexBy, incMap, reactive, isAtom} from "rata";
 import {getDisplayValue, getUUID} from "./createClass";
 
 type ConstraintsType =  {
@@ -93,8 +93,7 @@ function Select({ value, options, touched, required, name, fixed }: SelectPropTy
     const onChange = (e) => {
         touched(true)
         const newValue = (mapStringValueToObject as Map<any, any>).get(e.target.value)
-        // FIXME 由于 leaf atom 化了，所以这里可能是 atom 可能是没有 atom 化的对象，应该怎么处理。不应该出现需要用户来手动判断 atom 的情况。
-        value(isAtom(newValue) ? newValue() : newValue)
+        value(newValue)
     }
 
     // TODO fixed 化就显示一个假的
@@ -152,13 +151,14 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
     // initialize formValue
     // CAUTION 这里默认 createDefaultValue 不会有 plainObject
     const getFinalInitialValue = () => fixedValues?.[staticField.name] ?? initialValues?.[staticField.name] ?? createDefaultValue(staticField)
-    fieldValues[staticField.name] = asLeaf(getFinalInitialValue())
+    fieldValues[staticField.name] = getFinalInitialValue()
     fieldTouchedStatus[staticField.name] = false
 
     const commonProp = {
         name: staticField.name,
-        value: fieldValues[staticField.name],
-        touched: fieldTouchedStatus[staticField.name],
+        // CAUTION 通过 $ 显式地 取它的 leaf atom
+        value: fieldValues[`$${staticField.name}`],
+        touched: fieldTouchedStatus[`$${staticField.name}`],
         required: staticField.required,
         fixed: fixedValues?.[staticField.name] !== undefined
     }
@@ -172,10 +172,9 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
             // @ts-ignore
             const options = computed.as.options(() => {
                 // FIXME 这里在 options 变化时候需要重置自己。但写法有三个问题：
-                //  1. 由于 fieldValue 是 leaf，必须用下面这种写法，不然会用 atom 的写法会 track field.name，自己循环了
-                //  2. 重置的这种逻辑语义写成这样太晦涩了。
-                //  3. 这里在初始的时候就使得 fieldValues 执行了两次
-                fieldValues[staticField.name] = asLeaf(getFinalInitialValue())
+                //  1. 重置的这种逻辑语义写成这样太晦涩了。
+                //  2. 这里在初始的时候就使得 fieldValues 执行了两次
+                fieldValues[staticField.name] = getFinalInitialValue()
                 return staticField.options(fieldValues)
             })
 
@@ -215,7 +214,7 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
         const constraintComputed = createConstraintComputed(fieldValues) as Atom<boolean>
         const depTouchComputed = computed(()=> {
             // CAUTION 注意这里必须全部 touch 一遍才能保证正确的 reactive，不能用 every。想想后面又没有更好的方式
-            const results =  depMap[constraintName].map(depFieldName => fieldTouchedStatus[depFieldName]())
+            const results =  depMap[constraintName].map(depFieldName => fieldTouchedStatus[depFieldName])
             return results.every(v => v)
         }) as Atom<boolean>
 
@@ -227,7 +226,7 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
                 const constraintResult = constraintComputed()
 
                 const allTouchedResult = depTouchComputed()
-                return !(hasValue(fieldValues[staticField.name]()) || allTouchedResult) ? // 如果有值并且没 touch，说明是 initialValue 的
+                return !(hasValue(fieldValues[staticField.name]) || allTouchedResult) ? // 如果有值并且没 touch，说明是 initialValue 的
                     ConstraintResult.Unknown:
                     constraintResult ?
                         ConstraintResult.Success :
@@ -243,7 +242,8 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
             return deps.has(staticField.name)
         })
 
-        const depTouchedSet = incMap(deps, depFieldName => fieldTouchedStatus[depFieldName])
+        // CAUTION 注意这里取 leaf atom
+        const depTouchedSet = incMap(deps, depFieldName => fieldTouchedStatus[`$${depFieldName}`])
         const isAllDepTouchComputed = incEvery(depTouchedSet, (touched) => touched()) as Atom<boolean>
 
         return {
@@ -251,7 +251,7 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
             result: computed(() => {
                 return (!isRelated()) ?
                     ConstraintResult.Unrelated:
-                    (!(hasValue(fieldValues[staticField.name]())|| isAllDepTouchComputed())) ? // 如果有值并且没 touch，说明是 initialValue 的
+                    (!(hasValue(fieldValues[staticField.name])|| isAllDepTouchComputed())) ? // 如果有值并且没 touch，说明是 initialValue 的
                         ConstraintResult.Unknown:
                         constraintComputed() ?
                             ConstraintResult.Success:

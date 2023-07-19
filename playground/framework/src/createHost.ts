@@ -1,6 +1,6 @@
-import {containerToUnhandled, containerToUnhandledAttr, setAttribute, UnhandledPlaceholder} from "./DOM";
+import { UnhandledPlaceholder} from "./DOM";
 import {Host} from "./Host";
-import {computed, isAtom, isReactive} from "rata";
+import { isAtom, isReactive} from "rata";
 import {FragHost} from "./FragHost";
 import {ComponentHost} from "./ComponentHost";
 import {AtomHost} from "./AtomHost";

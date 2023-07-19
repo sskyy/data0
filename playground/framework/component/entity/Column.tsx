@@ -85,7 +85,7 @@ export function Column({ entity, opener, selected, openRelatedEntity, relationsB
                 {() => Array.from(relationsByEntity.get(entity).entries()).map(([relationName, [targetName, targetEntity]]) => (
                     <div onClick={() => openRelatedEntity(relationName)} className={() => `p-6 border-b-2 cursor-pointer ${relationName === selected() ? 'border-indigo-500 ' :'border-slate-200'}`}>
                         <span>{relationName}</span>
-                        <span>[{targetEntity.name}.{(targetName as Atom<string>)()}]</span>
+                        <span>[{targetEntity.name}.{targetName}]</span>
                     </div>
                 ))}
             </div>

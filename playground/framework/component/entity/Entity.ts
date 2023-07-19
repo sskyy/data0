@@ -21,10 +21,10 @@ export const Property = createClass({
             required: true,
             constraints: {
                 format({ name } : {name:Atom<string>}) {
-                    return computed(() => validNameFormatExp.test(name()))
+                    return computed(() => validNameFormatExp.test(name))
                 },
                 length({ name } : {name:Atom<string>}) {
-                    return computed(() => name().length > 1 && name().length < 5)
+                    return computed(() => name.length > 1 && name.length < 5)
                 }
             }
         },
@@ -51,7 +51,7 @@ export const Property = createClass({
 export const constraints = {
     entityNameUnique() {
         const entities = getInstance(Entity)
-        const uniqueNames = incUnique(incPick(entities, 'name'))
+        const uniqueNames = incUnique(incPick(entities, '$name'))
         return computed(() => uniqueNames.size === entities.length)
     }
 }
@@ -74,7 +74,8 @@ export const Entity = createClass({
             constraints: {
                 // 默认第一参数是 property 本身，第二参数是 entity
                 eachNameUnique({ properties }) {
-                    const uniqueNames = incUnique(incPick(properties, 'name'))
+                    // CAUTION 这里取的是 leaf atom，不然到 incUnique 里面已经监听不到  name string 的变化了。
+                    const uniqueNames = incUnique(incPick(properties, '$name'))
                     return computed(() => {
                         return uniqueNames.size === properties.length
                     })
@@ -113,14 +114,14 @@ export const Relation = createClass({
             constraints: {
                 nameNotSameWithProp({ entity1, targetName1 }) {
                     return computed(() => {
-                        return entity1()?.properties?.every(p => {
-                            return p.name !== targetName1()
+                        return entity1?.properties?.every(p => {
+                            return p.name !== targetName1
                         })
                     })
                 },
                 nameUnique({ entity1, entity2, targetName1, targetName2 }) {
                     return computed(() => {
-                        return !(entity1() === entity2() && targetName1() === targetName2())
+                        return !(entity1 === entity2 && targetName1 === targetName2)
                     })
                 }
             }
@@ -138,14 +139,14 @@ export const Relation = createClass({
             constraints: {
                 nameNotSameWithProp({ entity2, targetName2 }) {
                     return computed(() => {
-                        return entity2()?.properties?.every(p => {
-                            return p.name !== targetName2()
+                        return entity2?.properties?.every(p => {
+                            return p.name !== targetName2
                         })
                     })
                 },
                 nameUnique({ targetName1, entity1, entity2, targetName2 }) {
                     return computed(() => {
-                        return !(entity1() === entity2() && targetName1() === targetName2())
+                        return !(entity1 === entity2 && targetName1 === targetName2)
                     })
                 }
             }
