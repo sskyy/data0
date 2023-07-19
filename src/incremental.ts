@@ -83,7 +83,7 @@ function removeAtomIndexDep(source: any[]) {
 type PlainObject = {[k: string]: any}
 // 监听增删改
 // TODO
-export function incIndexBy<T>(source: T[], propName: string|((arg0: T) => any), mapFn?: (any) => any) {
+export function incIndexBy<T>(source: T[], propName: string|((arg0: T) => any), mapFn?: (arg: T) => any) {
     return computed(() => {
         const result = new Map<any, T>()
         source.forEach((item) => {

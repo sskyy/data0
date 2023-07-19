@@ -148,18 +148,18 @@ export type UnwrapReactiveLeaf<T> = T extends
     ? UnwrapReactive<T>
     : T
 
-export function rawStructureClone(obj: any, modifier?: (res: any) => any ) {
+export function rawStructureClone(obj: any, modifier?: (res: any) => any ): typeof obj{
   let result
   if (Array.isArray(obj)) {
-    result = obj.map(i => rawStructureClone(i, modifier))
+    result = obj.map((i: any) => rawStructureClone(i, modifier))
   } else  if (obj instanceof Map) {
-    result = new Map(Array.from(obj.entries(), ([key, value]) => [key, rawStructureClone(value, modifier)]))
+    result = new Map(Array.from(obj.entries(), ([key, value]: [string, any]) => [key, rawStructureClone(value, modifier)]))
   } else  if (obj instanceof Set) {
-    result = new Set(Array.from(obj.values(), x => rawStructureClone(x, modifier)))
+    result = new Set(Array.from(obj.values(), (x: any) => rawStructureClone(x, modifier)))
   } else  if( isAtom(obj)) {
     result = obj()
   } else if (isPlainObject(obj)) {
-    result = Object.fromEntries(Object.entries(obj).map(([k,v]) => [k, rawStructureClone(v, modifier)]))
+    result = Object.fromEntries(Object.entries(obj).map(([k,v]: [k: string, v: any]) => [k, rawStructureClone(v, modifier)]))
   } else {
     result = obj
   }
