@@ -160,14 +160,16 @@ class XGraph {
         </div>
     }
     createPlaceholder(node: Node): Parameters<typeof this.graph.addItem> {
+        // ModelConfig 类型定义错误，不能写 raw: node。
+        // @ts-ignore
         return [
             'node',
             {
-                id: node.id(),
+                id: (node.id as string),
                 raw: node,
                 type: 'rect-node',
-                x: node.x(),
-                y: node.y(),
+                x: (node.x as number),
+                y: (node.y as number),
                 style: {
                     opacity: 0,
                     stroke: '#ccc',
@@ -266,9 +268,9 @@ class XGraph {
             {
                 type: 'polyline',
                 raw: edge,
-                id: edge.id(),
-                source: edge.source(),
-                target : edge.target(),
+                id: edge.id,
+                source: edge.source,
+                target : edge.target,
                 style: {
                     endArrow: true,
                 }

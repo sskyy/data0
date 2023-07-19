@@ -25,8 +25,8 @@ export function StateMachine() {
 
 
     const edges = reactive([{
-        source: nodes[0].id(),
-        target: nodes[1].id(),
+        source: nodes[0].id,
+        target: nodes[1].id,
     }])
 
     let sourceAnchorIdx, targetAnchorIdx;
