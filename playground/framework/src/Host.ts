@@ -5,7 +5,7 @@ import {Props} from "../global";
 
 
 export interface Host {
-    element: ChildNode|DocumentFragment|Comment
+    element: HTMLElement|Comment
     placeholder:UnhandledPlaceholder
     computed?: ReturnType<computed<undefined>>
     render: () => void

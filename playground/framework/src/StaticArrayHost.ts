@@ -1,12 +1,13 @@
 import { insertBefore} from "./DOM";
 import {Host} from "./Host";
 import {createHost} from "./createHost";
+import {removeNodesBetween} from "./util";
 
 
 
 export class StaticArrayHost implements Host{
     computed = undefined
-    element: HTMLElement|DocumentFragment|Comment = this.placeholder
+    element: HTMLElement|Comment = this.placeholder
     childHosts: Host[] = []
     constructor(public source: any[], public placeholder: Comment) {
     }
@@ -17,20 +18,30 @@ export class StaticArrayHost implements Host{
     render(): void {
         if (this.element === this.placeholder) {
             this.source.forEach(item => {
-                const newPlaceholder: Comment = new Comment('array item')
-                insertBefore(newPlaceholder, this.placeholder)
-                this.childHosts.push(createHost(item, newPlaceholder))
+                if (typeof item === 'string' || typeof item === 'number') {
+                    const el = document.createTextNode(item.toString())
+                    if (this.element === this.placeholder) this.element = el
+                    insertBefore(el, this.placeholder)
+                } else if ( item instanceof Text) {
+                    // Component 或者 Function 返回值可能会是 DocumentFragment，而 DocumentFragment.childNodes 也会使用 StaticArrayHost 处理，
+                    //  这个时候的 this.source 就是 childNodes，已经是 DOM.js 处理过的了，所以直接是 Text 节点。
+                    if (this.element === this.placeholder) this.element = item
+                    insertBefore(item, this.placeholder)
+                } else {
+                    // 其他未知节点了
+                    const newPlaceholder: Comment = new Comment('array item')
+                    insertBefore(newPlaceholder, this.placeholder)
+                    this.childHosts.push(createHost(item, newPlaceholder))
+                }
             })
 
             this.childHosts.forEach(host => host.render())
-            // 因为 source 仍然有可能是 fragment 并且里面是空的，这个时候就还是等于没有元素。
-            this.element = (this.childHosts.length ? this.childHosts[0].element : this.placeholder) as HTMLElement
         } else {
             throw new Error('should never rerender')
         }
     }
     destroy() {
         this.childHosts!.forEach(host => host.destroy())
-        this.placeholder.remove()
+        removeNodesBetween(this.element, this.placeholder, true)
     }
 }

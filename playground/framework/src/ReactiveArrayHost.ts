@@ -10,7 +10,7 @@ function getSpliceRemoveLength(argv: any[], length: number) : number {
     return argv1 !== Infinity ? argv1: (length - (argv![0] as number))
 }
 
-export class FragHost implements Host{
+export class ReactiveArrayHost implements Host{
     handler: FragDOMHandler
     hostsComputed?: Host[]
     placeholderAndItemComputed?: [any, Comment][]

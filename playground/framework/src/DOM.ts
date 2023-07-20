@@ -204,7 +204,7 @@ export function createElement(type: JSXElementType, props: AttributesArg, ...chi
 
     if (typeof child === 'string' || typeof child === 'number') {
       container.appendChild(document.createTextNode(child.toString()))
-    } else if (child instanceof HTMLElement) {
+    } else if (child instanceof HTMLElement || child instanceof DocumentFragment) {
       container.appendChild(child)
       // 往上传递 unhandledChild ，直到没有 parent 了为止
       const unhandledChildInChild = containerToUnhandled.get(child)

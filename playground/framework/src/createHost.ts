@@ -1,7 +1,7 @@
 import { UnhandledPlaceholder} from "./DOM";
 import {Host} from "./Host";
 import { isAtom, isReactive} from "rata";
-import {FragHost} from "./FragHost";
+import {ReactiveArrayHost} from "./ReactiveArrayHost";
 import {ComponentHost} from "./ComponentHost";
 import {AtomHost} from "./AtomHost";
 import {FunctionHost} from "./FunctionHost";
@@ -11,6 +11,7 @@ import {StaticArrayHost} from "./StaticArrayHost";
 class EmptyHost implements Host{
     element = new Comment('empty')
     placeholder = this.element
+    // TODO 仍然 append placeholder，这样可以使得 staticArray 等的 firstElement 一路委托下来。
     render() { return }
     destroy() {}
 }
@@ -20,7 +21,7 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder) {
     let host:Host
     if ( Array.isArray(source)  ) {
         if(isReactive(source) ) {
-            host = new FragHost(source, placeholder)
+            host = new ReactiveArrayHost(source, placeholder)
         } else {
             host = new StaticArrayHost(source, placeholder)
         }
@@ -31,8 +32,10 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder) {
         host = new AtomHost(source, placeholder)
     } else if (typeof source === 'function'){
         host  = new FunctionHost(source, placeholder)
-    } else if( source instanceof HTMLElement || source instanceof DocumentFragment){
+    } else if( source instanceof HTMLElement ){
         host = new StaticHost(source, placeholder)
+    } else if( source instanceof DocumentFragment){
+        host = new StaticArrayHost([...source.childNodes], placeholder)
     } else if (source === undefined || source === null){
         host = new EmptyHost()
     } else {
