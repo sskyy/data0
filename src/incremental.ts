@@ -308,7 +308,9 @@ export function incUniqueMatch(initialValue?: any) {
 
     const watcher = computed(() => {
         const lastMatchedItem = indexMap.get(lastValue)
-        const thisMatchedItem = indexMap.get(value())
+        const thisValue = value()
+        lastValue = thisValue
+        const thisMatchedItem = indexMap.get(thisValue)
         if (lastMatchedItem && lastMatchedItem !== thisMatchedItem) {
             lastMatchedItem(false)
         }
