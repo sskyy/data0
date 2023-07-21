@@ -11,9 +11,10 @@ import {StaticArrayHost} from "./StaticArrayHost";
 class EmptyHost implements Host{
     element = new Comment('empty')
     placeholder = this.element
-    // TODO 仍然 append placeholder，这样可以使得 staticArray 等的 firstElement 一路委托下来。
     render() { return }
-    destroy() {}
+    destroy(parentHandle?: boolean) {
+        if (!parentHandle) this.placeholder.remove()
+    }
 }
 
 export function createHost(source: any, placeholder: UnhandledPlaceholder) {

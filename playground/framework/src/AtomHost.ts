@@ -27,10 +27,12 @@ export class AtomHost implements Host{
             }
         )
     }
-    destroy() {
+    destroy(parentHandle?: boolean) {
         destroyComputed(this.computed)
-        this.element.remove()
-        this.placeholder.remove()
+        if (!parentHandle) {
+            this.element.remove()
+            this.placeholder.remove()
+        }
     }
 
 }

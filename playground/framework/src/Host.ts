@@ -5,6 +5,6 @@ export interface Host {
     placeholder:Comment
     computed?: ReturnType<computed<undefined>>
     render: () => void
-    destroy : () => void
+    destroy : (parentHandleElement?: boolean) => void
     revoke?: () => void
 }

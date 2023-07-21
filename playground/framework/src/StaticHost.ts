@@ -66,9 +66,11 @@ export class StaticHost implements Host{
             throw new Error('should never rerender')
         }
     }
-    destroy() {
-        this.reactiveHosts!.forEach(host => host.destroy())
+    destroy(parentHandle?:boolean) {
         this.attrComputeds!.forEach(attrComputed => destroyComputed(attrComputed))
-        removeNodesBetween(this.element!, this.placeholder, true)
+        this.reactiveHosts!.forEach(host => host.destroy(true))
+        if (!parentHandle) {
+            removeNodesBetween(this.element!, this.placeholder, true)
+        }
     }
 }

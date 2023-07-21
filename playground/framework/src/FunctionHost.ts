@@ -9,20 +9,19 @@ type FunctionNode = () => ChildNode|DocumentFragment|string|number|null|boolean
 export class FunctionHost implements Host{
     computed: ReturnType<typeof computed>
     fragmentParent = document.createDocumentFragment()
-    element: HTMLElement|Comment|Text|SVGElement = this.placeholder
     innerHost?: Host
     constructor(public source: FunctionNode, public placeholder:Comment) {
     }
     get parentElement() {
         return this.placeholder.parentElement || this.fragmentParent
     }
-
+    get element() : HTMLElement|Comment|Text|SVGElement{
+        return this.innerHost?.element || this.placeholder
+    }
     render(): void {
         this.computed = computed(() => {
                 // CAUTION 每次都清空上一次的结果
-                if (this.element !== this.placeholder) {
-                    this.innerHost?.destroy()
-                }
+                this.innerHost?.destroy()
 
                 const node = this.source()
 
@@ -30,14 +29,12 @@ export class FunctionHost implements Host{
                 insertBefore(newPlaceholder, this.placeholder)
                 this.innerHost = createHost(node, newPlaceholder)
                 this.innerHost.render()
-
-            this.element = this.innerHost.element
             }
         )
     }
-    destroy() {
+    destroy(parentHandle?: boolean) {
         destroyComputed(this.computed)
-        this.innerHost!.destroy()
-        this.placeholder.remove()
+        this.innerHost!.destroy(parentHandle)
+        if (!parentHandle) this.placeholder.remove()
     }
 }
