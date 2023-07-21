@@ -140,13 +140,13 @@ export type UnwrapReactive<T> =
     :
     T extends Array<infer U>
         ?
-        { [P in keyof T]: P extends number ? UnwrapReactiveLeaf<T[P]> : T[P] } &
-        { [P in keyof T as `$${number & P}`]: P extends number ? Atom<T[P]> : never  }
+        Array<UnwrapReactiveLeaf<U>> &
+        { [P in number as `$${P}`]: Atom<T[P]> }
         :
     T extends object
     ?
       { [P in keyof T]: P extends PrimitiveLeaf ? T[P] : UnwrapReactiveLeaf<T[P]> } &
-      { [P in keyof T as `$${string & Exclude<P, symbol>}`]?: P extends symbol ? never : Atom<T[P]> }
+      { [P in keyof T as `$${P}`]?: P extends symbol ? never : Atom<T[P]> }
     :
       T
 
