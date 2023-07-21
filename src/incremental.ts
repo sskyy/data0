@@ -190,13 +190,14 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         const removeLength = getSpliceRemoveLength(argv!, data.length)
                         data.splice(argv![0], removeLength, ...newItems)
                     } else if(!method && result){
+                        // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。
                         // 没有 method 说明是 explicit_key_change 变化
-                        result.add?.forEach(({ key, newValue }) => {
-                            data[key] = mapFn(newValue, indexes![key])
+                        result.add?.forEach(({ key }) => {
+                            data[key] = mapFn(source[key], indexes![key])
                         })
 
-                        result.update?.forEach(({ key, newValue }) => {
-                            data[key] = mapFn(newValue, indexes![key])
+                        result.update?.forEach(({ key }) => {
+                            data[key] = mapFn(source[key], indexes![key])
                         })
 
                         result.remove?.forEach(({ key }) => {
@@ -291,4 +292,34 @@ export function incEvery(source: any, assert: AssertFn) : ReturnType<typeof comp
 
 export function incSome(source: any[], assert:AssertFn) : ReturnType<typeof computed>{
     return computed(() => source.some(assert))
+}
+
+// 单选的增量计算
+export function incUniqueMatch(initialValue?: any) {
+    let lastValue = initialValue
+    const value = atom(initialValue)
+    const indexMap = new WeakMap<any, any>()
+
+    function match(valueToMatch: any) {
+        const matched = atom(valueToMatch === value())
+        indexMap.set(valueToMatch, matched)
+        return matched
+    }
+
+    const watcher = computed(() => {
+        const lastMatchedItem = indexMap.get(lastValue)
+        const thisMatchedItem = indexMap.get(value())
+        if (lastMatchedItem && lastMatchedItem !== thisMatchedItem) {
+            lastMatchedItem(false)
+        }
+
+        if (thisMatchedItem) thisMatchedItem(true)
+    })
+
+    return [value, match, watcher]
+}
+
+// TODO 多选
+export function incMatch() {
+
 }

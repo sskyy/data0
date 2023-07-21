@@ -130,23 +130,30 @@ export const toReactive = <T extends unknown>(value: T): T =>
     isReactivableType(value) ? reactive(value) as T: value
 export declare const RawSymbol: unique symbol
 
+type PrimitiveLeaf = symbol | number | string
+
 
 export type UnwrapReactive<T> =
     T extends Map<any, any> ?
-      { [P in keyof T]: P extends symbol ? T[P] : UnwrapReactiveLeaf<T[P]> } &
+      { [P in keyof T]:  P extends PrimitiveLeaf ? T[P] : UnwrapReactiveLeaf<T[P]> } &
       {  $get: (key: Parameters<T['get']>[0]) => Atom<ReturnType<T['get']>> }
     :
+    T extends Array<infer U>
+        ?
+        { [P in keyof T]: P extends number ? UnwrapReactiveLeaf<T[P]> : T[P] } &
+        { [P in keyof T as `$${number & P}`]: P extends number ? Atom<T[P]> : never  }
+        :
     T extends object
     ?
-      { [P in keyof T]: P extends symbol ? T[P] : UnwrapReactiveLeaf<T[P]> } &
-      { [P in keyof T as `$${Exclude<P, symbol>}`]: P extends symbol ? never : Atom<T[P]> }
+      { [P in keyof T]: P extends PrimitiveLeaf ? T[P] : UnwrapReactiveLeaf<T[P]> } &
+      { [P in keyof T as `$${string & Exclude<P, symbol>}`]?: P extends symbol ? never : Atom<T[P]> }
     :
       T
 
 export type UnwrapReactiveLeaf<T> = T extends
     | Builtin
     | CollectionTypes
-    ? (Atom<T> | T)
+    ? T
     : T extends object
     ? UnwrapReactive<T>
     : T

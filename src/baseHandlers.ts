@@ -101,7 +101,7 @@ function createArrayInstrumentations() {
         }
       }
 
-      trigger(this, TriggerOpTypes.METHOD, { method:key, argv: args, result})
+      trigger(rawTarget, TriggerOpTypes.METHOD, { method:key, argv: args, result})
       resetTracking()
       return res
     }
@@ -249,7 +249,6 @@ function createSetter(shallow = false) {
 }
 
 function deleteProperty(target: object, key: string | symbol): boolean {
-  debugger
   const hadKey = hasOwn(target, key)
   const oldValue = (target as any)[key]
   const result = Reflect.deleteProperty(target, key)

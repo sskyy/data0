@@ -120,7 +120,10 @@ export class ReactiveEffect<T = any> {
           resetTracking()
           // 从 default set to enable
           enableTracking()
-          track(...argv)
+          // 因为用户的 applyPatch 里面只能拿到当前的 reactive source，那是个 proxy，而所有 trigger/track 都是基于 raw 的
+          const [target, ...rest] = argv
+
+          track(toRaw(target), ...rest)
           // 从 enable reset to default
           resetTracking()
 
