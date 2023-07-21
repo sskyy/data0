@@ -32,10 +32,10 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder) {
         host = new AtomHost(source, placeholder)
     } else if (typeof source === 'function'){
         host  = new FunctionHost(source, placeholder)
-    } else if( source instanceof HTMLElement ){
+    } else if( source instanceof HTMLElement || source instanceof SVGElement){
         host = new StaticHost(source, placeholder)
     } else if( source instanceof DocumentFragment){
-        host = new StaticArrayHost([...source.childNodes], placeholder)
+        host = new StaticArrayHost([...(source.childNodes as unknown as Array<HTMLElement>)], placeholder)
     } else if (source === undefined || source === null){
         host = new EmptyHost()
     } else {

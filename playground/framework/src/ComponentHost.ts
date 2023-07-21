@@ -14,7 +14,7 @@ export class ComponentHost implements Host{
     // CAUTION Component 只因为 props 的引用变化而重新 render。
     //  只有有 diff 算发以后才会出现引用变化的情况，现在我们还没有实现。所以现在其实永远不会重 render
     computed = undefined
-    element: HTMLElement|Comment = this.placeholder
+    element: HTMLElement|Comment|SVGElement|Text = this.placeholder
     type: Component
     innerHost?: Host
     props: Props

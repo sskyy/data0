@@ -9,7 +9,7 @@ type FunctionNode = () => ChildNode|DocumentFragment|string|number|null|boolean
 export class FunctionHost implements Host{
     computed: ReturnType<typeof computed>
     fragmentParent = document.createDocumentFragment()
-    element: HTMLElement|Comment = this.placeholder
+    element: HTMLElement|Comment|Text|SVGElement = this.placeholder
     innerHost?: Host
     constructor(public source: FunctionNode, public placeholder:Comment) {
     }

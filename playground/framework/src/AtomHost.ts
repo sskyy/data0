@@ -5,19 +5,19 @@ export class AtomHost implements Host{
     computed: ReturnType<typeof computed>
     fragmentParent = document.createDocumentFragment()
     element: Text|Comment = this.placeholder
-    constructor(public source: Atom<any>, public placeholder:Comment) {
+    constructor(public source: Atom, public placeholder:Comment) {
     }
     get parentElement() {
         return this.placeholder.parentElement || this.fragmentParent
     }
 
-    replace(value: string|number) {
+    replace(value: any) {
         if (this.element === this.placeholder) {
-            const textNode = new Text(value.toString())
+            const textNode = new Text((value as string).toString())
             this.parentElement.replaceChild(textNode, this.placeholder)
             this.element = textNode
         } else {
-            this.element.nodeValue = value.toString()
+            this.element.nodeValue = (value as string).toString()
         }
     }
 

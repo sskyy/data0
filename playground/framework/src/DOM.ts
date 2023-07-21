@@ -159,12 +159,12 @@ export type AttributesArg = {
   [k: string] : any
 }
 
-export function setAttributes(attributes: AttributesArg, element: HTMLElement, collectUnhandledAttr: (info: UnhandledAttrInfo) => void) {
+export function setAttributes(attributes: AttributesArg, element: HTMLElement|SVGElement, collectUnhandledAttr: (info: UnhandledAttrInfo) => void, isSVG?: boolean){
   each(attributes, (attribute, name) => {
     if (name === '_uuid') {
       setAttribute(element as ExtendedElement, 'data-uuid', getId())
     } else {
-      setAttribute(element as ExtendedElement, name, attribute, collectUnhandledAttr)
+      setAttribute(element as ExtendedElement, name, attribute, collectUnhandledAttr, isSVG)
     }
   })
 }
@@ -183,13 +183,14 @@ export const containerToUnhandled = new WeakMap<any, UnhandledChildInfo[]>()
 type UnhandledAttrInfo = {el: ExtendedElement, key: string, value: any}
 export const containerToUnhandledAttr = new WeakMap<any, UnhandledAttrInfo[]>()
 
-export function createElement(type: JSXElementType, props: AttributesArg, ...children: any[]) : ChildNode|any{
+export function createElement(type: JSXElementType, rawProps : AttributesArg, ...children: any[]) : HTMLElement|Comment|DocumentFragment|any{
+  const { _isSVG, ...props } = rawProps || {}
 
-  let container: HTMLElement|DocumentFragment
+  let container: HTMLElement|DocumentFragment|SVGElement
   if (type === Fragment) {
     container = document.createDocumentFragment()
   } else if (typeof type === 'string') {
-    container = document.createElement(type)
+    container = _isSVG ? document.createElementNS('http://www.w3.org/2000/svg', type) : document.createElement(type)
   } else {
 
     return { type, props: { ...props, children }}
@@ -204,7 +205,7 @@ export function createElement(type: JSXElementType, props: AttributesArg, ...chi
 
     if (typeof child === 'string' || typeof child === 'number') {
       container.appendChild(document.createTextNode(child.toString()))
-    } else if (child instanceof HTMLElement || child instanceof DocumentFragment) {
+    } else if (child instanceof HTMLElement || child instanceof DocumentFragment || child instanceof SVGElement) {
       container.appendChild(child)
       // 往上传递 unhandledChild ，直到没有 parent 了为止
       const unhandledChildInChild = containerToUnhandled.get(child)
@@ -235,7 +236,7 @@ export function createElement(type: JSXElementType, props: AttributesArg, ...chi
     const collectUnhandledAttr = (info: UnhandledAttrInfo) => {
       unhandledAttr.push(info)
     }
-    setAttributes(props, container as HTMLElement, collectUnhandledAttr)
+    setAttributes(props, container as HTMLElement, collectUnhandledAttr, _isSVG)
   }
 
   // 把 unhandled child/attr 全部收集到顶层的  container 上，等外部处理，这样就不用外部去遍历 jsx 的结果了
@@ -257,12 +258,17 @@ function resetOptionParentSelectValue(targetOption: HTMLElement) {
   }
 }
 
-export function insertBefore(newEl: Comment|HTMLElement|DocumentFragment, refEl: HTMLElement|Comment) {
+export function insertBefore(newEl: Comment|HTMLElement|DocumentFragment|SVGElement, refEl: HTMLElement|Comment) {
   const result = refEl.parentElement!.insertBefore!(newEl, refEl)
   if ((newEl as Element).tagName === 'OPTION') {
     resetOptionParentSelectValue(newEl as HTMLElement)
   }
 
   return result
+}
+
+// TODO reactive 化
+export function createElementNS(type: string, props: AttributesArg, ...children: any[]) {
+  return createElement(type, {_isSVG: true, ...(props || {})}, children)
 }
 
