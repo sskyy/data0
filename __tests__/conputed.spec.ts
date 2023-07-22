@@ -1,4 +1,4 @@
-import {computed} from "../src/computed";
+import {computed, destroyComputed} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import { describe, test, expect } from "@jest/globals";
@@ -67,5 +67,35 @@ describe('computed basic', () => {
 
         data2.l2 = 5
         expect(num.result).toShallowEqual(15)
+    })
+})
+
+describe('computed life cycle', () => {
+    test('should destroy inner computed', () => {
+        let innerRuns = 0
+        const a = atom(0)
+        const b = atom(0)
+        const outerComputed = computed(() => {
+            a()
+            computed.as.inner(() => {
+                b()
+                innerRuns ++
+            })
+        })
+
+        expect(innerRuns).toBe(1)
+        b(1)
+        expect(innerRuns).toBe(2)
+        a(1)
+        expect(innerRuns).toBe(3)
+        b(2)
+        // TODO 这里期待 computed 重新执行的时候，上一次内部的 computed 应该自动回收掉。
+        expect(innerRuns).toBe(4)
+
+        destroyComputed(outerComputed)
+        b(2)
+        // destroy 外面之后，里面的 computed 也要全部回收
+        expect(innerRuns).toBe(4)
+
     })
 })

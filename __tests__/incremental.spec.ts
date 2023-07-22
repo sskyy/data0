@@ -38,6 +38,30 @@ describe('incremental map', () => {
         expect(mapFnRuns).toBe(8)
     })
 
+    test('Array map with key change', () => {
+        const source = reactive([{id: 1}, {id: 2}, {id: 3}])
+        let mapFnRuns = 0
+        const mappedArr = incMap(source, (item) => {
+            mapFnRuns++
+            return { id: item.id + 3 }
+        })
+        // explicit key change
+        source[0] = {id: 5}
+        expect(mappedArr[0].id).toBe(8)
+
+        // change two item
+        expect(mappedArr[1].id).toBe(5)
+        expect(mappedArr[2].id).toBe(6)
+
+        let temp = source[1]
+        source[1] = source[2]
+        source[2] = temp
+        expect(mappedArr[1].id).toBe(6)
+        expect(mappedArr[2].id).toBe(5)
+    })
+
+
+
 
     test('Map map', () => {
 
