@@ -39,9 +39,9 @@ export class ReactiveArrayHost implements Host{
                 trackOnce!(this.source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 trackOnce!(this.source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
 
-                // FIXME 可能要支持重算？
+                // CAUTION 应该不支持重算，这里理论上覆盖了所有的 patch 场景。
                 if (this.hostsComputed) {
-                    throw new Error('')
+                    throw new Error('should never recompute reactiveArray')
                 }
 
                 return this.source.map(this.createPlaceholder)
@@ -93,8 +93,9 @@ export class ReactiveArrayHost implements Host{
 
         this.hostsComputed = computed(
             (trackOnce) => {
+                // CAUTION 不支持重算，这里理论上支持了所有变化场景
                 if (this.hostsComputed?.length) throw new Error('hostsComputed should not recompute')
-                // FIXME 可能要支持重算？
+
 
                 trackOnce!(this.placeholderAndItemComputed!, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 trackOnce!(this.placeholderAndItemComputed!, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
@@ -143,7 +144,7 @@ export class ReactiveArrayHost implements Host{
 
                         if (argv![0] === 0 && argv![1] >= hosts.length && this.isOnlyChildrenOfParent()) {
                             // CAUTION 如果完全就是某个子 children，那么这里一次性 replaceChildren 可以提升性能。
-                            const parent = this.placeholder.parentNode
+                            const parent = this.placeholder.parentNode!
                             if (!newHosts.length && parent instanceof HTMLElement) {
                                 (parent as HTMLElement).innerHTML = ''
                                 parent.appendChild(frag)

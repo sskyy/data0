@@ -52,7 +52,7 @@ export function createTypeClass(definition) {
 }
 
 type TypeChecker = {
-    (): (v: any) => (Error),
+    (v: any): any,
     [k: string] : any
     stringify: typeof JSON.stringify,
     parse: typeof JSON.parse,
@@ -78,7 +78,7 @@ export function createNormalType(type: any, definition: TypeDefinition = {}) : T
         stringify = JSON.stringify, parse = JSON.parse, is,
         ...rest
     } = definition
-    function TypeChecker(v: any) {
+    const TypeChecker: TypeChecker = <TypeChecker>function (v: any) {
         if (typeof type === 'function') {
             if (!type(v)) {
                 return new Error(`${v} type check failed`)
@@ -112,8 +112,6 @@ export function createNormalType(type: any, definition: TypeDefinition = {}) : T
         })
     }
 
-    // FIXME type
-    // @ts-ignore
     if (!TypeChecker.createDefaultValue) {
         // 提供一个 default 函数，可以动态将 TypeChecker 变成带 defaultValue 的(其实是动态再创建的)。
         Object.defineProperty(TypeChecker, 'default', {
@@ -129,19 +127,13 @@ export function createNormalType(type: any, definition: TypeDefinition = {}) : T
     } else {
         Object.defineProperty(TypeChecker, 'defaultValue', {
             get() {
-                // FIXME type
-                // @ts-ignore
                 if (TypeChecker.createDefaultValue) {
-                    // FIXME type
-                    // @ts-ignore
                     return TypeChecker.createDefaultValue()
                 }
             },
         })
     }
 
-    // FIXME type
-    // @ts-ignore
     return TypeChecker
 }
 
