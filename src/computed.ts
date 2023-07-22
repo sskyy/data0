@@ -7,7 +7,6 @@ import {
 } from "./debug";
 import {ReactiveEffect, track, TriggerInfo, triggerStack} from './effect'
 import {reactive, ReactiveInterceptor, UnwrapReactive} from './reactive'
-import {Cause} from "./patch";
 import {isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, AtomInterceptor, isAtom} from "./atom";
 
@@ -54,10 +53,28 @@ export function replace(source: any, nextSourceValue: any) {
 export const computedToInternal = new WeakMap<any, ComputedInternal>()
 
 
-export function destroyComputed(c: any) {
+export function destroyComputed(c: any, fromParent?: boolean) {
   const internal = computedToInternal.get(c)!
+  return destroyComputedInternal(internal, fromParent)
+}
+
+function destroyComputedInternal(internal: ComputedInternal, fromParent?: boolean) {
   internal.effect.stop()
   internal.onDestroy && internal.onDestroy(internal)
+
+  if (!fromParent && internal.parent) {
+    // 要把自己从 parent.innerComputeds 中移除掉。直接用 last 替换掉当前的要上出的，提升删除速度。
+    const last = internal.parent.innerComputeds.pop()!
+    if (last !== internal) {
+      internal.parent.innerComputeds[internal.index!] = last
+      last.index = internal.index
+    }
+  }
+
+  delete internal.parent
+  internal.innerComputeds.forEach(inner => destroyComputedInternal(inner, true))
+  internal.innerComputeds.length = 0
+
 }
 
 
@@ -77,7 +94,23 @@ type GetterType = (trackOnce?: typeof track ) => any
 type DirtyCallback = (recompute: (force?: boolean) => void) => void
 
 
+const activeComputedInternals:ComputedInternal[] = []
+function activateComputed(internal: ComputedInternal) {
+  activeComputedInternals.push(internal)
+}
 
+function resetActiveComputed() {
+  activeComputedInternals.pop()
+}
+
+function linkToParentComputed(internal: ComputedInternal) {
+  const current = activeComputedInternals.at(-1)
+  if (current) {
+    internal.parent = current
+    current.innerComputeds.push(internal)
+    internal.index = current.innerComputeds.length -1
+  }
+}
 
 // TODO 为了进一步提高性能，应该允许用于自定义一个合并 triggerInfo 的函数
 export class ComputedInternal {
@@ -88,9 +121,17 @@ export class ComputedInternal {
   immediate = false
   recomputing = false
   triggerInfos: TriggerInfo[] = []
+  innerComputeds: ComputedInternal[] = []
+  parent?: ComputedInternal
+  // 在 parent.innerComputeds 中的 index, 用来加速 destroy 的过程
+  index?: number
   onDestroy?: (i: ComputedInternal) => void
   scheduleRecompute? :DirtyCallback
-  constructor(public getter: GetterType, public applyPatch?: (computedData: ComputedData, info: TriggerInfo[]) => void, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
+  // TODO 需要一个更好的约定
+  public get debugName() {
+    return getDebugName(this.data)
+  }
+  constructor(public getter: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
 
     if (typeof scheduleRecompute === 'function') {
       this.scheduleRecompute = scheduleRecompute
@@ -115,7 +156,10 @@ export class ComputedInternal {
     if (applyPatch) this.effect.patchMode = true
 
     // CAUTION 这里一定要执行 effect.run，因为 effect.run 本身是建立 effect 依赖的。
+    // TODO 这个 activate 需不需要更好的和 effect 绑定？目前就是手动卸载 constructor 和 recompute 里面的
+    activateComputed(this)
     const initialValue = this.effect.run()
+    resetActiveComputed()
 
     const interceptReactive: ReactiveInterceptor = (a0, a1, mutableHandlers: ProxyHandler<object>, ...rest) => {
       const mutableHandlersWithRecompute: typeof mutableHandlers = {
@@ -155,11 +199,11 @@ export class ComputedInternal {
     }
 
     this.data = isReactivableType(initialValue) ? reactive(initialValue, interceptReactive) : atom(initialValue, interceptAtom)
-    // this.data = isReactivableType(initialValue) ? reactive(initialValue) : atom(initialValue)
-
 
     // destroy 的时候用户是拿 computed 去 destroy 的。
     computedToInternal.set(this.data, this)
+    debugger
+    linkToParentComputed(this)
   }
   effectRun = (trackOnce?: typeof track) => {
     // 初次执行 effectRun，用于建立依赖
@@ -184,13 +228,26 @@ export class ComputedInternal {
       }
     }
 
+    // TODO destroy innerComputeds
+
     this.recomputing = true
+    activateComputed(this)
+    debugger
     if (forceRecompute || !this.applyPatch || !this.isPatchable) {
+      // CAUTION 每一次重算前，都自动 destroy innerComputed，然后重新收集。
+      this.innerComputeds.forEach(internal => destroyComputedInternal(internal, true))
+      this.innerComputeds.length = 0
       this.effect.run()
     } else {
-      this.applyPatch(this.data, this.triggerInfos)
+      // CAUTION 每一次 patch，都是只负责收集新增 innerComputed，然后从 patch result 中获取要 destroy 的 innerComputed。
+      const toDestroy = this.applyPatch(this.data, this.triggerInfos)
+      if (toDestroy) {
+        toDestroy.forEach( internal => destroyComputed(internal, true))
+      }
+
       this.triggerInfos.length = 0
     }
+    resetActiveComputed()
 
     this.isDirty = false
     this.recomputing = false
@@ -199,7 +256,7 @@ export class ComputedInternal {
 }
 
 
-type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => void
+type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => ReturnType<typeof computed>[] | void
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
@@ -216,27 +273,6 @@ export function recompute(computedItem: ComputedData, force = false) {
   internal.recompute(force)
 }
 
-
-const patchCauses = new WeakMap()
-export function collectCause(computed: any, cause: Cause) {
-  let causes
-  if (!(causes = patchCauses.get(computed))) {
-    patchCauses.set(computed, (causes = []))
-  }
-  causes.push(cause)
-}
-
-export function getCauses(computed: any) {
-  return patchCauses.get(computed)
-}
-
-export function clearCauses(computed: any) {
-
-  const causes = patchCauses.get(computed)
-  if (causes) {
-    causes.length = 0
-  }
-}
 
 export function isComputed(target: any) {
   return !!computedToInternal.get(target)

@@ -122,7 +122,9 @@ export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : ReturnType<
 
 
 
-
+// CAUTION incMap 是故意不考虑 source 中深层变化的，只关心数据本身的变化。所以在 mapFn 的时候读深层的对象不会硬气整个重算。
+// FIXME 需要收集用户在 mapFn 中建立的 innerComputed，并且在相应 item remove 的时候，在 applyPatch 函数中 return 出来，
+//  这样才会被外部 destroy 掉，否则永远只会记录新增的，不会 destroy 删除的。
 export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
 
     if (!isReactive(source)) {
