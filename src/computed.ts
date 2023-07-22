@@ -19,9 +19,7 @@ export function replace(source: any, nextSourceValue: any) {
   } else if (isPlainObject(source)){
     const nextKeys = Object.keys(nextSourceValue)
     const keysToDelete = Object.keys(source).filter(k => !nextKeys.includes(k))
-    // FIXME
-    // @ts-ignore
-    keysToDelete.forEach((k) => delete source[k])
+    keysToDelete.forEach((k) => delete (source as {[k: string]: any})[k])
     Object.assign(source, nextSourceValue)
   } else if (source instanceof Map) {
 

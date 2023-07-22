@@ -124,10 +124,8 @@ export function markRaw<T extends object>(
   return value
 }
 
-// FIXME 类型问题
-export const toReactive = <T extends unknown>(value: T): T =>
-    // @ts-ignore
-    isReactivableType(value) ? reactive(value) as T: value
+export const toReactive = <T extends unknown>(value: T): UnwrapReactive<T>|T =>
+    isReactivableType(value) ? reactive(value as object) as UnwrapReactive<T>: value
 export declare const RawSymbol: unique symbol
 
 type PrimitiveLeaf = symbol | number | string
@@ -146,7 +144,7 @@ export type UnwrapReactive<T> =
     T extends object
     ?
       { [P in keyof T]: P extends PrimitiveLeaf ? T[P] : UnwrapReactiveLeaf<T[P]> } &
-      { [P in keyof T as `$${P}`]?: P extends symbol ? never : Atom<T[P]> }
+      { [P in Exclude<keyof T, symbol> as `$${P}`]?: P extends symbol ? never : Atom<T[P]> }
     :
       T
 
