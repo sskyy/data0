@@ -202,7 +202,6 @@ export class ComputedInternal {
 
     // destroy 的时候用户是拿 computed 去 destroy 的。
     computedToInternal.set(this.data, this)
-    debugger
     linkToParentComputed(this)
   }
   effectRun = (trackOnce?: typeof track) => {
@@ -232,7 +231,6 @@ export class ComputedInternal {
 
     this.recomputing = true
     activateComputed(this)
-    debugger
     if (forceRecompute || !this.applyPatch || !this.isPatchable) {
       // CAUTION 每一次重算前，都自动 destroy innerComputed，然后重新收集。
       this.innerComputeds.forEach(internal => destroyComputedInternal(internal, true))
