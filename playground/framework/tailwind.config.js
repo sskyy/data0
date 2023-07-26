@@ -3,12 +3,16 @@ module.exports = {
   content: [
     "./er.html",
     "./er.ts",
+    "./interact.html",
+    "./interact.tsx",
     "./src/**/*.{js,ts,jsx,tsx}",
     "./component/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {},
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms')
+  ],
 }
 

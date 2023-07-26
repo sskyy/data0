@@ -34,6 +34,8 @@
     "../../src",
     "./er.tsx",
     "./state.tsx",
-    "./interact.tsx"
+    "./interact.tsx",
+    "./concept.tsx",
+    "./activity.tsx"
   ]
 }

@@ -66,4 +66,10 @@ describe('component render', () => {
             expect(rootEl.firstElementChild!.children[6].innerHTML).toBe('4')
 
         })
+
+    test('component inside component', () => {})
+    test('function node', () => {})
+    test('static array node', () => {})
+    test('atom node', () => {})
+    test('reactive attribute', () => {})
 })

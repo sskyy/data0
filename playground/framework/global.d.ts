@@ -17,7 +17,7 @@ export type Props = {
     [k: string]: any,
     children?: ChildNode[]
 }
-export type Component = (props?: Props) => ChildNode|DocumentFragment
+export type Component = (props?: Props) => HTMLElement|Text|DocumentFragment|null|undefined|string|number|Function
 export type ComponentNode = {
     type: Component,
     props : Props,
