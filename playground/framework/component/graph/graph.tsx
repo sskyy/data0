@@ -1,15 +1,28 @@
 import {createElement} from "@framework";
-import { default as G6, Graph as G6Graph, GraphOptions, IEdge, INode} from '@antv/g6'
-import {Atom, computed, incIndexBy, incMap, isReactive, TrackOpTypes, TriggerOpTypes} from "rata";
+import {CanvasEventType, default as G6, Graph as G6Graph, GraphOptions, IEdge, INode} from '@antv/g6'
+import {atom, Atom, computed, incIndexBy, incMap, isReactive, TrackOpTypes, TriggerOpTypes} from "rata";
+import {hasOwn} from "../../../../src/util";
 
 
 type Node = {
     [k: string]: any,
-    id: Atom<string>
+    id: string
 }
 type Edge = {
     [k: string]: any,
-    id: Atom<string>
+    id: string
+}
+
+
+function createDefaultPositionGenerator(gapX:number = 200, gapY:number = 100) {
+    let lastX = 0
+    let lastY = 0
+    return function createDefaultPosition() {
+        return {
+            x: (lastX += gapX),
+            y: (lastY += gapY),
+        }
+    }
 }
 
 
@@ -80,6 +93,9 @@ G6.registerNode('rect-node', {
 }, 'rect')
 
 
+type CanvasEventListeners  = {
+  [k in CanvasEventType]: (event: any) => any
+}
 
 
 class XGraph {
@@ -91,10 +107,18 @@ class XGraph {
     public edgeToGraphEdge = new Map<any, IEdge>()
     public edgeToDOMNode = new Map<any, HTMLElement>()
     public resizeObserver: ResizeObserver
-    public componentContainer: HTMLElement
     public graphContainer:HTMLElement
-    constructor(public options: Omit<GraphOptions, 'container'>, public nodes: Node[], public edges: any[], public Component: (any) => JSX.Element, public Edge: (any) => JSX.Element) {
-
+    createDefaultPosition: ReturnType<typeof createDefaultPositionGenerator>
+    constructor(
+        public options: Omit<GraphOptions, 'container'>,
+        public nodes: Node[], public edges: Edge[],
+        public Component: (any) => JSX.Element,
+        public Edge: (any) => JSX.Element,
+        public isEditingNode = atom(false),
+        public canvasEventListeners?: CanvasEventListeners,
+    ) {
+        // TODO 配置
+        this.createDefaultPosition = createDefaultPositionGenerator(0, 200)
     }
     drawGraph() {
         this.graph = new G6Graph({ ...this.options, container: this.graphContainer })
@@ -104,6 +128,19 @@ class XGraph {
         this.linkEdgeAndGraphLabel()
         this.listenCreateEdge()
         this.listenAnchorEvents()
+        this.listenLayout()
+
+        this.attachCanvasListeners()
+
+        this.graph.layout()
+    }
+    attachCanvasListeners() {
+        if (this.canvasEventListeners) {
+            Object.entries(this.canvasEventListeners).forEach(([eventName, callback]) => {
+                console.log(eventName)
+                this.graph.on(eventName, callback)
+            })
+        }
     }
     listenAnchorEvents() {
         this.graph.on('node:mouseenter', e => {
@@ -149,17 +186,21 @@ class XGraph {
         });
 
         return <div style={{position: 'relative', border: '1px blue dashed', width: this.options.width, height: this.options.height}}>
-            <div style={{position:'absolute', width: 0, height:0, left: 0, top:0, overflow:'visible'}}>
+            <div style={{position:'absolute', width: 0, height:0, left: 0, top:0, overflow:'visible'}} className={() => this.isEditingNode() ? 'z-20' : ''}>
                 {incMap(nodeAndDOMNodes, ({ dom }) => dom)}
-
             </div>
-            {this.graphContainer}
+            <div className="z-0">
+                {this.graphContainer}
+            </div>
             <div style={{position:'absolute', width: 0, height:0, left: 0, top:0, overflow:'visible'}}>
                 {incMap(edgeAndDOMNodes, ({ dom }) => dom)}
             </div>
         </div>
     }
     createPlaceholder(node: Node): Parameters<typeof this.graph.addItem> {
+
+
+        const defaultPosition = hasOwn(node, 'x') ? null : this.createDefaultPosition()
         // ModelConfig 类型定义错误，不能写 raw: node。
         // @ts-ignore
         return [
@@ -168,11 +209,11 @@ class XGraph {
                 id: (node.id as string),
                 raw: node,
                 type: 'rect-node',
-                x: (node.x as number),
-                y: (node.y as number),
+                // x: (node.x as number) ?? defaultPosition.x,
+                // y: (node.y as number)  ?? defaultPosition.y,
                 style: {
-                    opacity: 0,
-                    stroke: '#ccc',
+                    opacity: .5,
+                    stroke: '#328572',
                 },
                 anchorPoints: [
                     [.5, 0],
@@ -180,7 +221,9 @@ class XGraph {
                     [1, .5],
                     [0, .5],
                 ]
-            }
+            },
+            false,
+            false
         ]
     }
     addPlaceholder(node: Node) {
@@ -212,6 +255,18 @@ class XGraph {
         const domNode = this.nodeToDOMNode.get(node)
         this.resizeObserver.unobserve(domNode)
     }
+    listenLayout() {
+        this.graph.on('afterlayout', () => {
+            this.nodes.forEach(node => {
+                this.syncDOMPos(node)
+            })
+
+            this.edges.forEach(edge => {
+                this.syncEdgeLabelPos(edge)
+            })
+        })
+    }
+
     linkGraphPlaceholderPositionAndNode() {
         this.nodes.forEach(node => {
             this.syncDOMPos(node)
@@ -333,9 +388,9 @@ class XGraph {
 }
 
 
-export type GraphType = { options: object, nodes: [], edges: [], Component: (any) => JSX.Element, Edge: (any) => JSX.Element }
-export function Graph( { options, nodes, edges, Component, Edge} : GraphType) {
-    const graph = new XGraph(options, nodes, edges, Component, Edge);
+export type GraphType = { options: object, nodes: Node[], edges: Edge[], Component: (any) => JSX.Element, Edge: (any) => JSX.Element, isEditingNode: Atom<boolean>, canvasEventListeners: CanvasEventListeners}
+export function Graph( { options, nodes, edges, Component, Edge, isEditingNode, canvasEventListeners} : GraphType) {
+    const graph = new XGraph(options, nodes, edges, Component, Edge, isEditingNode, canvasEventListeners);
     setTimeout(() => {
         graph.drawGraph()
     }, 1)

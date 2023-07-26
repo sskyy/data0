@@ -336,6 +336,8 @@ function renderFieldType(arg: RenderFieldType) {
         fieldValues,
     } = arg
 
+    if (!field) return null
+
     if ((field as FormGroupFieldType).children ) {
         return <GroupField {...arg}/>
     }

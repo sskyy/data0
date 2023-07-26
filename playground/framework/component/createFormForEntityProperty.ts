@@ -59,7 +59,15 @@ export function createFormForEntity<T>(EntityType: typeof T, formOptions? : Form
 
 
 export function createField(Klass, propName: string){
-    if (!Klass.public[propName].type ) {
+    if (
+        typeof Klass.public[propName].type !== 'string' ||
+        Array.isArray(Klass.public[propName].type) // or type 的情况
+    ) {
+        return null
+    }
+
+
+    if (!Klass.public[propName].type && Klass.public[propName].computedType) {
         // 如果没有 type 那么必须有 computedType，动态返回 type
         return (prop) => {
             const Type = Klass.public[propName].computedType(prop)
@@ -72,7 +80,6 @@ export function createField(Klass, propName: string){
                 children: childPropNames.map(childPropName => createField(Type, childPropName))
             }
         }
-
     }
 
 

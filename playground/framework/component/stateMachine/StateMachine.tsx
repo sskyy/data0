@@ -25,6 +25,7 @@ export function StateMachine() {
 
 
     const edges = reactive([{
+        id: crypto.randomUUID(),
         source: nodes[0].id,
         target: nodes[1].id,
     }])
