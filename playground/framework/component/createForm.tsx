@@ -185,13 +185,15 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
         } else {
             throw new Error('unknown option type')
         }
-    } else {
+    } else if(staticField.type === 'string' || staticField.type === 'number'){
         // 自由输入的情况
         formControl = staticField.type === 'number' ?
             <NumberInput {...commonProp}/> :
             staticField.type === 'boolean' ?
                 <Checkbox {...commonProp}/> :
                 <Input {...commonProp}/>
+    } else {
+        throw new Error(`${staticField.type} is not supported yet`)
     }
 
     onDestroy(() => {

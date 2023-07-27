@@ -49,8 +49,7 @@ export const Property = createClass({
 })
 
 export const constraints = {
-    entityNameUnique() {
-        const entities = getInstance(Entity)
+    entityNameUnique({entities}) {
         const uniqueNames = incUnique(incPick(entities, '$name'))
         return computed(() => uniqueNames.size === entities.length)
     }
@@ -75,6 +74,7 @@ export const Entity = createClass({
                 // 默认第一参数是 property 本身，第二参数是 entity
                 eachNameUnique({ properties }) {
                     // CAUTION 这里取的是 leaf atom，不然到 incUnique 里面已经监听不到  name string 的变化了。
+                    // FIXME 实例化之后 property 不是个 Class 吗？它的 name 就是个 atom，也没有 $name 这个属性，如何统一？？？
                     const uniqueNames = incUnique(incPick(properties, '$name'))
                     return computed(() => {
                         return uniqueNames.size === properties.length

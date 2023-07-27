@@ -2,7 +2,7 @@ import {atom, Atom, isAtom, isReactivableType, rawStructureClone, reactive} from
 import {hasOwn, isObject} from "../../../src/util";
 import {isPlainObject} from "../src/util";
 
-type AcceptablePropType<T> = 'string'|'number'|'boolean'| KlassType<T>
+type AcceptablePropType<T> = 'string'|'number'|'boolean'| 'object'| KlassType<T>
 
 type ClassPropType<T extends ClassDef['public']> = {
     type?: AcceptablePropType<T>|AcceptablePropType<T>[] ,

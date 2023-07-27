@@ -5,7 +5,9 @@ import {atom} from "rata";
 console.log(parse('A && !B || C || D && (E || !F)'))
 
 
-function renderAttrExpression(expression: AttrNode, mayNeedParams?: boolean) {
+function renderAttrExpression(expression?: AttrNode, mayNeedParams?: boolean) {
+    if (!expression) return <div>empty</div>
+
     if ( expression.type === AttrNodeTypes.variable) {
         return <a href="#" style={{color: "blue", textDecoration:'underline'}}>{expression.name}</a>
     } else if (expression.type === AttrNodeTypes.group) {
@@ -33,38 +35,25 @@ function renderAttrExpression(expression: AttrNode, mayNeedParams?: boolean) {
 }
 
 function renderEditingInput(attrNode: AttrNode, onConfirm) {
-    return <div contenteditable onBlur={(e) => onConfirm(e.target.innerText)}>
-        {renderAttrExpression(attrNode)}
+    return <div contenteditable onBlur={(e) => onConfirm(e.target.innerText)} style={{minWidth:20}}>
+        {attrNode ? renderAttrExpression(attrNode) : ''}
     </div>
 }
 
 
 
-export function AttributiveInput({ options, attributive = atom(parse('A && !B || C || D && (E || !F)'))}) {
+export function AttributiveInput({ value }) {
+
     const editing = atom(false)
+
+    // TODO 适配结构
 
     const onConfirm = (innerText) => {
         const newAttr = parse(innerText)
-        attributive(newAttr)
+        value(newAttr)
         editing(false)
     }
     return <div className="inline-block mr-4" ondblclick={() => editing(true)} >
-        {() => editing() ? renderEditingInput(attributive(), onConfirm) : renderAttrExpression(attributive())}
-    </div>
-}
-
-
-export function AttributiveInput2({ value, isEditing, errors, push}) {
-    // editing value 好像根本没有必要 外部生成，因为是和组件嘻嘻相关的。
-    //  这里甚至都不需要，因为我们的编辑工具不需要受控。
-
-    const onConfirm = (innerText) => {
-        const newAttr = parse(innerText)
-        push(newAttr)
-        isEditing(false)
-    }
-
-    return <div className="inline-block mr-4" ondblclick={() => isEditing(true)} >
-        {() => isEditing() ? renderEditingInput(value, onConfirm) : renderAttrExpression(value)}
+        {() => editing() ? renderEditingInput(value(), onConfirm) : renderAttrExpression(value())}
     </div>
 }

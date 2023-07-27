@@ -18,27 +18,12 @@ export const Role = createClass({
     }
 })
 
+// TODO 这里应该是个复合结构怎么表示？？
 export const RoleAttributive = createClass({
     name: 'RoleAttributive',
     public: {
-        name: {
-            type: 'string',
-            // TODO name unique
-        },
-        // TODO content 是个复合结构
-        // content: {
-        //     type: 'string',
-        // },
-        stringContent: {
-            type: 'string',
-            required: true,
-            // TODO 必须是合法的 function 代码
-        },
-        base: {
-            type: Role,
-            options: () => {
-                return getInstance(Role)
-            }
+        content: {
+            type: 'object',
         }
     }
 })
@@ -68,19 +53,47 @@ export const Action = createClass({
     }
 })
 
-// TODO Attributive 和 Payload 都是动态类型的怎么表达啊？？？
+// TODO Payload 都是动态类型的怎么表达？现在先直接写成 object，在视图层去处理数据结构。
+// export const PayloadItem = createClass({
+//     name: 'PayloadItem',
+//     public: {
+//         name: {
+//             type: 'string',
+//             required: true
+//         },
+//         value: {
+//             type: ['string', 'number', 'boolean'],
+//             required: true
+//         }
+//     }
+// })
+
 export const Payload = createClass({
-    name: 'Payload'
+    name: 'Payload',
+    public: {
+        content: {
+            type: 'object',
+            // collection: true,
+            // required: true,
+            // constraints: {
+            //     nameUnique({ items }) {
+            //         // FIXME 实例化之后 items 不是个 Class 吗？它的 name 就是个 atom，也没有 $name 这个属性，如何统一？？？
+            //         const uniqueNames = incUnique(incPick(items, '$name'))
+            //         return computed(() => {
+            //             return uniqueNames.size === items.length
+            //         })
+            //     }
+            // }
+        }
+    }
 })
 
 export const constraints = {
-    actionNameUnique() {
-        const actions = getInstance(Action)
+    actionNameUnique({actions}) {
         const uniqueNames = incUnique(incPick(actions, '$name'))
         return computed(() => uniqueNames.size === actions.length)
     },
-    roleNameUnique() {
-        const roles = getInstance(Role)
+    roleNameUnique({ roles }) {
         const uniqueNames = incUnique(incPick(roles, '$name'))
         return computed(() => uniqueNames.size === roles.length)
     }

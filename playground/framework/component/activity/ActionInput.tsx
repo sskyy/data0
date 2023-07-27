@@ -19,6 +19,6 @@ export function ActionInput2({ value, push, errors }) {
 }
 
 
-export function ActionInput() {
-    return <input placeholder="action name"/>
+export function ActionInput({ value }) {
+    return <input placeholder="action name" value={value.name()}/>
 }

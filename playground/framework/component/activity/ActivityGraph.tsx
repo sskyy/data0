@@ -6,32 +6,41 @@ import {Graph} from "../graph/graph";
 import {atom, computed, incMap, reactive} from "rata";
 import {GraphOptions} from "@antv/g6";
 import {InteractionEdge} from "./InteractionEdge";
-import {Action, Activity, Interaction, InteractionGroup, Role, Transfer} from "./InteractionClass";
+import {
+    Action,
+    Activity,
+    Interaction,
+    InteractionGroup,
+    Payload,
+    Role,
+    RoleAttributive,
+    Transfer
+} from "./InteractionClass";
 import {ActivityNode} from "./AcitivityNode";
 import hotkeys from "hotkeys-js";
 import {service} from "../service";
 
 
-const _nodes = reactive([{
-    id: crypto.randomUUID(),
-    x: 100,
-    y: 200,
-}, {
-    id: crypto.randomUUID(),
-    x: 100,
-    y: 300,
-}, {
-    id: crypto.randomUUID(),
-    x: 100,
-    y: 400,
-}])
-
-
+const globalUserRole = Role.createReactive({ name: 'User'})
 
 const sendInteraction = Interaction.createReactive({
     name: 'sendRequest',
-    role: Role.createReactive({ name: 'User'}),
-    action: Action.createReactive({ name: 'sendRequest'})
+    roleAttributive: RoleAttributive.createReactive({
+        // TODO 写个 attributive
+    }),
+    role: globalUserRole,
+    roleAs: 'A',
+    action: Action.createReactive({ name: 'sendRequest'}),
+    payload: Payload.createReactive({
+        content: {
+            to: {
+                // TODO 还要支持 as B
+            },
+            message: {
+                // TODO 从实体导入的
+            }
+        }
+    })
 })
 
 const responseGroup = InteractionGroup.createReactive({
@@ -39,18 +48,27 @@ const responseGroup = InteractionGroup.createReactive({
     interactions: [
         Interaction.createReactive({
             name: 'approve',
+            // TODO role 要改成 as B
+            roleAttributive: RoleAttributive.createReactive({}),
             role: Role.createReactive({ name: 'User'}),
-            action: Action.createReactive({ name: 'approve'})
+            action: Action.createReactive({ name: 'approve'}),
+            payload: Payload.createReactive({})
         }),
         Interaction.createReactive({
             name: 'reject',
+            roleAttributive: RoleAttributive.createReactive({}),
+            // TODO role 要改成 as B
             role: Role.createReactive({ name: 'User'}),
-            action: Action.createReactive({ name: 'reject'})
+            action: Action.createReactive({ name: 'reject'}),
+            payload: Payload.createReactive({})
         }),
         Interaction.createReactive({
             name: 'cancel',
+            roleAttributive: RoleAttributive.createReactive({}),
+            // TODO role 要改成 as A
             role: Role.createReactive({ name: 'User'}),
-            action: Action.createReactive({ name: 'cancel'})
+            action: Action.createReactive({ name: 'cancel'}),
+            payload: Payload.createReactive({})
         }),
     ]
 })
@@ -71,13 +89,16 @@ const _activity: Activity = {
     ]
 }
 
+// FIXME 目前没有递归处理 group
 export function ActivityGraph({ activity = _activity }) {
     // TODO concat 如何仍然保持 incremental ?
     const nodes = computed(() => {
         return activity.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction })).concat(
-            activity.groups.map( group => ({ id: group.uuid, raw: group, isGroup: true }))
+            ...activity.groups.map( group => group.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction, comboId: group.uuid })))
         )
     })
+
+    const combos = incMap(activity.groups, group => ({ id: group.uuid, isGroup: true, raw: group}))
 
 
     const edges = incMap(activity.transfers, transfer => ({
@@ -100,6 +121,7 @@ export function ActivityGraph({ activity = _activity }) {
             // TODO align center 现在无效
             align: undefined
         },
+        groupByTypes: false,
         modes: {
             // default: ['drag-canvas'],
             default: [
@@ -142,13 +164,15 @@ export function ActivityGraph({ activity = _activity }) {
             style: {
                 endArrow: true,
             }
-
+        },
+        defaultCombo: {
+            type: 'rect'
         }
+
     }
 
     const listeners = {
         'canvas:dblclick': () => {
-            console.log(111)
             isEditingNode(true)
         }
     }
@@ -168,5 +192,5 @@ export function ActivityGraph({ activity = _activity }) {
     })
 
 
-    return <Graph options={options} nodes={nodes} edges={edges} Component={ActivityNode} isEditingNode={isEditingNode} Edge={InteractionEdge} canvasEventListeners={listeners}/>
+    return <Graph options={options} nodes={nodes} edges={edges} combos={combos} Combo={ActivityNode} Component={ActivityNode} isEditingNode={isEditingNode} Edge={InteractionEdge} canvasEventListeners={listeners}/>
 }
