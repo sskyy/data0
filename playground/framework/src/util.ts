@@ -60,3 +60,8 @@ export function removeNodesBetween(start: ChildNode, endNode: ChildNode|Comment,
 
 export const isPlainObject = (val: unknown): val is object => val?.constructor === Object
 
+const hasOwnProperty = Object.prototype.hasOwnProperty
+export const hasOwn = (
+    val: object,
+    key: string | symbol
+) => hasOwnProperty.call(val, key)
