@@ -27,7 +27,6 @@ function renderAttrExpression(expression?: AttrNode, mayNeedParams?: boolean) {
                      {needParams ? ')' : null}
                  </>
             )
-
     } else {
         debugger
         throw new Error('unknown type')
@@ -43,16 +42,17 @@ function renderEditingInput(attrNode: AttrNode, onConfirm) {
 
 
 export function AttributiveInput({ value }) {
-
     const editing = atom(false)
-
-    // TODO 适配结构
 
     const onConfirm = (innerText) => {
         const newAttr = parse(innerText)
         value(newAttr)
         editing(false)
     }
+
+    // TODO focus ?
+    // user.focusElement = xxxElement
+
     return <div className="inline-block mr-4" ondblclick={() => editing(true)} >
         {() => editing() ? renderEditingInput(value(), onConfirm) : renderAttrExpression(value())}
     </div>

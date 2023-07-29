@@ -1,6 +1,7 @@
-import {atom, Atom, isAtom, isReactivableType, rawStructureClone, reactive} from "rata";
+import {atom, Atom, isAtom, isReactivableType, isReactive, rawStructureClone, reactive} from "rata";
 import {hasOwn, isObject} from "../../../src/util";
 import {isPlainObject} from "../src/util";
+import {toRaw} from "../../../src/reactive";
 
 type AcceptablePropType<T> = 'string'|'number'|'boolean'| 'object'| KlassType<T>
 
@@ -63,6 +64,7 @@ type KlassType<T> = {
     create: (arg: object, options?: KlassOptions) => KlassInstance<T>,
     createReactive: (arg: object, options?: KlassOptions) => KlassInstance<T>,
     displayName: string,
+    isKlass: true,
     public: T,
     constraints: ClassDef['constraints'],
     instances: any[],
@@ -194,10 +196,18 @@ export function createClass(def){
         } as KlassInstanceStringifyType)
     }
 
+
+    function clone(obj: Klass, deepCloneKlass) : Klass{
+        const arg = Object.fromEntries(Object.keys(def.public).map(k => [k, deepClone(obj[k]), deepCloneKlass]))
+        return obj._options?.isReactive ? Klass.createReactive(arg) : Klass.create(arg)
+    }
+
     class Klass {
         static create = create
         static createReactive = createReactive
         static stringify = stringify
+        static clone = clone
+        static isKlass = true
         public _options?: KlassOptions
         public _type = def.name
         public static displayName = def.name
@@ -255,3 +265,31 @@ export function getDisplayValue<T>( obj: KlassInstance<T>) {
     return (rawObj.constructor as KlassType<T>).display?.(rawObj)
 }
 
+// FIXME 这里没法指定要不要 clone Klass 里面的 引用，现在默认就是不 copy
+export function deepClone(obj: any, deepCloneKlass?: boolean){
+    // 优先处理 reactive 节点，因为下面的 instance 判断会覆盖
+    if (isAtom(obj)) return atom(deepClone(obj()))
+    if (isReactive(obj)) return reactive(deepClone(toRaw(obj)))
+
+
+    if (obj === undefined || obj === null || typeof obj !== 'object') return obj
+    if (Array.isArray(obj)) return obj.map(v => deepClone(v))
+    if (isPlainObject(obj)) {
+        return Object.fromEntries(Object.entries(obj).map(([key, value]) => deepClone(value)))
+    }
+
+    if (obj instanceof Set) {
+        return new Set(Array.from(obj.values()).map(v => deepClone(v)))
+    }
+
+    if (obj instanceof Map) {
+        return new Map(Array.from(obj.entries()).map(([k, v]) => deepClone(v)))
+    }
+
+
+    if (typeof obj?.constructor?.isKlass) return deepCloneKlass ? obj?.constructor?.clone(obj, deepCloneKlass) : obj
+
+    // TODO 支持其他类型，例如 Date/RegExp/Error
+    debugger
+    throw new Error(`unknown type`)
+}

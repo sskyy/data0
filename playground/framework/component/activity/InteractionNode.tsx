@@ -4,22 +4,34 @@ import {RoleInput} from "./RoleInput";
 import {PayloadInput} from "./PayloadInput";
 import {Select} from "../form/Select";
 import {ActionInput} from "./ActionInput";
+import {createDraftControl} from "../createDraftControl";
 
 export function InteractionNode({ interaction }){
-    console.log(interaction.role())
+
+    const renderAttributiveDraftControl = createDraftControl(AttributiveInput)
+
+    const renderActionDraftControl = createDraftControl(ActionInput, {
+        pushEvent: 'input:onBlur'
+    })
+
+    const renderPayloadDraftControl = createDraftControl(PayloadInput, {
+        pushEvent: 'code:onBlur',
+        toControlValue: () => '',
+        toDraft: () => ({})
+    })
 
     return (
         <div style={{border: '1px blue dashed', display: 'inline-block'}}>
             <div>
-                <AttributiveInput value={interaction.roleAttributive().content}/>
+                {renderAttributiveDraftControl(interaction.roleAttributive().content)}
                 {/*<RoleInput />*/}
                 <span>{interaction.role().name()}</span>
             </div>
             <div>
-                <ActionInput value={interaction.action()}/>
+                {renderActionDraftControl(interaction.action().name)}
             </div>
             <div style={{ width: 200, height:100, overflow: 'auto'}}>
-                <PayloadInput />
+                {renderPayloadDraftControl(interaction.payload)}
             </div>
         </div>
     )

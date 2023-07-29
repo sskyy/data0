@@ -90,7 +90,7 @@ const _activity: Activity = {
 }
 
 // FIXME 目前没有递归处理 group
-export function ActivityGraph({ activity = _activity }) {
+export function ActivityGraph({ value:activity = _activity }) {
     // TODO concat 如何仍然保持 incremental ?
     const nodes = computed(() => {
         return activity.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction })).concat(
@@ -100,6 +100,7 @@ export function ActivityGraph({ activity = _activity }) {
 
     const combos = incMap(activity.groups, group => ({ id: group.uuid, isGroup: true, raw: group}))
 
+    window.activity = activity
 
     const edges = incMap(activity.transfers, transfer => ({
         id: crypto.randomUUID(),
