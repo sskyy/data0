@@ -8,8 +8,6 @@ import {createDraftControl} from "../createDraftControl";
 
 export function InteractionNode({ interaction }){
 
-    const renderAttributiveDraftControl = createDraftControl(AttributiveInput)
-
     const renderActionDraftControl = createDraftControl(ActionInput, {
         pushEvent: 'input:onBlur'
     })
@@ -23,7 +21,7 @@ export function InteractionNode({ interaction }){
     return (
         <div style={{border: '1px blue dashed', display: 'inline-block'}}>
             <div>
-                {renderAttributiveDraftControl(interaction.roleAttributive().content)}
+                <AttributiveInput value={interaction.roleAttributive().content} />
                 {/*<RoleInput />*/}
                 <span>{interaction.role().name()}</span>
             </div>

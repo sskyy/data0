@@ -1,4 +1,5 @@
 import {expect} from '@jest/globals'
+import {createElement} from './src/DOM'
 
 // Global compile-time constants
 declare var __DEV__: boolean
@@ -17,10 +18,19 @@ export type Props = {
     [k: string]: any,
     children?: ChildNode[]
 }
-export type Component = (props?: Props) => HTMLElement|Text|DocumentFragment|null|undefined|string|number|Function
+
+type InjectHandles = {
+    createElement: typeof createElement,
+    ref: {
+        [k: string]: HTMLElement
+    }
+}
+
+export type Component = (props?: Props, injectHandles?: InjectHandles) => HTMLElement|Text|DocumentFragment|null|undefined|string|number|Function|JSX.Element
 export type ComponentNode = {
     type: Component,
     props : Props,
+    children: any
 }
 
 declare global {

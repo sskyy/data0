@@ -1,7 +1,8 @@
-import {UnhandledPlaceholder} from "./DOM";
+import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg} from "./DOM";
 import {Host} from "./Host";
 import {createHost} from "./createHost";
 import {Component, ComponentNode, Props} from "../global";
+import {reactive} from "rata";
 
 
 const componentRenderFrame: ComponentHost[] = []
@@ -18,9 +19,17 @@ export class ComponentHost implements Host{
     innerHost?: Host
     props: Props
     public onDestroy?: () => any
-    constructor({ type, props }: ComponentNode, public placeholder: UnhandledPlaceholder) {
+    public ref = reactive({})
+    public config? : Config
+    public children: any
+    constructor({ type, props, children }: ComponentNode, public placeholder: UnhandledPlaceholder) {
         this.type = type
         this.props = props
+        if(children[0] instanceof Config) {
+            this.config = children[0]
+        } else {
+            this.children = children
+        }
     }
     get parentElement() {
         return this.placeholder.parentElement
@@ -30,6 +39,36 @@ export class ComponentHost implements Host{
         return this.innerHost?.element || this.placeholder
     }
 
+    createElement = (type: JSXElementType, rawProps : AttributesArg, ...children: any[]) : ReturnType<typeof createElement> => {
+
+        let name
+        if (rawProps) {
+            Object.keys(rawProps).forEach(key => {
+                if (key[0] === '$') {
+                    name = key.slice(1, Infinity)
+                    // 为了性能，直接使用了 delete
+                    delete rawProps[key]
+                }
+
+            })
+        }
+
+
+        if (name && this.config?.items[name]) {
+            // 为了性能，又直接操作了 rawProps
+            Object.assign(rawProps, this.config!.items[name].props || {})
+            // TODO 支持其他 config
+        }
+
+        const element = createElement(type, rawProps, ...children)
+
+        if (name) {
+            this.ref[name] = element
+        }
+
+        return element
+    }
+
     // TODO 需要用 computed 限制一下自己的变化范围？？？
     render(): void {
         if (this.element !== this.placeholder) {
@@ -37,7 +76,7 @@ export class ComponentHost implements Host{
             throw new Error('should never rerender')
         }
         componentRenderFrame.push(this)
-        const node = this.type(this.props)
+        const node = this.type(this.props, {createElement: this.createElement, ref: this.ref})
         componentRenderFrame.pop()
         // 就用当前 component 的 placeholder
         this.innerHost = createHost(node, this.placeholder)
@@ -50,4 +89,13 @@ export class ComponentHost implements Host{
             this.placeholder.remove()
         }
     }
+}
+
+
+class Config {
+    constructor(public items: object) {}
+}
+
+export function configure(items: object) {
+    return new Config(items)
 }

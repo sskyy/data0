@@ -1,4 +1,5 @@
 import { each, isPlainObject } from './util'
+import {Component} from "../global";
 
 let uuid = 0
 function getId() {
@@ -31,7 +32,7 @@ interface ExtendedElement extends HTMLElement {
 
 function eventProxy(this: ExtendedElement, e: Event) {
   const listener = this._listeners![e.type]
-  return Array.isArray(listener) ? listener.forEach(l => l(e)) : listener(e)
+  return Array.isArray(listener) ? listener.forEach(l => l?.(e)) : listener?.(e)
 }
 
 export type UnhandledPlaceholder = Comment
@@ -171,9 +172,6 @@ export function setAttributes(attributes: AttributesArg, element: HTMLElement|SV
 
 
 
-
-type Component = (props: any) => HTMLElement
-
 export type JSXElementType =  string | typeof Fragment | Component
 
 
@@ -183,24 +181,30 @@ export const containerToUnhandled = new WeakMap<any, UnhandledChildInfo[]>()
 type UnhandledAttrInfo = {el: ExtendedElement, key: string, value: any}
 export const containerToUnhandledAttr = new WeakMap<any, UnhandledAttrInfo[]>()
 
-export function createElement(type: JSXElementType, rawProps : AttributesArg, ...children: any[]) : HTMLElement|Comment|DocumentFragment|any{
+type VNode = {
+  type: JSXElementType,
+  props? : AttributesArg
+}
+
+
+export function createElement(type: JSXElementType, rawProps : AttributesArg, ...children: any[]) : VNode|HTMLElement|Comment|DocumentFragment|SVGElement|string|number|undefined|null{
   const { _isSVG, ...props } = rawProps || {}
 
   let container: HTMLElement|DocumentFragment|SVGElement
+
   if (type === Fragment) {
     container = document.createDocumentFragment()
   } else if (typeof type === 'string') {
     container = _isSVG ? document.createElementNS('http://www.w3.org/2000/svg', type) : document.createElement(type)
   } else {
-
-    return { type, props: { ...props, children }}
+    return { type, props, children }
   }
 
 
   const unhandledAttr: UnhandledAttrInfo[] = []
   const unhandledChildren: UnhandledChildInfo[] = []
 
-  children && children.forEach((child) => {
+  children?.forEach((child) => {
     if (child === undefined || child === null) return
 
     if (typeof child === 'string' || typeof child === 'number') {
