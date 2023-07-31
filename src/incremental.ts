@@ -129,7 +129,8 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
 
     if (!isReactive(source)) {
         if (Array.isArray(source)) {
-            return source.map(mapFn)
+            // 注意这里为了和后面的数据结构保持一致，所以把  index 伪装成 atom
+            return source.map((item, index) => mapFn(item, () => index))
         } else if (source instanceof Map){
             return new Map(Object.entries(source).map(([key, value]) => [key, mapFn(value, key)]))
         } else if (source instanceof Set) {
@@ -253,7 +254,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         },
         {
             onDestroy() {
-                cache.clear()
+                cache?.clear()
                 removeAtomIndexDep(source)
             }
         }
