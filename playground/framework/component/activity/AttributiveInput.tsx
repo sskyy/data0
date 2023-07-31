@@ -1,9 +1,12 @@
 import {AttrNode, AttrNodeTypes, OperatorNames, parse} from "./attrParser";
-import {atom, computed} from "rata";
+import {atom, computed, reactive} from "rata";
 import {nextJob} from "../../src/util";
 import {InjectHandles, Props} from "../../global";
 import {createDraftControl} from "../createDraftControl";
 import {Contenteditable} from "../contenteditable/Contenteditable";
+import {Dropdown} from "../form/Dropdown";
+import {configure} from "../../src/ComponentHost";
+import {createEventTransfer, onDownKey, onEnterKey, onUpKey} from "../../eventAlias";
 
 console.log(parse('A && !B || C || D && (E || !F)'))
 
@@ -36,65 +39,104 @@ function renderAttrExpression(createElement, expression?: AttrNode, mayNeedParam
     }
 }
 
-function renderEditingInput(createElement, attrNode: AttrNode, onFocusout) {
-    const lastConsecutiveInputEvent = atom(null)
 
-    // 什么时候收起 dropdown ?
+function AttrEditor({ value, onFocusout, errors, options}, { createElement} ) {
+    const lastConsecutiveInputValue = atom('')
 
     const renderDraftControl = createDraftControl(Contenteditable, {
         pushEvent: 'container:onFocusout',
         // FIXME 还是想改成数组
-        toControlValue: (rawValue) =>  <div className="px-4 border-b-2 border-indigo-500" style={{minWidth:20}} $editingInput>{renderAttrExpression(createElement, rawValue)}</div>,
-        // FIXME 没有 parse 成功怎么办？？？parse 不成功和 parse成功后验证不通过是两个概念，要分分开处理。
-        toDraft: (controlValue) => (parse(controlValue.innerText))
+        toControlValue: (rawValue) =>  <div className="px-4" $editingInput style={{minWidth:20, minHeight:20}} >{renderAttrExpression(createElement, rawValue)}</div>,
+        toDraft: (controlValue) => (parse(controlValue.innerText)),
+        errors
     })
 
 
-    const dropdown = () => {
-        console.log(lastConsecutiveInputEvent())
-        if(!lastConsecutiveInputEvent()?.detail.data) return null
+    const insertAutoComplete = () => {
+        console.log("should insert !!!")
+    }
 
+    const upKeyEventTransfer = createEventTransfer()
+    const downKeyEventTransfer = createEventTransfer()
+    const enterKeyEventTransfer = createEventTransfer()
+
+
+    // const matchedOptions = options.filter(o => o.name.slice(0, data.length) === data )
+    const matchedOptions = reactive([{name: '1'}, {name: '2'}, {name: '3'}])
+    const dropdownStyle = () => {
+        console.log('recompute style',lastConsecutiveInputValue())
+        if (!lastConsecutiveInputValue()) return {display: 'none'}
+
+        console.log('have new style')
         const selection = window.getSelection()
         const range = selection.getRangeAt(0)
         // TODO 这里的 rect 的其实是在 consectuiveInput 完全改变后才能得到的，现在是因为触发 eventChange 的地方做了 setTimeout，但这不优雅
         const rect = range.getBoundingClientRect()
-        console.log(range.getBoundingClientRect())
-
-        return <div className="absolute" style={{background:'#fff', top: rect.top + rect.height, left: rect.left}}>
-            dropdown
-        </div>
+        return {display: 'block', background:'#fff', zIndex: 9999, top: rect.top + rect.height, left: rect.left, minWidth: 20, minHeight: 20}
     }
+    const dropdownIndex = atom(0)
 
-    // TODO 鼠标和键盘事件选择 option
-    // TODO consecutive 也可以用 状态的方式实现，为什么这里要用事件？？？
+    const preventArrowKey = (e) => e.preventDefault()
+
+
     return <div className="relative" onFocusout={onFocusout}>
-        {renderDraftControl(attrNode, {onConsecutiveInput:lastConsecutiveInputEvent})}
-        {dropdown}
+        {renderDraftControl({
+            value,
+            lastConsecutiveInputValue,
+            onKeydown:[
+                onUpKey(upKeyEventTransfer.source),
+                onDownKey(downKeyEventTransfer.source),
+                onEnterKey(enterKeyEventTransfer.source),
+                onUpKey(preventArrowKey), // 因为 keyup 会让 contenteditable 光标往前
+                onEnterKey(preventArrowKey) // 不需要回车
+            ]
+        })}
+        <Dropdown index={dropdownIndex} options={matchedOptions}>
+            {configure({
+                container: {
+                    props: {
+                        style: dropdownStyle,
+                        className: "absolute border-2 border-indigo-500",
+                        onKeydown: onEnterKey(insertAutoComplete)
+                    },
+                    eventTarget: [
+                        upKeyEventTransfer.target,
+                        downKeyEventTransfer.target,
+                        enterKeyEventTransfer.target,
+                    ]
+                }
+            })}
+        </Dropdown>
     </div>
 }
 
 
 /* @jsx createElement */
-export function AttributiveInput({ value }: Props, { createElement, ref }: InjectHandles) {
+export function AttributiveInput({ value, options = [] }: Props, { createElement, ref }: InjectHandles) {
     const editing = atom(false)
+    const errors = reactive([])
 
     const onFocusout = () => {
-        editing(false)
+        if (!errors.length) {
+            editing(false)
+        }
     }
 
-    // TODO onDblclick 要改成数组形式，变成一种关于状态事件和副作用的声明？
-    const onDblclick = () => {
-        // TODO editing 也要改成事件形式？
-        editing(true)
-        // TODO focus 要从 api 改成状态控制？
-        // user.focusElement = xxxElement
-        nextJob(() => {
-            ref.editingInput!.focus()
+    // 把各种不同的功能分开
+    const onDblclick = [
+        // TODO 状态修改也改成事件形式？例如 editing.setTrue ?? 还是 events.setEditing(() => editing(true))?
+        () => editing(true),
+        () => nextJob(() => {
+            // TODO focus 要从 api 改成状态控制？
+            // user.focusElement = xxxElement
+            ref.editor!.ref!.editingInput!.focus!()
         })
-    }
-
+    ]
 
     return <div className="inline-block mr-4" onDblclick={onDblclick} >
-        {() => editing() ? renderEditingInput(createElement, value, onFocusout) : renderAttrExpression(createElement, value(), false, 'empty')}
+        {() => {
+            console.warn('editing recompute')
+            return editing() ? <AttrEditor ref='editor' value={value} onFocusout={onFocusout} errors={errors} options={options} /> : renderAttrExpression(createElement, value(), false, 'empty')
+        }}
     </div>
 }

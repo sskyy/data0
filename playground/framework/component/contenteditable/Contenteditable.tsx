@@ -1,7 +1,8 @@
-// 这里的 contenteditable 组件和 richtext 不是同一个东西。
+// 这里的 contenteditable 组件和 richText 不是同一个东西。
 // richText 的 value 是有业务语义的数据结构，这里的 value 就是 element children
 
-import {nextJob} from "../../src/util";
+
+import {atom, computed} from "rata";
 
 function getSelectionRange() {
     const selection = window.getSelection()
@@ -16,17 +17,21 @@ function hasCursor() {
 
 
 
-export function Contenteditable({ value,  ...props }, {createElement, ref}) {
+export function Contenteditable({ value, errors, lastConsecutiveInputValue = atom(''), ...props }, {createElement, ref}) {
 
-    let consecutiveInputValue = ''
 
-    const triggerConsecutiveInput = (data) => {
+    const updateConsecutiveInput = (data) => {
         const range = getSelectionRange()
-        consecutiveInputValue = range?.collapsed ? (consecutiveInputValue + data):data
         // TODO 为了让外界获得准确的 range boundingClientRect
         setTimeout(() => {
-            const newEvent = new CustomEvent('consecutiveinput',  { detail: {data: consecutiveInputValue}, cancelable: true });
-            ref.container.dispatchEvent(newEvent)
+            lastConsecutiveInputValue(
+                data === undefined ?
+                    '' :
+                    (range?.collapsed ?
+                        (lastConsecutiveInputValue() + data)
+                        :data
+                    )
+            )
         }, 1)
     }
 
@@ -34,7 +39,6 @@ export function Contenteditable({ value,  ...props }, {createElement, ref}) {
         if (!hasCursor()) {
             return
         }
-        // TODO 判断有没有 cursor
         // -2 输入法中的  Keydown 不管。
         // 这里有关于 keydown 和输入法的问题的例子。虽然 keydown 发生在 compositionstart 前，但 keyCode === 229 能表示这个  keydown 是输入法的一部分。
         // https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event
@@ -43,7 +47,7 @@ export function Contenteditable({ value,  ...props }, {createElement, ref}) {
         }
 
         if(e.key.length === 1) {
-            triggerConsecutiveInput(e.key)
+            updateConsecutiveInput(e.key)
         }
     }
 
@@ -57,22 +61,25 @@ export function Contenteditable({ value,  ...props }, {createElement, ref}) {
     }
 
     const handleCompositionend = (e) => {
-        triggerConsecutiveInput(e.data)
+        updateConsecutiveInput(e.data)
     }
 
     const handleBlur = () => {
-        consecutiveInputValue = ''
-        triggerConsecutiveInput('')
+        updateConsecutiveInput(undefined)
     }
 
     // TODO selection change 也要监听，但监听的是 document 上面的，还需要消除。
     const handleSelectionChange = () => {
         // 这里得判断到底是用户鼠标键盘移动导致的，还是 输入导致的。
-        console.log(getSelectionRange())
+        // console.log(getSelectionRange())
     }
     document.addEventListener('selectionchange', handleSelectionChange)
 
-    return <div $container {...props}>
+    const className = computed(() => {
+        return errors.length ? 'border-b-2 border-rose-500' :'border-b-2 border-indigo-500'
+    })
+
+    return <div ref="container" {...props} className={className} >
         {() => {
             const inner = value() as HTMLElement
             inner.addEventListener('keydown', handleKeydown)

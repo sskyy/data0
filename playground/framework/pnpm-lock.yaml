@@ -4,6 +4,7 @@ specifiers:
   '@antv/g6': ^4.8.20
   '@heroicons/react': ^2.0.18
   '@tailwindcss/forms': ^0.5.4
+  '@types/acorn': ^6.0.0
   '@types/jest': ^29.5.2
   '@types/node': ^20.3.3
   acorn: ^8.10.0
@@ -26,6 +27,7 @@ dependencies:
   '@antv/g6': 4.8.20
   '@heroicons/react': 2.0.18
   '@tailwindcss/forms': 0.5.4_tailwindcss@3.3.2
+  '@types/acorn': 6.0.0
   '@types/jest': 29.5.2
   acorn: 8.10.0
   butterfly-dag: 4.3.26_m4kcc5qzkw6na7wvjdb4lyxxpu
@@ -1139,6 +1141,13 @@ packages:
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
     dev: true
+
+  /@types/acorn/6.0.0:
+    resolution: {integrity: sha512-8tSIZoick397hAZIZkiq6R09qNgLjx0CBvmxix3gWyCi6UvXNFjN56xh4e1wTwyYlnTEy32tgo9cooxt6J4lhA==}
+    deprecated: This is a stub types definition. acorn provides its own type definitions, so you do not need this installed.
+    dependencies:
+      acorn: 8.10.0
+    dev: false
 
   /@types/babel__core/7.20.1:
     resolution: {integrity: sha512-aACu/U/omhdk15O4Nfb+fHgH/z3QsfQzpnvRZhYhThms83ZnAOZz7zZAWO7mn2yyNQaA4xTO8GLK3uqFU4bYYw==}

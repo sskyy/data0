@@ -26,10 +26,10 @@ export function InteractionNode({ interaction }){
                 <span>{interaction.role().name()}</span>
             </div>
             <div>
-                {renderActionDraftControl(interaction.action().name)}
+                {renderActionDraftControl({ value: interaction.action().name})}
             </div>
             <div style={{ width: 200, height:100, overflow: 'auto'}}>
-                {renderPayloadDraftControl(interaction.payload)}
+                {renderPayloadDraftControl({ value: interaction.payload})}
             </div>
         </div>
     )
