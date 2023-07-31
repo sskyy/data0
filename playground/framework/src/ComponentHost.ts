@@ -1,8 +1,10 @@
-import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg} from "./DOM";
+import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg, dispatchEvent} from "./DOM";
 import {Host} from "./Host";
 import {createHost} from "./createHost";
 import {Component, ComponentNode, Props} from "../global";
-import {reactive} from "rata";
+import {reactive, computed, destroyComputed} from "rata";
+import {assert} from "./util";
+import {pauseTracking, resetTracking} from "../../../src/effect";
 
 
 const componentRenderFrame: ComponentHost[] = []
@@ -11,10 +13,22 @@ export function onDestroy(destroyCallback: () => any) {
     componentRenderFrame.at(-1)!.onDestroy = destroyCallback
 }
 
+
+function ensureArray(o) {
+    return o ? (Array.isArray(o) ? o : [o]) : []
+}
+
+
+// CAUTION 为了性能，直接 assign。在底层 所有 DOM 节点都可以接受 array attribute，这样就为属性的覆盖和合并减轻了工作量。
+function combineProps(origin, newProps) {
+    Object.entries(newProps).forEach(([key, value]) => {
+        const originValue = origin[key]
+        origin[key] = ensureArray(originValue).concat(value)
+    })
+    return origin
+}
+
 export class ComponentHost implements Host{
-    // CAUTION Component 只因为 props 的引用变化而重新 render。
-    //  只有有 diff 算发以后才会出现引用变化的情况，现在我们还没有实现。所以现在其实永远不会重 render
-    computed = undefined
     type: Component
     innerHost?: Host
     props: Props
@@ -22,6 +36,7 @@ export class ComponentHost implements Host{
     public ref = reactive({})
     public config? : Config
     public children: any
+
     constructor({ type, props, children }: ComponentNode, public placeholder: UnhandledPlaceholder) {
         this.type = type
         this.props = props
@@ -40,7 +55,7 @@ export class ComponentHost implements Host{
     }
 
     createElement = (type: JSXElementType, rawProps : AttributesArg, ...children: any[]) : ReturnType<typeof createElement> => {
-
+        const isComponent = typeof type === 'function'
         let name
         if (rawProps) {
             Object.keys(rawProps).forEach(key => {
@@ -48,39 +63,109 @@ export class ComponentHost implements Host{
                     name = key.slice(1, Infinity)
                     // 为了性能，直接使用了 delete
                     delete rawProps[key]
+                } else  if (key === 'ref') {
+                    name = rawProps[key]
+                    delete rawProps[key]
                 }
 
             })
         }
 
 
+        let finalProps = rawProps
+        let finalChildren = children
         if (name && this.config?.items[name]) {
+
+
             // 为了性能，又直接操作了 rawProps
-            Object.assign(rawProps, this.config!.items[name].props || {})
-            // TODO 支持其他 config
+            const thisItemConfig = this.config!.items[name]
+            if (thisItemConfig.props) {
+
+                if (isComponent) {
+                    // 如果是个 component，它的 props 无法自动合并，所以用户要自己处理
+                    assert(typeof thisItemConfig.props === 'function', 'configure a component node must use function to handle props rewrite')
+                    finalProps = thisItemConfig.props(rawProps)
+                } else {
+                    // CAUTION 普通节点，这里默认适合原来的 props 合并，除非用户想要自己的处理
+                    if (typeof thisItemConfig.props === 'function') {
+                        finalProps = thisItemConfig.props(rawProps)
+                    } else {
+                        finalProps = combineProps(rawProps, thisItemConfig.props)
+                        // if (name === 'container') console.log(thisItemConfig.props, rawProps)
+                    }
+                }
+
+            }
+
+            if (thisItemConfig.eventTarget) {
+                // TODO 支持 eventTarget，用户
+                thisItemConfig.eventTarget.forEach(eventTarget => {
+                    eventTarget((e) => {
+                        this.eventTargetTrigger(e, name)
+                    })
+                })
+
+            }
+
+
+            // 支持 children 和 configure 同时存在
+            if (thisItemConfig.children) {
+                if (isComponent) {
+                    // 支持对 InnerComponent 的穿透 configure
+                    finalChildren = [configure(thisItemConfig.children)]
+                } else {
+                    finalChildren = thisItemConfig.children
+                }
+            }
         }
 
-        const element = createElement(type, rawProps, ...children)
-
-        if (name) {
-            this.ref[name] = element
+        if (name && isComponent) {
+            finalProps.ref = (host) => this.ref[name] = host
         }
+        const el = createElement(type, finalProps, ...finalChildren)
 
-        return element
+        if (name && !isComponent) {
+            this.ref[name] = el
+        }
+        return el
     }
+    eventTargetTrigger = (sourceEvent, targetName) => {
+        // TODO 如何 clone 各种不同的 event ? 这里的暴力方式是否ok
+        const EventConstructor = sourceEvent.constructor
+        const targetEvent = new EventConstructor(sourceEvent.type, sourceEvent)
+        console.log(`dispatching ${targetName} ${targetEvent.type} ${targetEvent.key}`)
+        // CAUTION 因为 keydown 等 event 是无法通过 node.dispatchEvent 模拟的，所以这里我们直接用 DOM 的 eventProxy 实现。
+        this.ref[targetName].dispatchEvent( targetEvent)
+    }
+
 
     // TODO 需要用 computed 限制一下自己的变化范围？？？
     render(): void {
         if (this.element !== this.placeholder) {
             // CAUTION 因为现在没有 diff，所以不可能出现 Component rerender
-            throw new Error('should never rerender')
+            assert(false, 'should never rerender')
         }
         componentRenderFrame.push(this)
-        const node = this.type(this.props, {createElement: this.createElement, ref: this.ref})
+
+        const props = {...this.props}
+        // CAUTION 注意这里 children 的写法，没有children 就不要传，免得后面 props 继续往下透传的时候出问题。
+        if (this.children) props.children = this.children
+        // CAUTION 组件在渲染的时候只是为了建立联系，这种过程可能会读 reactive，但不应该被更上层监听。
+        //  组件的渲染会出现在 FunctionHost 中，并且是在 FunctionHost render 的 computed 中，所以这里 render 中的读的值都可能会被上层 track.
+        pauseTracking()
+        const node = this.type(props, {createElement: this.createElement, ref: this.ref})
+
         componentRenderFrame.pop()
         // 就用当前 component 的 placeholder
         this.innerHost = createHost(node, this.placeholder)
         this.innerHost.render()
+        resetTracking()
+
+        // CAUTION 一定是渲染之后才调用 ref，这样才能获得 dom 信息。
+        if (this.props.ref) {
+            assert(typeof this.props.ref === 'function', `ref on component should be a function after parent component handled`)
+            this.props.ref(this)
+        }
     }
     destroy(parentHandle?: boolean) {
         this.innerHost!.destroy(parentHandle)

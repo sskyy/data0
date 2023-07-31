@@ -1,4 +1,4 @@
-import { each, isPlainObject } from './util'
+import {assert, each, isPlainObject} from './util'
 import {Component} from "../global";
 
 let uuid = 0
@@ -39,23 +39,36 @@ export type UnhandledPlaceholder = Comment
 
 const selectValueTmp = new WeakMap<ExtendedElement, any>()
 
+function isValidAttribute(name:string, value:any) {
+  if (typeof value !== 'object' && typeof value !== 'function') return true
+  // 事件
+  if ((name[0] === 'o' && name[1] === 'n') && typeof value === 'function' ) return true
+  if (isPlainObject(value) && name ==='style') return true
+  // 默认支持 className 的对象形式
+  if (isPlainObject(value) && name ==='className') return true
 
-export function setAttribute(node: ExtendedElement, name: string, value: any, collectUnhandledAttr?: (info: UnhandledAttrInfo) => any, isSvg?: boolean) {
-  // 只有 style 允许 object，否则就是不认识的属性
-  if (isPlainObject(value) && name !=='style') {
-    collectUnhandledAttr!({el: node, key: name, value});
+  return false
+}
+
+function isEventName(name) {
+  return name[0] === 'o' && name[1] === 'n'
+}
+
+export function setAttribute(node: ExtendedElement, name: string, value: any,  isSvg?: boolean) {
+  if (Array.isArray(value) && name !== 'style' && name !== 'className' && !isEventName(name) ) {
+    // 全都是覆盖模式，只处理最后一个
+    return setAttribute(node, name, value.at(-1), isSvg)
+  }
+
+
+  // uuid
+  if (name === 'uuid') {
+    node.setAttribute('data-uuid', value)
     return
   }
 
-  // 处理函数
-  if (typeof value === 'function' ) {
-    // 只有事件回调允许是函数，否则的话可能是 computed attr/atom，让外部处理
-    if (!(name[0] === 'o' && name[1] === 'n')) {
-      collectUnhandledAttr!({el: node, key: name, value});
-      return
-    }
-
-    // 事件
+  // 事件
+  if (name[0] === 'o' && name[1] === 'n') {
     const useCapture = name !== (name = name.replace(/Capture$/, ''))
     let eventName = name.toLowerCase().substring(2)
     // CAUTION 体验改成和 react 的一致
@@ -66,21 +79,60 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
       node.removeEventListener(eventName, eventProxy, useCapture)
     }
 
+    assert(node._listeners?.[eventName] === undefined, `${eventName} already listened`);
     (node._listeners || (node._listeners = {}))[eventName] = value
 
     return
   }
 
-  // 剩下的都是能识别的情况了
-  if (name === 'className') name = 'class'
+  // style
+  if (name === 'style') {
+    if (!value || (Array.isArray(value) && !value.length)) {
+      node.style.cssText = value || ''
+    }
+    const styles = Array.isArray(value) ? value : [value]
+    styles.forEach(style => {
+      if (typeof style !== 'object') assert(false, 'style can only be object, string style is deprecated')
+      each(style, (v, k) => {
+        if (v === undefined) {
+          // @ts-ignore
+          node.style[k] = ''
+        } else {
+          // @ts-ignore
+          node.style[k] = typeof v === 'number' ? (`${v}px`) : v
+        }
+      })
+    })
+    return
+  }
 
+  if (name === 'className') {
+    const classNames = Array.isArray(value) ? value : [value]
+    let classNameValue = ''
+    classNames.forEach((className) => {
+      if (typeof className === 'object') {
+        Object.entries(className).forEach(([name, shouldShow]) => {
+          if (shouldShow) classNameValue = `${classNameValue} ${name}`
+        })
+      } else if(typeof className === 'string'){
+        // 只能是 string
+        classNameValue = `${classNameValue} ${className}`
+      } else {
+        assert(false, 'className can only be string or {[k:string]:boolean}')
+      }
+    })
+
+    node.setAttribute('class', classNameValue)
+    return
+  }
+
+  // 剩下的都是 primitive value 的情况了
   if (name === 'key' || name === 'ref') {
     // ignore
   } else if (name === 'class' && !isSvg) {
     node.className = value || ''
   } else if(name === 'value') {
     (node as HTMLDataElement).value = value
-
 
     // CAUTION 因为 select 如果 option 还没有渲染（比如 computed 的情况），那么设置 value 就没用，我们这里先存着，
     //  等 append option children 的时候再 set value 一下
@@ -115,23 +167,7 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
       node.removeAttribute('disabled')
     }
 
-  }else if (name === 'style') {
-    if (!value || typeof value === 'string') {
-      node.style.cssText = value || ''
-    }
-
-    if (value && typeof value === 'object') {
-      each(value, (v, k) => {
-        if (value[k] === undefined) {
-          // @ts-ignore
-          node.style[k] = ''
-        } else {
-          // @ts-ignore
-          node.style[k] = typeof v === 'number' ? (`${v}px`) : v
-        }
-      })
-    }
-  } else if (name === 'dangerouslySetInnerHTML') {
+  }else if (name === 'dangerouslySetInnerHTML') {
     console.warn(value)
     if (value) node.innerHTML = value.__html || ''
   } else if (name !== 'list' && name !== 'type' && !isSvg && name in node) {
@@ -158,16 +194,6 @@ export function setAttribute(node: ExtendedElement, name: string, value: any, co
 
 export type AttributesArg = {
   [k: string] : any
-}
-
-export function setAttributes(attributes: AttributesArg, element: HTMLElement|SVGElement, collectUnhandledAttr: (info: UnhandledAttrInfo) => void, isSVG?: boolean){
-  each(attributes, (attribute, name) => {
-    if (name === '_uuid') {
-      setAttribute(element as ExtendedElement, 'data-uuid', getId())
-    } else {
-      setAttribute(element as ExtendedElement, name, attribute, collectUnhandledAttr, isSVG)
-    }
-  })
 }
 
 
@@ -233,21 +259,29 @@ export function createElement(type: JSXElementType, rawProps : AttributesArg, ..
     }
   })
 
-
   // CAUTION 注意这里一定要先处理往 children 再处理自身的 prop，因为像 Select 这样的元素只有在渲染完 option 之后再设置 value 才有效。
   //  否则会出现  Select value 自动变成 option 第一个的情况。
   if (props) {
-    const collectUnhandledAttr = (info: UnhandledAttrInfo) => {
-      unhandledAttr.push(info)
-    }
-    setAttributes(props, container as HTMLElement, collectUnhandledAttr, _isSVG)
+    Object.entries(props).forEach(([key, value]) => {
+      // 注意这里好像写得很绕，但逻辑判断是最少的
+      if ( Array.isArray(value)) {
+        if (!value.every(v => isValidAttribute(key, v))){
+          unhandledAttr.push({ el: container as ExtendedElement, key, value})
+          return
+        }
+      } else if(!isValidAttribute(key, value)){
+        unhandledAttr.push({ el: container as ExtendedElement, key, value})
+        return
+      }
+      setAttribute(container as ExtendedElement, key, value, _isSVG)
+    })
   }
 
   // 把 unhandled child/attr 全部收集到顶层的  container 上，等外部处理，这样就不用外部去遍历 jsx 的结果了
   if (unhandledChildren.length) containerToUnhandled.set(container, unhandledChildren)
   if (unhandledAttr) containerToUnhandledAttr.set(container, unhandledAttr)
 
-  // TODO props.ref 也改成收集的形式，外部决定合适执行
+  // CAUTION ref 外部处理
   return container
 }
 
@@ -277,3 +311,7 @@ export function createElementNS(type: string, props: AttributesArg, ...children:
   return createElement(type, {_isSVG: true, ...(props || {})}, children)
 }
 
+
+export function dispatchEvent(target, event) {
+  return eventProxy.call(target, event)
+}

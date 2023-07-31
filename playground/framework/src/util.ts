@@ -65,3 +65,10 @@ export const hasOwn = (
     val: object,
     key: string | symbol
 ) => hasOwnProperty.call(val, key)
+
+export function assert(condition: boolean, message: string ) {
+  if (!condition) {
+    if (__DEV__) debugger
+    throw new Error(message)
+  }
+}

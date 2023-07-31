@@ -1,12 +1,23 @@
 import {containerToUnhandled, containerToUnhandledAttr, setAttribute, UnhandledPlaceholder, insertBefore} from "./DOM";
 import {Host} from "./Host";
-import {computed, destroyComputed, isAtom} from "rata";
+import {computed, destroyComputed, isAtom, isReactive} from "rata";
 import {createHost} from "./createHost";
 import {removeNodesBetween} from "./util";
+
+// FIXME 不应该出现 reactive，因为 createElement 的时候会直接读，造成泄露？
+function isReactiveValue(v) {
+    return isReactive(v) || isAtom(v) || typeof v === 'function'
+}
+
+function isAtomLike(v) {
+    return isAtom(v) || typeof v === 'function'
+}
 
 
 function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragment|SVGElement) {
     if (!(result instanceof HTMLElement || result instanceof DocumentFragment || result instanceof SVGElement)) return
+
+    const isSVG = result instanceof SVGElement
 
     const unhandledChild = containerToUnhandled.get(result)
 
@@ -18,20 +29,32 @@ function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragme
     const attrComputeds: ReturnType<typeof computed>[] = []
     const unhandledAttr = containerToUnhandledAttr.get(result)
     unhandledAttr?.forEach(({ el, key, value}) => {
-        // CAUTION 刚好读 atom 和 function 都是执行函数的写法。
-        if (isAtom(value) || typeof value === 'function') {
-            attrComputeds.push(computed(() => {
-                // if (key === 'value') debugger
-                setAttribute(el, key, value(), () => {}, result instanceof SVGElement)
-            }))
 
-            // TODO 表单组件，要变成受控的形式，还要考虑值不是 atom 的情况，是不是要写到 DOM 里面？
-            if (key === 'value') {
-
+        // 增加一些类型判断
+        if (__DEV__) {
+            if (Array.isArray(value)) {
+                if (!value.every(isReactiveValue)) throw new Error(`unknown attr array type: ${key}`)
+            } else {
+                if (!isReactiveValue(value)) throw new Error(`unknown attr type: ${key}`)
             }
+        }
 
+        // CAUTION 这里只有 style 和 className 的合并是特殊情况，其他都是字符串，直接覆盖。
+        if(key === 'style' || key === 'className') {
+            attrComputeds.push(computed(() => {
+                // 肯定是有不能识别的 style
+                const final = Array.isArray(value) ? value.map(v => isAtomLike(v) ? v() : v) : value()
+                setAttribute(el, key, final)
+            }))
         } else {
-            throw new Error(`unknown attr ${key}: ${value}`)
+            const last = Array.isArray(value) ? value.at(-1) : value
+            if (isReactiveValue(last)) {
+                attrComputeds.push(computed(() => {
+                    setAttribute(el, key, isAtomLike(last) ? last() : last,  isSVG)
+                }))
+            } else {
+                setAttribute(el, key, last,  isSVG)
+            }
         }
     })
 
