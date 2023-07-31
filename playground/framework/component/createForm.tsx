@@ -189,9 +189,9 @@ function StaticField({field, fieldValues, fieldTouchedStatus, fieldNames, constr
         // 自由输入的情况
         formControl = staticField.type === 'number' ?
             <NumberInput {...commonProp}/> :
-            staticField.type === 'boolean' ?
-                <Checkbox {...commonProp}/> :
-                <Input {...commonProp}/>
+            <Input {...commonProp}/>
+    } else if (staticField.type === 'boolean') {
+        formControl = <Checkbox {...commonProp}/>
     } else {
         throw new Error(`${staticField.type} is not supported yet`)
     }

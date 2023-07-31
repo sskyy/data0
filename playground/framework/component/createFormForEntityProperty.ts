@@ -53,7 +53,8 @@ export function createFormForEntity<T>(EntityType: typeof T, formOptions? : Form
         getConstraintArgs: formOptions?.getConstraintArgs,
         fixedValues: formOptions?.fixedValues,
         initialValues: formOptions?.initialValues,
-        fields: propertyNames.map(propName => createField(EntityType, propName))
+        // FIXME computedType 的情况还不知道怎么处理
+        fields: propertyNames.map(propName => createField(EntityType, propName)).filter(x => x)
     })
 }
 
