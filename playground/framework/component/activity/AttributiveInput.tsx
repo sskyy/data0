@@ -1,21 +1,25 @@
-import {AttrNode, AttrNodeTypes, OperatorNames, parse} from "./attrParser";
-import {atom, computed, reactive} from "rata";
+import {AttrNode, AttrNodeTypes, OperatorNames, parse, VariableNode} from "./attrParser";
+import {atom, computed, incFilter, reactive} from "rata";
 import {nextJob} from "../../src/util";
 import {InjectHandles, Props} from "../../global";
 import {createDraftControl} from "../createDraftControl";
-import {Contenteditable} from "../contenteditable/Contenteditable";
+import {Contenteditable, replaceLastText} from "../contenteditable/Contenteditable";
 import {Dropdown} from "../form/Dropdown";
 import {configure} from "../../src/ComponentHost";
 import {createEventTransfer, onDownKey, onEnterKey, onUpKey} from "../../eventAlias";
 
-console.log(parse('A && !B || C || D && (E || !F)'))
+
+function renderAttrNode(createElement, name, availableAttrs?) {
+    // TODO 展示链接？？？
+    return <a href="#" style={{color: "blue", textDecoration:'underline'}}>{name}</a>
+}
 
 
 function renderAttrExpression(createElement, expression?: AttrNode, mayNeedParams?: boolean, placeholder?: string) {
     if (!expression) return <div>{placeholder}</div>
 
     if ( expression.type === AttrNodeTypes.variable) {
-        return <a href="#" style={{color: "blue", textDecoration:'underline'}}>{expression.name}</a>
+        return renderAttrNode(createElement, (expression as VariableNode).name)
     } else if (expression.type === AttrNodeTypes.group) {
         const needParams = expression.op === OperatorNames['||'] && mayNeedParams
         return expression.op === OperatorNames['!'] ?
@@ -42,53 +46,69 @@ function renderAttrExpression(createElement, expression?: AttrNode, mayNeedParam
 
 function AttrEditor({ value, onFocusout, errors, options}, { createElement} ) {
     const lastConsecutiveInputValue = atom('')
+    // 基于 contenteditable lastConsecutiveInputValue 还要再构建一下，因为我们把 && || 空格 等也看做中断。
+    const lastAttrNameLike = computed(() => lastConsecutiveInputValue().match(/[0-9a-zA-Z_]+$/)?.[0] || '')
 
     const renderDraftControl = createDraftControl(Contenteditable, {
         pushEvent: 'container:onFocusout',
         // FIXME 还是想改成数组
         toControlValue: (rawValue) =>  <div className="px-4" $editingInput style={{minWidth:20, minHeight:20}} >{renderAttrExpression(createElement, rawValue)}</div>,
         toDraft: (controlValue) => (parse(controlValue.innerText)),
-        errors
+
     })
 
 
+
     const insertAutoComplete = () => {
-        console.log("should insert !!!")
+        // FIXME 理论上，因为修改该的是 contenteditable 的 value，所以应该改成包装在事件里的形式。
+        //  见 https://z8lxoxwryu.feishu.cn/docx/E07Zd2Y2Ioy6BVxWj21cO3Smnmg?from=from_copylink
+        if (dropdownIndex() > -1) {
+            // TODO 应该是替换成 Concept node
+            console.log('replacing', lastAttrNameLike())
+            // CAUTION 这里取 name 一定要得到真正的 string，因为这个节点是个当成 value 用的 dom 节点，不是组件的一部分，atom 不会被转化。
+            const matchedName = matchedOptions[dropdownIndex()].name()
+            // 会触发 selection change，然后 consecutiveInput 就重置了
+            replaceLastText(lastAttrNameLike().length, renderAttrNode(createElement, matchedName))
+            // 应该要触发 selection change，重置 lastConsecutiveInputValue
+            // setTimeout(() => {
+            //     console.log(lastAttrNameLike())
+            // }, 1)
+        }
     }
 
     const upKeyEventTransfer = createEventTransfer()
     const downKeyEventTransfer = createEventTransfer()
-    const enterKeyEventTransfer = createEventTransfer()
+
+    const matchedOptions = incFilter(options, o => o.name().slice(0, lastAttrNameLike().length) === lastAttrNameLike() )
 
 
-    // const matchedOptions = options.filter(o => o.name.slice(0, data.length) === data )
-    const matchedOptions = reactive([{name: '1'}, {name: '2'}, {name: '3'}])
+
     const dropdownStyle = () => {
-        console.log('recompute style',lastConsecutiveInputValue())
-        if (!lastConsecutiveInputValue()) return {display: 'none'}
+        if (!lastAttrNameLike() || !matchedOptions.length ) return {display: 'none'}
 
-        console.log('have new style')
         const selection = window.getSelection()
         const range = selection.getRangeAt(0)
         // TODO 这里的 rect 的其实是在 consectuiveInput 完全改变后才能得到的，现在是因为触发 eventChange 的地方做了 setTimeout，但这不优雅
         const rect = range.getBoundingClientRect()
         return {display: 'block', background:'#fff', zIndex: 9999, top: rect.top + rect.height, left: rect.left, minWidth: 20, minHeight: 20}
     }
-    const dropdownIndex = atom(0)
 
-    const preventArrowKey = (e) => e.preventDefault()
+    const dropdownIndex = atom(-1) // 默认没有选中的
 
+    const preventDefault = (e) => e.preventDefault()
 
     return <div className="relative" onFocusout={onFocusout}>
         {renderDraftControl({
             value,
+            errors,
             lastConsecutiveInputValue,
+
             onKeydown:[
                 onUpKey(upKeyEventTransfer.source),
                 onDownKey(downKeyEventTransfer.source),
-                onEnterKey(enterKeyEventTransfer.source),
-                onUpKey(preventArrowKey), // 因为 keyup 会让 contenteditable 光标往前
-                onEnterKey(preventArrowKey) // 不需要回车
+                onUpKey(preventDefault), // 因为 keyup 会让 contenteditable 光标往前
+                onEnterKey(insertAutoComplete),
+                onEnterKey(preventDefault) // 不需要回车换行
             ]
         })}
         <Dropdown index={dropdownIndex} options={matchedOptions}>
@@ -99,10 +119,10 @@ function AttrEditor({ value, onFocusout, errors, options}, { createElement} ) {
                         className: "absolute border-2 border-indigo-500",
                         onKeydown: onEnterKey(insertAutoComplete)
                     },
+                    // 将 contenteditable 的事件转移过来。
                     eventTarget: [
                         upKeyEventTransfer.target,
                         downKeyEventTransfer.target,
-                        enterKeyEventTransfer.target,
                     ]
                 }
             })}

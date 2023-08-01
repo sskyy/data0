@@ -18,24 +18,39 @@ export const Role = createClass({
     }
 })
 
-// TODO 这里应该是个复合结构怎么表示？？
+// TODO Role 和 Attributive 合在一起可以变成新的 Role，怎么表示？
+
 export const RoleAttributive = createClass({
     name: 'RoleAttributive',
+    display: (obj) => `${obj.name}`,
     public: {
         content: {
             type: 'object',
+        },
+        stringContent: {
+            type: 'string',
+        },
+        name: {
+            type: 'string'
         }
     }
 })
 
+
+// TODO Entity 和 Attributive 合在一起可以变成新的 Role，怎么表示？
 export const EntityAttributive = createClass({
     name: 'EntityAttributive',
+    display: (obj) => `${obj.name}`,
     public: {
         name: {
             type: 'string',
         },
-
-        base: Entity
+        content: {
+            type: 'object',
+        },
+        stringContent: {
+            type: 'string',
+        },
     }
 })
 

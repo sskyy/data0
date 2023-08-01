@@ -59,7 +59,7 @@ type KlassInstance<T> = {
 }
 
 
-type KlassType<T> = {
+export type KlassType<T> = {
     new(arg: object, options?: KlassOptions) : KlassInstance<T>,
     create: (arg: object, options?: KlassOptions) => KlassInstance<T>,
     createReactive: (arg: object, options?: KlassOptions) => KlassInstance<T>,

@@ -14,7 +14,7 @@ export const enum AttrNodeTypes {
 
 export type AttrNode = GroupNode|VariableNode
 
-type GroupNode = {
+export type GroupNode = {
     type: AttrNodeTypes
     op: OperatorNames,
     left: AttrNode,
@@ -22,7 +22,7 @@ type GroupNode = {
 }
 
 
-type VariableNode = {
+export type VariableNode = {
     type: 'variable'
     name: string
 }

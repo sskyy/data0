@@ -17,8 +17,22 @@ function hasCursor() {
 
 
 
-export function Contenteditable({ value, errors, lastConsecutiveInputValue = atom(''), ...props }, {createElement, ref}) {
+export function Contenteditable({ value, errors, lastConsecutiveInputValue = atom(''), ...props }, {createElement, ref, useLayoutEffect}) {
 
+
+    let lastCursorNode
+    let lastCursorOffset
+    const rememberNextCursor = (newOffsetDataLength, fromLastPos?) => {
+        if (fromLastPos) {
+            // fromLastPos 说明是可能是 compositionEnd 之类触发的，
+            lastCursorOffset += newOffsetDataLength
+        } else {
+            const range = getSelectionRange()
+            lastCursorNode = range?.startContainer
+            lastCursorOffset = range?.startOffset + newOffsetDataLength
+        }
+        // console.warn('remember', lastCursorNode, lastCursorOffset)
+    }
 
     const updateConsecutiveInput = (data) => {
         const range = getSelectionRange()
@@ -35,7 +49,7 @@ export function Contenteditable({ value, errors, lastConsecutiveInputValue = ato
         }, 1)
     }
 
-    const handleKeydown = (e) => {
+    const onKeydown = (e) => {
         if (!hasCursor()) {
             return
         }
@@ -48,47 +62,91 @@ export function Contenteditable({ value, errors, lastConsecutiveInputValue = ato
 
         if(e.key.length === 1) {
             updateConsecutiveInput(e.key)
+            rememberNextCursor(1)
         }
     }
 
-    const handlePaste = (e) => {
-        // TODO
-        // const domparser = new DOMParser()
-        // const result = domparser.parseFromString(e.clipboardData!.getData('text/html'), 'text/html')
-        // const range = getSelectionRange()
-        // consecutiveInputValue = range ? e.key : (consecutiveInputValue + e.key)
-        //
+    const onPaste = (e) => {
+        const data =  e.clipboardData!.getData('text/plain')
+        updateConsecutiveInput(data)
+        rememberNextCursor(data.length)
+        console.log(data)
     }
 
-    const handleCompositionend = (e) => {
+    let isInComposition = false
+    const onCompositionstart = (e) => {
+        isInComposition = true
+        rememberNextCursor(0)
+    }
+
+    const onCompositionend = (e) => {
+        isInComposition = false
         updateConsecutiveInput(e.data)
+        rememberNextCursor(e.data.length, true)
     }
 
-    const handleBlur = () => {
+    const onBlur = () => {
         updateConsecutiveInput(undefined)
     }
 
-    // TODO selection change 也要监听，但监听的是 document 上面的，还需要消除。
-    const handleSelectionChange = () => {
-        // 这里得判断到底是用户鼠标键盘移动导致的，还是 输入导致的。
-        // console.log(getSelectionRange())
-    }
-    document.addEventListener('selectionchange', handleSelectionChange)
 
-    const className = computed(() => {
-        return errors.length ? 'border-b-2 border-rose-500' :'border-b-2 border-indigo-500'
+    const onSelectionChange = () => {
+        // 这里得判断到底是用户鼠标键盘移动导致的，还是 输入导致的。
+        const range = getSelectionRange()
+        // console.log("equal test",
+        //     range?.startContainer === lastCursorNode || range?.startContainer.parentNode === lastCursorNode,
+        //     isInComposition,
+        //     range?.startOffset === lastCursorOffset,
+        // )
+
+        const isResultOfInput = isInComposition ||
+                (range?.startContainer === lastCursorNode || range?.startContainer.parentNode === lastCursorNode) &&
+                (range?.startOffset === lastCursorOffset)
+
+        // console.log(isResultOfInput)
+        console.info(isResultOfInput)
+        // 清空
+        if (!isResultOfInput) {
+            updateConsecutiveInput(undefined)
+        }
+    }
+
+    // TODO 有没有更好地方法？？
+    useLayoutEffect(() => {
+        document.addEventListener('selectionchange', onSelectionChange)
+        return () => {
+            document.removeEventListener('selectionchange', onSelectionChange)
+        }
+    })
+
+    // 不要自己包装 computed，识别不了。
+    const className = () => ({
+        'border-b-2': true,
+        'border-rose-500':errors.length,
+        'border-indigo-500': !errors.length
     })
 
     return <div ref="container" {...props} className={className} >
         {() => {
             const inner = value() as HTMLElement
-            inner.addEventListener('keydown', handleKeydown)
-            inner.addEventListener('paste', handlePaste)
-            inner.addEventListener('blur', handleBlur)
-            inner.addEventListener('compositionend', handleCompositionend)
+            inner.addEventListener('keydown', onKeydown)
+            inner.addEventListener('paste', onPaste)
+            inner.addEventListener('blur', onBlur)
+            inner.addEventListener('compositionend', onCompositionend)
+            inner.addEventListener('compositionstart', onCompositionstart)
             inner.setAttribute('contenteditable', 'true')
 
             return inner
         }}
     </div>
+}
+
+// selection helpers
+export function replaceLastText(length, newNode) {
+    const currentRange = getSelectionRange()
+    if (!currentRange) throw new Error('no cursor')
+    currentRange.setStart(currentRange.startContainer, currentRange.startOffset - length)
+    currentRange.deleteContents()
+    currentRange.insertNode(typeof newNode === 'string' ? document.createTextNode(newNode) : newNode)
+    currentRange.collapse()
 }

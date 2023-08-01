@@ -1,7 +1,7 @@
 import {createElement} from "@framework";
 import {Component} from "../global";
 import {deepClone} from "./createClass";
-import {isAtom, reactive} from "rata";
+import {Atom, isAtom, reactive} from "rata";
 import {configure} from "../src/ComponentHost";
 
 type Options = {
@@ -9,17 +9,22 @@ type Options = {
     constraints?: {},
     toControlValue? : (value: any) => any,
     toDraft? : (controlValue: any) => any,
-    errors? : any[]
+}
+
+type RenderControlArg = {
+    [k: string]: any,
+    value: Atom,
+    children? :any
+    errors? :any[]
 }
 
 export function createDraftControl(Component: Component, options?: Options) {
-    return function renderControl({value, ...restProps}) {
+    return function renderControl({value, children, errors = reactive([]), ...restProps}: RenderControlArg) {
         if (!isAtom(value)) {
             throw new Error('draft only accept atom value')
         }
         let controlValue = options?.toControlValue? options.toControlValue(value()) : deepClone(value())
 
-        const errors = options?.errors || reactive([])
 
         function updateValue() {
             let toDraftError
@@ -63,7 +68,8 @@ export function createDraftControl(Component: Component, options?: Options) {
                     [eventName]: () => {
                         updateValue()
                     }
-                }
+                },
+                children
             }
         }
 

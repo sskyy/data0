@@ -6,7 +6,7 @@ import {Select} from "../form/Select";
 import {ActionInput} from "./ActionInput";
 import {createDraftControl} from "../createDraftControl";
 
-export function InteractionNode({ interaction }){
+export function InteractionNode({ interaction, roles, roleAttributives }){
 
     const renderActionDraftControl = createDraftControl(ActionInput, {
         pushEvent: 'input:onBlur'
@@ -21,7 +21,7 @@ export function InteractionNode({ interaction }){
     return (
         <div style={{border: '1px blue dashed', display: 'inline-block'}}>
             <div>
-                <AttributiveInput value={interaction.roleAttributive().content} />
+                <AttributiveInput value={interaction.roleAttributive().content} options={roleAttributives}/>
                 {/*<RoleInput />*/}
                 <span>{interaction.role().name()}</span>
             </div>
@@ -29,7 +29,7 @@ export function InteractionNode({ interaction }){
                 {renderActionDraftControl({ value: interaction.action().name})}
             </div>
             <div style={{ width: 200, height:100, overflow: 'auto'}}>
-                {renderPayloadDraftControl({ value: interaction.payload})}
+                {/*{renderPayloadDraftControl({ value: interaction.payload})}*/}
             </div>
         </div>
     )

@@ -1,5 +1,6 @@
 import {onUpKey, onDownKey} from "../../eventAlias";
-import {Atom, incMap} from "rata";
+import {Atom, computed, incMap} from "rata";
+import {KlassType} from "../createClass";
 
 export function Dropdown({ index, options}, { createElement, ref }) {
     const setNextIndex = () => {
@@ -7,9 +8,12 @@ export function Dropdown({ index, options}, { createElement, ref }) {
     }
 
     const setPrevIndex = () => {
-        if (index() > 0) index(index() - 1)
+        if (index() > -1) index(index() - 1)
     }
 
+    computed(() => {
+        if (index() > options.length) index(-1)
+    })
 
     return <div ref='container' onKeydown={[onUpKey(setPrevIndex), onDownKey(setNextIndex)]} >
         {incMap(options, (option, i) => {
@@ -23,9 +27,11 @@ export function Dropdown({ index, options}, { createElement, ref }) {
                 }
             }
 
+            const displayValue = (option.constructor as KlassType<object>).display?.(option) ?? option.toString()
+
             return (
                 <div className={className}>
-                    {option.name}
+                    {displayValue}
                 </div>
             )
         })}
