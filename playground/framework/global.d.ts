@@ -19,11 +19,14 @@ export type Props = {
     children?: ChildNode[]
 }
 
+export type EffectHandle = () => (void | (() => void))
+
 type InjectHandles = {
     createElement: typeof createElement,
+    useLayoutEffect: (arg: EffectHandle) => void
     ref: {
         [k: string]: HTMLElement
-    }
+    },
 }
 
 export type Component = (props?: Props, injectHandles?: InjectHandles) => HTMLElement|Text|DocumentFragment|null|undefined|string|number|Function|JSX.Element
