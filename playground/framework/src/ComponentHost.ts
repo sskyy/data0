@@ -1,10 +1,9 @@
+import {reactive, pauseTracking, resetTracking, isReactive} from "rata";
 import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg, dispatchEvent} from "./DOM";
 import {Host} from "./Host";
 import {createHost} from "./createHost";
-import {Component, ComponentNode, Props} from "../global";
-import {reactive, computed, destroyComputed} from "rata";
+import {Component, ComponentNode, EffectHandle, Props} from "../global";
 import {assert} from "./util";
-import {pauseTracking, resetTracking} from "../../../src/effect";
 
 
 const componentRenderFrame: ComponentHost[] = []
@@ -32,7 +31,8 @@ export class ComponentHost implements Host{
     type: Component
     innerHost?: Host
     props: Props
-    public onDestroy?: () => any
+    public layoutEffects = new Set<EffectHandle>()
+    public layoutEffectDestroyHandles = new Set<Exclude<ReturnType<EffectHandle>, void>>()
     public ref = reactive({})
     public config? : Config
     public children: any
@@ -56,6 +56,13 @@ export class ComponentHost implements Host{
 
     createElement = (type: JSXElementType, rawProps : AttributesArg, ...children: any[]) : ReturnType<typeof createElement> => {
         const isComponent = typeof type === 'function'
+        if(__DEV__) {
+            if (!isComponent && rawProps)
+                Object.entries(rawProps).forEach(([key, value]) => {
+                    assert(!isReactive(value), `don't use reactive or computed for attr: ${key}, simply use function or atom`)
+                })
+        }
+
         let name
         if (rawProps) {
             Object.keys(rawProps).forEach(key => {
@@ -138,6 +145,9 @@ export class ComponentHost implements Host{
         this.ref[targetName].dispatchEvent( targetEvent)
     }
 
+    useLayoutEffect = (callback) => {
+        this.layoutEffects.add(callback)
+    }
 
     // TODO 需要用 computed 限制一下自己的变化范围？？？
     render(): void {
@@ -153,7 +163,7 @@ export class ComponentHost implements Host{
         // CAUTION 组件在渲染的时候只是为了建立联系，这种过程可能会读 reactive，但不应该被更上层监听。
         //  组件的渲染会出现在 FunctionHost 中，并且是在 FunctionHost render 的 computed 中，所以这里 render 中的读的值都可能会被上层 track.
         pauseTracking()
-        const node = this.type(props, {createElement: this.createElement, ref: this.ref})
+        const node = this.type(props, {createElement: this.createElement, ref: this.ref, useLayoutEffect: this.useLayoutEffect})
 
         componentRenderFrame.pop()
         // 就用当前 component 的 placeholder
@@ -166,10 +176,16 @@ export class ComponentHost implements Host{
             assert(typeof this.props.ref === 'function', `ref on component should be a function after parent component handled`)
             this.props.ref(this)
         }
+
+        // TODO 理论上要有个通知挂载的事件时才执行。虽然组件 render，但未来可能为了一些其他原因会延迟挂载到 document 上。
+        this.layoutEffects.forEach(layoutEffect => {
+            const handle = layoutEffect()
+            if (handle) this.layoutEffectDestroyHandles.add(handle)
+        })
     }
     destroy(parentHandle?: boolean) {
         this.innerHost!.destroy(parentHandle)
-        this.onDestroy?.()
+        this.layoutEffectDestroyHandles.forEach(handle => handle())
         if (!parentHandle) {
             this.placeholder.remove()
         }
