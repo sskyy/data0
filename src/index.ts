@@ -4,3 +4,4 @@ export { computed, type ComputedData, destroyComputed, recompute } from './compu
 export {TrackOpTypes, TriggerOpTypes} from "./operations";
 export * from './incremental'
 export { isReactivableType }from './util'
+export  {pauseTracking, resetTracking} from './effect'

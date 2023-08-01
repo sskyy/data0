@@ -328,3 +328,11 @@ export function incUniqueMatch(initialValue?: any) {
 export function incMatch() {
 
 }
+
+export function incFilter(source, filterFn) {
+    return computed(() => {
+        const result =  source.filter(filterFn)
+        console.log(result)
+        return result
+    })
+}
