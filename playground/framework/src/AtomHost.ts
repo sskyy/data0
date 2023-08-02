@@ -1,11 +1,11 @@
 import {computed, destroyComputed, Atom} from "rata";
-import {Host} from "./Host";
+import {Context, Host} from "./Host";
 
 export class AtomHost implements Host{
     computed: ReturnType<typeof computed>
     fragmentParent = document.createDocumentFragment()
     element: Text|Comment = this.placeholder
-    constructor(public source: Atom, public placeholder:Comment) {
+    constructor(public source: Atom, public placeholder:Comment, public context: Context) {
     }
     get parentElement() {
         return this.placeholder.parentElement || this.fragmentParent

@@ -1,5 +1,5 @@
 import {computed, destroyComputed} from "rata";
-import {Host} from "./Host";
+import {Context, Host} from "./Host";
 import {createHost} from "./createHost";
 import {insertBefore} from './DOM'
 
@@ -10,7 +10,7 @@ export class FunctionHost implements Host{
     computed: ReturnType<typeof computed>
     fragmentParent = document.createDocumentFragment()
     innerHost?: Host
-    constructor(public source: FunctionNode, public placeholder:Comment) {
+    constructor(public source: FunctionNode, public placeholder:Comment, public context: Context) {
     }
     get parentElement() {
         return this.placeholder.parentElement || this.fragmentParent
@@ -27,7 +27,7 @@ export class FunctionHost implements Host{
 
                 const newPlaceholder = new Comment('computed node')
                 insertBefore(newPlaceholder, this.placeholder)
-                this.innerHost = createHost(node, newPlaceholder)
+                this.innerHost = createHost(node, newPlaceholder, this.context)
                 this.innerHost.render()
             }
         )

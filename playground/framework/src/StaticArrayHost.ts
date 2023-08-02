@@ -1,5 +1,5 @@
 import { insertBefore} from "./DOM";
-import {Host} from "./Host";
+import {Context, Host} from "./Host";
 import {createHost} from "./createHost";
 import {removeNodesBetween} from "./util";
 
@@ -9,7 +9,7 @@ export class StaticArrayHost implements Host{
     computed = undefined
 
     childHosts: Host[] = []
-    constructor(public source: any[], public placeholder: Comment) {
+    constructor(public source: any[], public placeholder: Comment, public context: Context) {
     }
     get parentElement() {
         return this.placeholder.parentElement
@@ -37,7 +37,7 @@ export class StaticArrayHost implements Host{
                     // 其他未知节点了
                     const newPlaceholder: Comment = new Comment('array item')
                     frag.appendChild(newPlaceholder)
-                    const newHost = createHost(item, newPlaceholder)
+                    const newHost = createHost(item, newPlaceholder, this.context)
                     this.childHosts.push(newHost)
                     if (index === 0) this.firstChild = newHost
                 }

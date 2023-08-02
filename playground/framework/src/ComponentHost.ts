@@ -1,6 +1,6 @@
 import {reactive, pauseTracking, resetTracking, isReactive} from "rata";
 import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg, dispatchEvent} from "./DOM";
-import {Host} from "./Host";
+import {Context, Host} from "./Host";
 import {createHost} from "./createHost";
 import {Component, ComponentNode, EffectHandle, Props} from "../global";
 import {assert} from "./util";
@@ -37,7 +37,7 @@ export class ComponentHost implements Host{
     public config? : Config
     public children: any
 
-    constructor({ type, props, children }: ComponentNode, public placeholder: UnhandledPlaceholder) {
+    constructor({ type, props, children }: ComponentNode, public placeholder: UnhandledPlaceholder, public context: Context) {
         this.type = type
         this.props = props
         if(children[0] instanceof Config) {
@@ -167,7 +167,7 @@ export class ComponentHost implements Host{
 
         componentRenderFrame.pop()
         // 就用当前 component 的 placeholder
-        this.innerHost = createHost(node, this.placeholder)
+        this.innerHost = createHost(node, this.placeholder, this.context)
         this.innerHost.render()
         resetTracking()
 

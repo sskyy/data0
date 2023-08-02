@@ -1,5 +1,5 @@
 import {containerToUnhandled, containerToUnhandledAttr, setAttribute, UnhandledPlaceholder, insertBefore} from "./DOM";
-import {Host} from "./Host";
+import {Context, Host} from "./Host";
 import {computed, destroyComputed, isAtom, isReactive} from "rata";
 import {createHost} from "./createHost";
 import {removeNodesBetween} from "./util";
@@ -14,7 +14,7 @@ function isAtomLike(v) {
 }
 
 
-function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragment|SVGElement) {
+function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragment|SVGElement, context: Context) {
     if (!(result instanceof HTMLElement || result instanceof DocumentFragment || result instanceof SVGElement)) return
 
     const isSVG = result instanceof SVGElement
@@ -23,7 +23,7 @@ function renderReactiveChildAndAttr(result: HTMLElement|ChildNode|DocumentFragme
 
     const reactiveHosts:  Host[]=
         unhandledChild ?
-            unhandledChild.map(({ placeholder, child}) => createHost(child, placeholder)) :
+            unhandledChild.map(({ placeholder, child}) => createHost(child, placeholder, context)) :
             []
 
     const attrComputeds: ReturnType<typeof computed>[] = []
@@ -71,7 +71,7 @@ export class StaticHost implements Host{
     computed = undefined
     reactiveHosts?: Host[]
     attrComputeds?: ReturnType<typeof computed>[]
-    constructor(public source: HTMLElement|SVGElement, public placeholder: UnhandledPlaceholder) {
+    constructor(public source: HTMLElement|SVGElement, public placeholder: UnhandledPlaceholder, public context: Context) {
     }
     get parentElement() {
         return this.placeholder.parentElement
@@ -81,7 +81,7 @@ export class StaticHost implements Host{
         if (this.element === this.placeholder) {
             this.element = this.source
             insertBefore(this.source, this.placeholder)
-            const { reactiveHosts, attrComputeds, renderHosts } = renderReactiveChildAndAttr(this.source)!
+            const { reactiveHosts, attrComputeds, renderHosts } = renderReactiveChildAndAttr(this.source, this.context)!
             this.reactiveHosts = reactiveHosts
             this.attrComputeds = attrComputeds
             renderHosts()

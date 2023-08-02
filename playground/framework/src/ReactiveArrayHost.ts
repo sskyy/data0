@@ -1,6 +1,6 @@
 import {UnhandledPlaceholder, insertBefore} from './DOM'
 import {computed, destroyComputed, TrackOpTypes, TriggerOpTypes} from "rata";
-import { Host } from "./Host";
+import {Context, Host} from "./Host";
 import {createHost} from "./createHost";
 
 function getSpliceRemoveLength(argv: any[], length: number) : number {
@@ -14,13 +14,13 @@ export class ReactiveArrayHost implements Host{
     hostsComputed?: Host[]
     placeholderAndItemComputed?: [any, Comment][]
 
-    constructor(public source: ReturnType<typeof computed>, public placeholder:UnhandledPlaceholder, ) {
+    constructor(public source: ReturnType<typeof computed>, public placeholder:UnhandledPlaceholder, public context: Context) {
     }
     createPlaceholder(item: any): [any, Comment] {
         return [item, new Comment('frag item host')]
     }
-    createHost([item, placeholder] : [any, UnhandledPlaceholder]) : Host{
-        return createHost(item, placeholder)
+    createHost = ([item, placeholder] : [any, UnhandledPlaceholder]) : Host => {
+        return createHost(item, placeholder, this.context)
     }
 
     isOnlyChildrenOfParent() {
@@ -99,7 +99,7 @@ export class ReactiveArrayHost implements Host{
 
                 trackOnce!(this.placeholderAndItemComputed!, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 trackOnce!(this.placeholderAndItemComputed!, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
-                const hosts = this.placeholderAndItemComputed!.map(([item, placeholder]) => createHost(item, placeholder))
+                const hosts = this.placeholderAndItemComputed!.map(([item, placeholder]) => createHost(item, placeholder, this.context))
                 const frag = document.createDocumentFragment()
                 hosts.forEach(host => {
                     frag.appendChild(host.placeholder)
