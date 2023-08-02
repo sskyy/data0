@@ -57,6 +57,7 @@ type Handler = ProxyHandler<object>
 
 
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
+    // FIXME 是不是能够允许？下面已经改成允许了。
     if (isAtom(initValue)) throw new Error('cant wrap atom inside atom')
 
     let value: typeof initValue|undefined  = initValue
@@ -68,11 +69,14 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
             return value
         }
 
-        if(typeof newValue === 'function') {
-            value = newValue!(value)
-        } else {
-            value = newValue
-        }
+        // CAUTION 不再支持 newValue 为 function 的方式，因为 atom 中可以包装 atom，就像指针可以指向另一个指针一样。
+        // if(typeof newValue === 'function') {
+        //     value = newValue!(value)
+        // } else {
+        //     value = newValue
+        // }
+
+        value = newValue
 
         triggerAtomValue(finalUpdater, value)
     }
