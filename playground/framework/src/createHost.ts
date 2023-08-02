@@ -11,7 +11,7 @@ import {StaticArrayHost} from "./StaticArrayHost";
 class EmptyHost implements Host{
     element = new Comment('empty')
     placeholder = this.element
-    context: Context
+    context = {}
     render() { return }
     destroy(parentHandle?: boolean) {
         if (!parentHandle) this.placeholder.remove()

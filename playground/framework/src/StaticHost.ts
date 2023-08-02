@@ -5,11 +5,11 @@ import {createHost} from "./createHost";
 import {removeNodesBetween} from "./util";
 
 // FIXME 不应该出现 reactive，因为 createElement 的时候会直接读，造成泄露？
-function isReactiveValue(v) {
+function isReactiveValue(v:any) {
     return isReactive(v) || isAtom(v) || typeof v === 'function'
 }
 
-function isAtomLike(v) {
+function isAtomLike(v:any) {
     return isAtom(v) || typeof v === 'function'
 }
 

@@ -1,5 +1,5 @@
 import {reactive, pauseTracking, resetTracking, isReactive} from "rata";
-import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg, dispatchEvent} from "./DOM";
+import {UnhandledPlaceholder, createElement, JSXElementType, AttributesArg} from "./DOM";
 import {Context, Host} from "./Host";
 import {createHost} from "./createHost";
 import {Component, ComponentNode, EffectHandle, Props} from "../global";
@@ -9,17 +9,18 @@ import {assert} from "./util";
 const componentRenderFrame: ComponentHost[] = []
 
 export function onDestroy(destroyCallback: () => any) {
-    componentRenderFrame.at(-1)!.onDestroy = destroyCallback
+    componentRenderFrame.at(-1)!.destroyCallback.add(destroyCallback)
 }
 
 
-function ensureArray(o) {
+function ensureArray(o: any) {
     return o ? (Array.isArray(o) ? o : [o]) : []
 }
 
+type DestroyCallback = () => any
 
 // CAUTION 为了性能，直接 assign。在底层 所有 DOM 节点都可以接受 array attribute，这样就为属性的覆盖和合并减轻了工作量。
-function combineProps(origin, newProps) {
+function combineProps(origin:{[k:string]: any}, newProps: {[k:string]: any}) {
     Object.entries(newProps).forEach(([key, value]) => {
         const originValue = origin[key]
         origin[key] = ensureArray(originValue).concat(value)
@@ -32,8 +33,9 @@ export class ComponentHost implements Host{
     innerHost?: Host
     props: Props
     public layoutEffects = new Set<EffectHandle>()
+    public destroyCallback = new Set<DestroyCallback>()
     public layoutEffectDestroyHandles = new Set<Exclude<ReturnType<EffectHandle>, void>>()
-    public ref = reactive({})
+    public ref: {[k:string]: any} = reactive({})
     public config? : Config
     public children: any
 
@@ -63,18 +65,19 @@ export class ComponentHost implements Host{
                 })
         }
 
-        let name
+        let name = ''
         if (rawProps) {
-            Object.keys(rawProps).forEach(key => {
+            Object.keys(rawProps).some(key => {
                 if (key[0] === '$') {
                     name = key.slice(1, Infinity)
                     // 为了性能，直接使用了 delete
                     delete rawProps[key]
+                    return true
                 } else  if (key === 'ref') {
                     name = rawProps[key]
                     delete rawProps[key]
+                    return true
                 }
-
             })
         }
 
@@ -91,7 +94,7 @@ export class ComponentHost implements Host{
                 if (isComponent) {
                     // 如果是个 component，它的 props 无法自动合并，所以用户要自己处理
                     assert(typeof thisItemConfig.props === 'function', 'configure a component node must use function to handle props rewrite')
-                    finalProps = thisItemConfig.props(rawProps)
+                    finalProps = (thisItemConfig.props as FunctionProp)(rawProps)
                 } else {
                     // CAUTION 普通节点，这里默认适合原来的 props 合并，除非用户想要自己的处理
                     if (typeof thisItemConfig.props === 'function') {
@@ -107,7 +110,7 @@ export class ComponentHost implements Host{
             if (thisItemConfig.eventTarget) {
                 // TODO 支持 eventTarget，用户
                 thisItemConfig.eventTarget.forEach(eventTarget => {
-                    eventTarget((e) => {
+                    eventTarget((e: Event) => {
                         this.eventTargetTrigger(e, name)
                     })
                 })
@@ -127,7 +130,7 @@ export class ComponentHost implements Host{
         }
 
         if (name && isComponent) {
-            finalProps.ref = (host) => this.ref[name] = host
+            finalProps.ref = (host: Host) => this.ref[name] = host
         }
         const el = createElement(type, finalProps, ...finalChildren)
 
@@ -136,16 +139,16 @@ export class ComponentHost implements Host{
         }
         return el
     }
-    eventTargetTrigger = (sourceEvent, targetName) => {
+    eventTargetTrigger = (sourceEvent: Event, targetName: string) => {
         // TODO 如何 clone 各种不同的 event ? 这里的暴力方式是否ok
-        const EventConstructor = sourceEvent.constructor
+        const EventConstructor = sourceEvent.constructor as typeof Event
         const targetEvent = new EventConstructor(sourceEvent.type, sourceEvent)
-        console.log(`dispatching ${targetName} ${targetEvent.type} ${targetEvent.key}`)
+        // console.log(`dispatching ${targetName} ${targetEvent.type} ${targetEvent.key}`)
         // CAUTION 因为 keydown 等 event 是无法通过 node.dispatchEvent 模拟的，所以这里我们直接用 DOM 的 eventProxy 实现。
         this.ref[targetName].dispatchEvent( targetEvent)
     }
 
-    useLayoutEffect = (callback) => {
+    useLayoutEffect = (callback: EffectHandle) => {
         this.layoutEffects.add(callback)
     }
 
@@ -163,7 +166,7 @@ export class ComponentHost implements Host{
         // CAUTION 组件在渲染的时候只是为了建立联系，这种过程可能会读 reactive，但不应该被更上层监听。
         //  组件的渲染会出现在 FunctionHost 中，并且是在 FunctionHost render 的 computed 中，所以这里 render 中的读的值都可能会被上层 track.
         pauseTracking()
-        const node = this.type(props, {createElement: this.createElement, ref: this.ref, useLayoutEffect: this.useLayoutEffect})
+        const node = this.type(props, {createElement: this.createElement, ref: this.ref, useLayoutEffect: this.useLayoutEffect, context: this.context})
 
         componentRenderFrame.pop()
         // 就用当前 component 的 placeholder
@@ -186,17 +189,26 @@ export class ComponentHost implements Host{
     destroy(parentHandle?: boolean) {
         this.innerHost!.destroy(parentHandle)
         this.layoutEffectDestroyHandles.forEach(handle => handle())
+        this.destroyCallback.forEach(callback => callback())
         if (!parentHandle) {
             this.placeholder.remove()
         }
     }
 }
 
+type FunctionProp = (arg:any) => object
+type EventTarget = (arg: (e:Event) => any) => void
 
-class Config {
-    constructor(public items: object) {}
+type ConfigItem = {
+    eventTarget?: EventTarget[],
+    props?: object|FunctionProp,
+    children?: any
 }
 
-export function configure(items: object) {
+class Config {
+    constructor(public items: {[k:string]:ConfigItem}) {}
+}
+
+export function configure(items: {[k:string]:ConfigItem}) {
     return new Config(items)
 }

@@ -1,13 +1,6 @@
 import {assert, each, isPlainObject} from './util'
 import {Component} from "../global";
 
-let uuid = 0
-function getId() {
-  return ++uuid
-}
-
-
-
 // type WritablePropertyName = Exclude<keyof HTMLElement, keyof Readonly<HTMLElement> >
 /** Attempt to set a DOM property to the given value.
  *  IE & FF throw for certain property-value combinations.
@@ -50,7 +43,7 @@ function isValidAttribute(name:string, value:any) {
   return false
 }
 
-function isEventName(name) {
+function isEventName(name: string) {
   return name[0] === 'o' && name[1] === 'n'
 }
 
@@ -209,7 +202,8 @@ export const containerToUnhandledAttr = new WeakMap<any, UnhandledAttrInfo[]>()
 
 type VNode = {
   type: JSXElementType,
-  props? : AttributesArg
+  props? : AttributesArg,
+  children?: any
 }
 
 
@@ -312,6 +306,6 @@ export function createElementNS(type: string, props: AttributesArg, ...children:
 }
 
 
-export function dispatchEvent(target, event) {
+export function dispatchEvent(target: ExtendedElement, event: Event) {
   return eventProxy.call(target, event)
 }
