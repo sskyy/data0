@@ -1,7 +1,7 @@
 import {toRaw, toReactive} from './reactive'
 import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import {hasOwn, hasChanged, toRawType, isMap, def} from './util'
+import {hasOwn, hasChanged, toRawType, isMap, def, assert} from './util'
 import {inCollectionMethodTargets} from "./baseHandlers";
 import {ReactiveFlags} from "./flags";
 import {Atom, UpdateFn} from "./atom";
@@ -68,7 +68,7 @@ function $get(
   } else if (has.call(rawTarget, rawKey)) {
     return createLeafAtom(target, rawKey)
   } else {
-    throw new Error(`can not find key ${(key as string).toString()}`)
+    assert(false, `can not find key ${(key as string).toString()}`)
   }
 }
 

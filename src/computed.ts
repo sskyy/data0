@@ -7,7 +7,7 @@ import {
 } from "./debug";
 import {ReactiveEffect, track, TriggerInfo, triggerStack} from './effect'
 import {reactive, ReactiveInterceptor, UnwrapReactive} from './reactive'
-import {isPlainObject, isReactivableType} from "./util";
+import {assert, isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, AtomInterceptor, isAtom} from "./atom";
 
 
@@ -45,7 +45,7 @@ export function replace(source: any, nextSourceValue: any) {
       if (!source.has(item)) source.add(item)
     })
   } else {
-    throw new Error('unknown source type to replace data')
+    assert(false, 'unknown source type to replace data')
   }
 }
 

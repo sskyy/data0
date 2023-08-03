@@ -206,3 +206,11 @@ export const getStackTrace = function() {
         return nameAndLoc
     });
 };
+
+
+export function assert(condition: boolean, message: string ) {
+    if (!condition) {
+        if (__DEV__) debugger
+        throw new Error(message)
+    }
+}

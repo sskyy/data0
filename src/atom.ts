@@ -7,7 +7,7 @@ import {
 
 import { TrackOpTypes } from './operations'
 import {createDep, Dep} from "./dep";
-import {def, getStackTrace, isPlainObject, isStringOrNumber} from "./util";
+import {assert, def, getStackTrace, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
 import { setDebugName} from "./debug";
 
@@ -58,7 +58,7 @@ type Handler = ProxyHandler<object>
 
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
     // FIXME 是不是能够允许？下面已经改成允许了。
-    if (isAtom(initValue)) throw new Error('cant wrap atom inside atom')
+    assert(!isAtom(initValue), 'cant wrap atom inside atom')
 
     let value: typeof initValue|undefined  = initValue
 

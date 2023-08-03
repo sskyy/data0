@@ -1,5 +1,5 @@
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import {extend, getStackTrace, isArray, isIntegerKey, isMap, toNumber} from './util'
+import {assert, extend, getStackTrace, isArray, isIntegerKey, isMap, toNumber} from './util'
 import { EffectScope, recordEffectScope } from './effectScope'
 import {
   createDep,
@@ -182,20 +182,6 @@ type TrackFrame = {
   end: Function
 }
 const frameStack: TrackFrame[] = []
-export function createTrackFrame() : TrackFrame {
-  return {
-    start() {
-      frameStack.push(this)
-    },
-    deps: [],
-    end() {
-      if (frameStack.at(-1) !== this) throw new Error('not your frame')
-      frameStack.pop()
-      return this.deps
-    }
-  }
-}
-
 
 export function cleanupEffect(effect: ReactiveEffect) {
   const { deps } = effect

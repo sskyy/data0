@@ -4,6 +4,7 @@ import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom, isAtom} from "./atom";
 import {isReactive} from "./reactive";
 import {pauseTracking, resetTracking} from "./effect";
+import {assert} from "./util";
 
 
 const atomIndexMap = new Map<any[], {depCount:number, computed?: ReturnType<typeof computed>, indexes: Atom<number>[]}>()
@@ -17,7 +18,7 @@ function getSpliceRemoveLength(argv: any[], length: number) : number {
 
 
 function getAtomIndexOfArray(source: any[]) {
-    if (!Array.isArray(source)) throw new Error('only array source can have atom indexes')
+    assert(Array.isArray(source), 'only array source can have atom indexes')
     let indexInfo = atomIndexMap.get(source)
     if (!indexInfo) {
         const indexes = source.map((i: any,index:number) => atom(index))
@@ -30,7 +31,7 @@ function getAtomIndexOfArray(source: any[]) {
                 },
                 function applyAtomIndexChange(data, triggerInfos) {
                     triggerInfos.forEach(({ method , argv, result}) => {
-                        if(!method && !result) throw new Error('trigger info has no method and result')
+                        assert(!!(method || result), 'trigger info has no method and result')
 
                         if (method === 'push') {
                             const newIndexes = argv!.map((i: any, index: number) => atom(index+indexes.length))
@@ -71,7 +72,7 @@ function getAtomIndexOfArray(source: any[]) {
 
 function removeAtomIndexDep(source: any[]) {
     const indexInfo = atomIndexMap.get(source)
-    if (!indexInfo) throw new Error('no dep for this array source found.')
+    assert(!!indexInfo, 'no dep for this array source found.')
     indexInfo.depCount--
     if (indexInfo.depCount < 1) {
         destroyComputed(indexInfo.computed)
@@ -136,7 +137,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         } else if (source instanceof Set) {
             return new Set(Array.from(source as Set<any>).map(mapFn))
         } else {
-            throw new Error('unknown source type for incMap')
+            assert(false, 'unknown source type for incMap')
         }
     }
 
@@ -167,12 +168,12 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 })
                 return new Set(mappedData)
             } else {
-                throw new Error('non-support map source type')
+                assert(false, 'non-support map source type')
             }
         },
         function applyMapArrayPatch(data, triggerInfos) {
             triggerInfos.forEach(({ method , argv, result}) => {
-                if(!method && !result) throw new Error('trigger info has no method and result')
+                assert(!!(method || result), 'trigger info has no method and result')
                 // Array
                 if (Array.isArray(source)) {
                     // CAUTION indexes 应该已经准备好了
@@ -207,7 +208,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                             delete data[key]
                         })
                     } else {
-                        throw new Error('unknown trigger info')
+                        assert(false, 'unknown trigger info')
                     }
 
                 // Map
@@ -329,10 +330,8 @@ export function incMatch() {
 
 }
 
-export function incFilter(source, filterFn) {
+export function incFilter(source: any[], filterFn: (item:any) => boolean) {
     return computed(() => {
-        const result =  source.filter(filterFn)
-        console.log(result)
-        return result
+        return source.filter(filterFn)
     })
 }
