@@ -72,3 +72,7 @@ export function assert(condition: boolean, message: string ) {
     throw new Error(message)
   }
 }
+
+export function mapClassNameToObject(className: string) {
+  return Object.fromEntries(className.split(' ').map(c => [c, true]))
+}

@@ -8,6 +8,8 @@ import {assert} from "./util";
 
 const componentRenderFrame: ComponentHost[] = []
 
+
+// TODO 应该变成 useEffect ???而且应该从 inject handle 里面取？？？这样就不需要 renderFrame 了？？？
 export function onDestroy(destroyCallback: () => any) {
     componentRenderFrame.at(-1)!.destroyCallback.add(destroyCallback)
 }

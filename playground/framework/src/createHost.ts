@@ -1,4 +1,4 @@
-import { UnhandledPlaceholder} from "./DOM";
+import {insertBefore, UnhandledPlaceholder} from "./DOM";
 import {Context, Host} from "./Host";
 import { isAtom, isReactive} from "rata";
 import {ReactiveArrayHost} from "./ReactiveArrayHost";
@@ -17,6 +17,21 @@ class EmptyHost implements Host{
         if (!parentHandle) this.placeholder.remove()
     }
 }
+
+class PrimitiveHost implements Host{
+    element = this.placeholder
+    constructor(public source: string|number|boolean, public placeholder:Comment, public context: Context) {
+    }
+    render() {
+        this.element = document.createTextNode(this.source.toString());
+        insertBefore(this.element, this.placeholder)
+    }
+    destroy(parentHandle?: boolean) {
+        if (!parentHandle) this.placeholder.remove()
+        this.element.remove()
+    }
+}
+
 
 export function createHost(source: any, placeholder: UnhandledPlaceholder, context: Context) {
     if (!(placeholder instanceof Comment)) throw new Error('incorrect placeholder type')
@@ -38,8 +53,10 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder, conte
         host = new StaticHost(source, placeholder, context)
     } else if( source instanceof DocumentFragment){
         host = new StaticArrayHost([...(source.childNodes as unknown as Array<HTMLElement>)], placeholder, context)
-    } else if (source === undefined || source === null){
+    } else if (source === undefined || source === null) {
         host = new EmptyHost()
+    }else if( typeof source === 'string' || typeof source === 'number' || typeof source === 'boolean'){
+        host = new PrimitiveHost(source, placeholder, context)
     } else {
         throw new Error(`unknown child type ${source}`)
     }

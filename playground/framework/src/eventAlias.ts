@@ -16,6 +16,8 @@ export const onEnterKey = eventAlias((e) => e.key === 'Enter')
 export const onTabKey = eventAlias((e) => e.key === 'Tab')
 export const onESCKey = eventAlias((e) => e.key === 'Escape')
 
+export const onSelf = eventAlias(e => e.target === e.currentTarget)
+
 
 export function createEventTransfer() {
     let triggerTargetEvent
