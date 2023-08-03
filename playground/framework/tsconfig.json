@@ -36,6 +36,7 @@
     "./state.tsx",
     "./interact.tsx",
     "./concept.tsx",
-    "./activity.tsx"
+    "./activity.tsx",
+    "./form.tsx"
   ]
 }

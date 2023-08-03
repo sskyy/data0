@@ -3,7 +3,11 @@ import {createElement, createRoot} from "@framework";
 import "./index.css"
 import {InteractionNode} from "./component/activity/InteractionNode";
 import {Action, Interaction, Payload, Role, RoleAttributive} from "./component/activity/InteractionClass";
-import {reactive} from "rata";
+import {atom, computed, reactive} from "rata";
+import {Code} from "./component/code/Code";
+import {Drawer} from "./component/util/Drawer";
+import {editor} from "monaco-editor";
+import IStandaloneEditorConstructionOptions = editor.IStandaloneEditorConstructionOptions;
 
 const globalUserRole = Role.createReactive({ name: 'User'})
 
@@ -16,14 +20,7 @@ const sendInteraction = Interaction.createReactive({
     roleAs: 'A',
     action: Action.createReactive({ name: 'sendRequest'}),
     payload: Payload.createReactive({
-        content: {
-            to: {
-                // TODO 还要支持 as B
-            },
-            message: {
-                // TODO 从实体导入的
-            }
-        }
+        items: []
     })
 })
 
@@ -74,10 +71,36 @@ const Anonymous = Role.createReactive( {
 })
 
 const roles = reactive([User, Admin, Anonymous])
+// TODO entities and entity attributives
 
 
 const root = createRoot(document.getElementById('root')!)
-// TODO entities and entity attributives
-root.render(<InteractionNode interaction={sendInteraction} roles={roles} roleAttributives={roleAttributives}/>)
+
+
+// 如果我们想在 root 上注册事件，应该怎么写？
+const codeVisible = atom(false)
+const selected = atom(null)
+const title = computed(() => selected()?.name?.() || '')
+const options: IStandaloneEditorConstructionOptions = {
+    language: "javascript",
+    automaticLayout: true,
+    theme: 'vs-dark',
+    minimap: {
+        enabled: false
+    }
+}
+
+root.on('selectConcept',(concept) => {
+    selected(concept)
+    codeVisible(true)
+})
+
+
+root.render(<div>
+    <InteractionNode interaction={sendInteraction} roles={roles} roleAttributives={roleAttributives}/>
+    <Drawer title={title} visible={codeVisible}>
+        {() => selected() ?  <Code options={{value: selected().stringContent() || '', ...options}} />  : null}
+    </Drawer>
+</div>)
 
 

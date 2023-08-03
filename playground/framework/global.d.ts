@@ -1,5 +1,6 @@
 import {expect} from '@jest/globals'
 import {createElement} from './src/DOM'
+import {Context} from "./src/Host";
 
 // Global compile-time constants
 declare var __DEV__: boolean
@@ -27,6 +28,7 @@ type InjectHandles = {
     ref: {
         [k: string]: HTMLElement
     },
+    context: Context
 }
 
 export type Component = (props?: Props, injectHandles?: InjectHandles) => HTMLElement|Text|DocumentFragment|null|undefined|string|number|Function|JSX.Element

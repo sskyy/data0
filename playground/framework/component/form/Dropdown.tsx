@@ -1,4 +1,4 @@
-import {onUpKey, onDownKey} from "../../eventAlias";
+import {onUpKey, onDownKey} from "../../src/eventAlias";
 import {Atom, computed, incMap} from "rata";
 import {KlassType} from "../createClass";
 
