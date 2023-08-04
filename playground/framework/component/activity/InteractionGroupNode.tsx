@@ -1,8 +1,4 @@
-import {createElement} from "@framework";
-import { InteractionNode } from "./InteractionNode";
-import {incMap} from "rata";
-
-export function InteractionGroupNode({ group }){
+export function InteractionGroupNode({ group }, {createElement}){
     return (
         <div style={{border: "1px dashed red"}}>
             <div className="text-center">

@@ -2,6 +2,7 @@ import {createElement} from "@framework";
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import './useWorker';
 import {IMarkdownString} from "monaco-editor/esm/vs/editor/editor.api";
+import {InjectHandles} from "../../global";
 
 type HoverProp = { match : (...arg: any[]) => any, contents: (...arg: any[]) => IMarkdownString[]}
 
@@ -11,12 +12,11 @@ type CodeProp = {
     hover?: HoverProp[]
 }
 
-export function Code({ options, extraLib, hover }: CodeProp) {
+export function Code({ options, extraLib, hover }: CodeProp, { useLayoutEffect} : InjectHandles) {
 
-    const container = <div style={{height: 500}}></div>
+    const container = <div style={{minHeight: 200}}></div>
 
-    // FIXME 需要真正组件挂载的声明周期，还要 destroy
-    setTimeout(() => {
+    useLayoutEffect(() => {
 
         if (extraLib) {
             monaco.languages.typescript.javascriptDefaults.addExtraLib(extraLib[0], extraLib[1]);
@@ -41,8 +41,11 @@ export function Code({ options, extraLib, hover }: CodeProp) {
             });
         }
 
+        const editor = monaco.editor.create(container as HTMLElement, options);
 
-        monaco.editor.create(container as HTMLElement, options);
+        return () => {
+            editor.dispose()
+        }
     })
 
     return container

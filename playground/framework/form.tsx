@@ -8,6 +8,7 @@ import {createClass, createInstancesFromString, stringifyAllInstances} from "./c
 import {Checkbox} from "./component/form/Checkbox";
 import {Select} from "./component/form/Select";
 import {Input} from "./component/form/Input";
+import {createDraftControl} from "./component/createDraftControl";
 
 
 
@@ -39,6 +40,9 @@ const options = reactive([
 ])
 
 
+const renderSelectDraftControl = createDraftControl(Select)
+
+
 root.render(<div className="">
     <div>
         <Input value={inputValue} placeholder="input string value"/>
@@ -63,7 +67,12 @@ root.render(<div className="">
             <span>{() => selectValue()?.value ?? ''}</span>
         </div>
     </div>
-
+    {renderSelectDraftControl({
+        value: selectValue,
+        options,
+        placeholder: "select value",
+        display: Item.display
+    })}
 
 </div>)
 

@@ -1,7 +1,6 @@
-import {createElement} from "@framework";
-import {ArrowIcon} from "../icons/arrow";
+import {ArrowIcon} from "../icons/Arrow";
 
-export function RoleInput() {
+export function RoleInput({}, {createElement}) {
     return (
         <div>
             <label htmlFor="combobox" className="block text-sm font-medium leading-6 text-gray-900">Assigned to</label>

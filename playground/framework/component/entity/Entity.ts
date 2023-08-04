@@ -42,7 +42,7 @@ export const Property = createClass({
             }
         },
         args: {
-            // TODO 怎么表达 args？？需要根据不同的 type 类型构建
+            // TODO 怎么表达 args？？需要根据不同的 type 类型构建。例如 string 长度，number 范围。
             computedType: (values) => PropertyTypeMap[values.type],
         }
     }

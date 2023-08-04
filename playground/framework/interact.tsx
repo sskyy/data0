@@ -2,7 +2,8 @@
 import {createElement, createRoot} from "@framework";
 import "./index.css"
 import {InteractionNode} from "./component/activity/InteractionNode";
-import {Action, Interaction, Payload, Role, RoleAttributive} from "./component/activity/InteractionClass";
+import {Action, Interaction, Payload, Role, RoleAttributive, EntityAttributive} from "./component/activity/InteractionClass";
+import {Entity} from "./component/entity/Entity";
 import {atom, computed, reactive} from "rata";
 import {Code} from "./component/code/Code";
 import {Drawer} from "./component/util/Drawer";
@@ -55,8 +56,13 @@ const Old3Attr = RoleAttributive.createReactive({
     stringContent: `function Old3(){}`
 })
 
+const OtherAttr = RoleAttributive.createReactive({
+    name: 'Other',
+    stringContent: `function Other(){}`
+})
 
-const roleAttributives = reactive([NewAttr, New2Attr, New3Attr, OldAttr, Old2Attr, Old3Attr])
+
+const roleAttributives = reactive([NewAttr, New2Attr, New3Attr, OldAttr, Old2Attr, Old3Attr, OtherAttr])
 
 const User = Role.createReactive( {
     name: 'User'
@@ -73,8 +79,21 @@ const Anonymous = Role.createReactive( {
 const roles = reactive([User, Admin, Anonymous])
 // TODO entities and entity attributives
 
+const Message = Entity.createReactive({
+    name: 'Message',
+    properties: [{
+        name: 'content',
+        type: 'string',
+        collection: false,
+    }]
+})
+
+const entities = reactive([Message])
+
+const entityAttributives = reactive([])
 
 const root = createRoot(document.getElementById('root')!)
+
 
 
 // 如果我们想在 root 上注册事件，应该怎么写？
@@ -97,7 +116,14 @@ root.on('selectConcept',(concept) => {
 
 
 root.render(<div>
-    <InteractionNode interaction={sendInteraction} roles={roles} roleAttributives={roleAttributives}/>
+    <InteractionNode
+        interaction={sendInteraction}
+        roles={roles}
+        roleAttributives={roleAttributives}
+        entities={entities}
+        entityAttributives={entityAttributives}
+        selectedAttributive={selected}
+    />
     <Drawer title={title} visible={codeVisible}>
         {() => selected() ?  <Code options={{value: selected().stringContent() || '', ...options}} />  : null}
     </Drawer>

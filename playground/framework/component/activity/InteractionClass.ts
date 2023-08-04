@@ -1,6 +1,5 @@
-import {createClass, getInstance} from "../createClass";
+import {createClass} from "../createClass";
 import {Atom, computed, incPick, incUnique} from "rata";
-import {Entity} from "../entity/Entity";
 
 export const Role = createClass({
     name: 'Role',
@@ -54,6 +53,22 @@ export const EntityAttributive = createClass({
     }
 })
 
+export const Attributive = createClass({
+    name: 'Attributive',
+    display: (obj) => `${obj.name}`,
+    public: {
+        name: {
+            type: 'string',
+        },
+        content: {
+            type: 'object',
+        },
+        stringContent: {
+            type: 'string',
+        },
+    }
+})
+
 const validNameFormatExp = /^[a-z(A-Z0-9_]+$/
 
 
@@ -83,22 +98,41 @@ export const Action = createClass({
 //     }
 // })
 
+
+export const PayloadItem = createClass({
+    name: 'PayloadItem',
+    public: {
+        name: {
+            type: 'string',
+            required: true
+        },
+        attributive: {
+            type: RoleAttributive
+        },
+        // TODO 可以是 role 也可以是 entity 怎么表达？？？
+        base: {
+            type: Role,
+            required: true,
+        },
+        isRef: {
+            type: 'boolean',
+            defaultValue: () => false
+
+        },
+        isCollection: {
+            type: 'boolean',
+            defaultValue: () => false
+        }
+    }
+})
+
 export const Payload = createClass({
     name: 'Payload',
     public: {
-        content: {
-            type: 'object',
-            // collection: true,
-            // required: true,
-            // constraints: {
-            //     nameUnique({ items }) {
-            //         // FIXME 实例化之后 items 不是个 Class 吗？它的 name 就是个 atom，也没有 $name 这个属性，如何统一？？？
-            //         const uniqueNames = incUnique(incPick(items, '$name'))
-            //         return computed(() => {
-            //             return uniqueNames.size === items.length
-            //         })
-            //     }
-            // }
+        items: {
+            type: PayloadItem,
+            collection: true,
+            required: true,
         }
     }
 })

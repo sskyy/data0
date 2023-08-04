@@ -1,5 +1,5 @@
 import { createElement} from "@framework";
-import {atom, incMap, reactive} from "rata";
+import {atom, computed, incMap, reactive} from "rata";
 import {Code} from "../code/Code";
 import {editor} from "monaco-editor";
 import IStandaloneEditorConstructionOptions = editor.IStandaloneEditorConstructionOptions;
@@ -7,6 +7,7 @@ import {Entity} from "../entity/Entity";
 import {createFormForEntity} from "../createFormForEntityProperty";
 import {createDialog, createDialogFooter} from "../createDialog";
 import {RoleAttributive, EntityAttributive, Role} from "../activity/InteractionClass";
+import {Drawer} from "../util/Drawer";
 
 type Concept = {
     name: string,
@@ -46,10 +47,12 @@ const OldAttr = RoleAttributive.createReactive({
 
 export function ConceptOverview({ roles = reactive([User, Admin, Anonymous]), attributives = reactive([NewAttr, OldAttr])}) {
     const selected = atom(null)
+    const codeVisible = atom(false)
 
     const options: IStandaloneEditorConstructionOptions = {
         language: "javascript",
         automaticLayout: true,
+        theme: 'vs-dark',
         minimap: {
             enabled: false
         }
@@ -67,6 +70,11 @@ export function ConceptOverview({ roles = reactive([User, Admin, Anonymous]), at
         addEntityForm,
         createDialogFooter([{ text: 'Submit', onClick: onSubmitClick}, { text: 'Cancel', onClick: () => roleAttrCreateDialogVisible(false)}])
     )
+
+
+    const title = computed(() => {
+        return selected()?.name() ?? ''
+    })
 
 
     return (<div className="flex gap-x-8 ">
@@ -90,11 +98,14 @@ export function ConceptOverview({ roles = reactive([User, Admin, Anonymous]), at
                 create
             </button>
             {attrCreateDialog}
-            {incMap(attributives, attributive => (
-                <div>
-                    <a onClick={() => selected(attributive)}>{attributive.name}</a>
-                </div>
-            ))}
+            {incMap(attributives, attributive => {
+                console.warn('rerender', attributive)
+                return (
+                    <div>
+                        <a href="#" class="no-underline hover:underline" onClick={[() => selected(attributive), () => codeVisible(true)]}>{attributive.name}</a>
+                    </div>
+                )
+            })}
         </div>
 
         <div>
@@ -105,7 +116,10 @@ export function ConceptOverview({ roles = reactive([User, Admin, Anonymous]), at
             <h1 className="text-lg font-bold">Entities Attributives</h1>
         </div>
 
-        {() => selected() ?  <Code options={{value: selected().stringContent() || '', ...options}} />  : null}
+
+        <Drawer title={title} visible={codeVisible}>
+            {() => selected() ?  <Code options={{value: selected().stringContent() || '', ...options}} />  : null}
+        </Drawer>
     </div>)
 }
 

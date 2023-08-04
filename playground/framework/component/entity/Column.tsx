@@ -5,7 +5,7 @@ import {Atom, incMap} from 'rata'
 import {createDialog, createDialogFooter} from "../createDialog";
 import {createFormForEntity, createFormForEntityProperty} from "../createFormForEntityProperty";
 import {RelationEntityMap} from "./EREditor";
-import {IconAddProperty} from "../icons/addProperty";
+import {IconAddProperty} from "../icons/Add";
 
 
 type columnProp = {

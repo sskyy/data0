@@ -3,7 +3,7 @@ import {createElement} from "@framework";
 import {Entity, Property, PropertyTypes, Relation} from "./Entity";
 import {reactive, incMap, Atom, atom, computed} from 'rata'
 import {Column} from "./Column";
-import {IconAddProperty} from "../icons/addProperty";
+import {IconAddProperty} from "../icons/Add";
 import {createFormForEntity, createFormForEntityProperty} from "../createFormForEntityProperty";
 import {createDialog, createDialogFooter} from "../createDialog";
 import {createClass} from "../createClass";

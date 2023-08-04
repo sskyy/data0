@@ -5,31 +5,40 @@ import {PayloadInput} from "./PayloadInput";
 import {Select} from "../form/Select";
 import {ActionInput} from "./ActionInput";
 import {createDraftControl} from "../createDraftControl";
+import {Role} from "./InteractionClass";
+import {incConcat} from "rata";
 
-export function InteractionNode({ interaction, roles, roleAttributives }){
+export function InteractionNode({ interaction, roles, entities, roleAttributives, entityAttributives, selectedAttributive }){
 
     const renderActionDraftControl = createDraftControl(ActionInput, {
         pushEvent: 'input:onBlur'
     })
 
-    const renderPayloadDraftControl = createDraftControl(PayloadInput, {
-        pushEvent: 'code:onBlur',
-        toControlValue: () => '',
-        toDraft: () => ({})
-    })
+
+window.interaction = interaction
 
     return (
-        <div style={{border: '1px blue dashed', display: 'inline-block'}}>
+        <div style={{border: '1px blue dashed', display: 'inline-block'}} classNames="overflow-visible">
             <div>
-                <AttributiveInput value={interaction.roleAttributive().content} options={roleAttributives}/>
-                {/*<RoleInput />*/}
-                <span>{interaction.role().name()}</span>
+                <AttributiveInput
+                    value={interaction.roleAttributive}
+                    options={roleAttributives}
+                    selectedAttributive={selectedAttributive}
+                />
+                <Select value={interaction.role} options={roles} display={Role.display}></Select>
             </div>
             <div>
                 {renderActionDraftControl({ value: interaction.action().name})}
             </div>
-            <div style={{ width: 200, height:100, overflow: 'auto'}}>
-                {/*{renderPayloadDraftControl({ value: interaction.payload})}*/}
+            <div style={{ width: 200}}>
+                <PayloadInput
+                    value={interaction.payload}
+                    roles={roles}
+                    roleAttributives={roleAttributives}
+                    entities={entities}
+                    entityAttributives={entityAttributives}
+                    selectedAttributive={selectedAttributive}
+                />
             </div>
         </div>
     )
