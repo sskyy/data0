@@ -71,6 +71,7 @@ export type KlassType<T> = {
     display? : ClassDef['display']
     stringify: (instance: KlassInstance<T>) => string
     parse: () => KlassInstance<T>
+    is: (arg: any) => boolean
 }
 
 type KlassOptions = {
@@ -202,10 +203,15 @@ export function createClass(def){
         return obj._options?.isReactive ? Klass.createReactive(arg) : Klass.create(arg)
     }
 
+    function is(obj: any) {
+        return obj instanceof Klass
+    }
+
     class Klass {
         static create = create
         static createReactive = createReactive
         static stringify = stringify
+        static is = is
         static clone = clone
         static isKlass = true
         public _options?: KlassOptions
