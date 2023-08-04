@@ -335,3 +335,8 @@ export function incFilter(source: any[], filterFn: (item:any) => boolean) {
         return source.filter(filterFn)
     })
 }
+
+// TODO
+export function incConcat(arr1: any[], ...arr: any[][]) {
+    return arr1.concat(...arr)
+}
