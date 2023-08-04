@@ -1,7 +1,7 @@
 import {createElement} from "@framework";
 import {Component} from "../global";
 import {deepClone} from "./createClass";
-import {Atom, isAtom, reactive} from "rata";
+import {atom, Atom, computed, isAtom, reactive} from "rata";
 import {configure} from "../src/ComponentHost";
 
 type Options = {
@@ -23,14 +23,14 @@ export function createDraftControl(Component: Component, options?: Options) {
         if (!isAtom(value)) {
             throw new Error('draft only accept atom value')
         }
-        let controlValue = options?.toControlValue? options.toControlValue(value()) : deepClone(value())
 
+        const controlValue = atom(options?.toControlValue? options.toControlValue(value()) : deepClone(value()))
 
         function updateValue() {
             let toDraftError
             let draftValue
             try {
-                draftValue = options?.toDraft ? options.toDraft(controlValue) : controlValue
+                draftValue = options?.toDraft ? options.toDraft(controlValue()) : controlValue()
             } catch(e) {
                 toDraftError = e
             }
@@ -39,25 +39,12 @@ export function createDraftControl(Component: Component, options?: Options) {
                 // CAUTION 引用相同，说明更新过一次以后，value 直接使用了我们产生的controlValue对象，所以这个时候需要 cloneDeep
                 const nextValue = draftValue === value() ? deepClone(draftValue) : draftValue
                 // TODO 怎么跑 contraints ？？只有成功了以后才修改 value
-                errors.splice(0, Infinity)
+                errors!.splice(0, Infinity)
                 value(nextValue)
             } else {
-                errors.splice(0, Infinity, { type: 'toDraftError'})
+                errors!.splice(0, Infinity, { type: 'toDraftError'})
             }
             return
-        }
-
-        function draft() {
-            if (arguments.length === 0) {
-                return controlValue
-            }
-
-            controlValue = arguments[0]
-
-            // TODO 这里要改成监听 value 的 onChange 事件。对于那些为了性能不改变 value 引用的组件，他们的应该自行触发 onChange 事件。
-            if (!options?.pushEvent) {
-                updateValue()
-            }
         }
 
         let config = {}
@@ -71,10 +58,22 @@ export function createDraftControl(Component: Component, options?: Options) {
                 },
                 children
             }
+        } else {
+            // FIXME 这里的 computed 没有销毁，会泄露到上层控制里，而且这里的写法也很变扭。
+            let isInitial = true
+            computed(() => {
+                if (isInitial) {
+                    controlValue()
+                    isInitial = false
+                } else {
+                    updateValue()
+                }
+
+            })
         }
 
         // FIXME type
         // @ts-ignore
-        return <Component value={draft} errors={errors} {...restProps}>{configure(config)}</Component>
+        return <Component value={controlValue} errors={errors} {...restProps}>{configure(config)}</Component>
     }
 }
