@@ -1,5 +1,6 @@
 import {createClass} from "../createClass";
 import {Atom, computed, incPick, incUnique} from "rata";
+import {Entity} from "../entity/Entity";
 
 export const Role = createClass({
     name: 'Role',
@@ -13,6 +14,10 @@ export const Role = createClass({
                     return computed(() => validNameFormatExp.test(name))
                 },
             }
+        },
+        isRef: {
+            type: 'boolean',
+            defaultValue: () => false
         }
     }
 })
@@ -83,20 +88,7 @@ export const Action = createClass({
     }
 })
 
-// TODO Payload 都是动态类型的怎么表达？现在先直接写成 object，在视图层去处理数据结构。
-// export const PayloadItem = createClass({
-//     name: 'PayloadItem',
-//     public: {
-//         name: {
-//             type: 'string',
-//             required: true
-//         },
-//         value: {
-//             type: ['string', 'number', 'boolean'],
-//             required: true
-//         }
-//     }
-// })
+
 
 
 export const PayloadItem = createClass({
@@ -122,6 +114,9 @@ export const PayloadItem = createClass({
         isCollection: {
             type: 'boolean',
             defaultValue: () => false
+        },
+        itemRef: {
+            type: [Role, Entity]
         }
     }
 })
@@ -162,6 +157,9 @@ export const Interaction = createClass({
         role : {
             type: Role,
             required: true
+        },
+        roleRef: {
+            type: Role
         },
         action:  {
             type: Action,
@@ -263,3 +261,8 @@ export const Activity = createClass({
         },
     }
 })
+
+export function forEachInteraction(activity: ReturnType<typeof Activity.create>|ReturnType<typeof Activity.createReactive>, handle: (interaction: ReturnType<typeof Interaction.create>|ReturnType<typeof Interaction.createReactive>) => any) {
+    activity.interactions.forEach(interaction => handle(interaction))
+    activity.groups?.forEach((group) => forEachInteraction(group as InstanceType<typeof Activity>, handle) )
+}

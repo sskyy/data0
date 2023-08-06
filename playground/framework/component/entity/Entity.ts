@@ -84,6 +84,10 @@ export const Entity = createClass({
             defaultValue() {
                 return []
             }
+        },
+        isRef: {
+            type: 'boolean', // 可以在 payload 中作为 ref 被后续的 interaction 引用。
+            defaultValue: () => false
         }
     }
 })

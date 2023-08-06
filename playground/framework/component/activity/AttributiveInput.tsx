@@ -15,7 +15,7 @@ function renderAttrNode(createElement, selectedAttributive, expression, availabl
 
 
 function renderAttrExpression(createElement, selectedAttributive, expression?: AttrNode, mayNeedParams?: boolean, placeholder?: string) {
-    if (!expression) return <div>{placeholder}</div>
+    if (!expression) return <div className="text-gray-400">{placeholder}</div>
 
     if ( expression.type === AttrNodeTypes.variable) {
         return renderAttrNode(createElement, selectedAttributive, (expression as VariableNode).name)
@@ -157,7 +157,6 @@ export function AttributiveInput({ value, options = [], selectedAttributive }: P
     return <div className="inline-block mr-4" onDblclick={onDblclick} >
         {() => {
             if (!value()?.content) return null
-            console.warn('editing recompute', value().content)
             return editing() ? <AttrEditor ref='editor' value={value().content} onFocusout={onFocusout} errors={errors} options={options} /> : renderAttrExpression(createElement, selectedAttributive, value().content(), false, 'empty')
         }}
     </div>

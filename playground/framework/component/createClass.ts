@@ -1,7 +1,7 @@
 import {atom, Atom, isAtom, isReactivableType, isReactive, rawStructureClone, reactive} from "rata";
 import {hasOwn, isObject} from "../../../src/util";
 import {isPlainObject} from "../src/util";
-import {toRaw} from "../../../src/reactive";
+import {toRaw, UnwrapReactive} from "../../../src/reactive";
 
 type AcceptablePropType<T> = 'string'|'number'|'boolean'| 'object'| KlassType<T>
 
@@ -58,11 +58,23 @@ type KlassInstance<T> = {
         )
 }
 
+type ReactiveKlassInstance<T> = {
+    [Key in keyof T]: T[Key]['type'] extends KlassType<T[Key]['type']['public']> ?
+        (T[Key] extends ClassCollectionPropType<T[Key]['type']['public']> ?
+            UnwrapReactive<KlassInstance<T[Key]['type']['public']>[]>:  // 对象数组
+            Atom<KlassInstance<T[Key]['type']['public']>> // 对象 单一值
+        ) :
+        (T[Key] extends ClassCollectionPropType<T[Key]['type']['public']> ?
+            UnwrapReactive<PrimitivePropertyMap[T[Key]['type']][]>: // primitive 的数组 reactive()
+            Atom<PrimitivePropertyMap[T[Key]['type']]>  // primitive 单一值
+        )
+}
+
 
 export type KlassType<T> = {
     new(arg: object, options?: KlassOptions) : KlassInstance<T>,
     create: (arg: object, options?: KlassOptions) => KlassInstance<T>,
-    createReactive: (arg: object, options?: KlassOptions) => KlassInstance<T>,
+    createReactive: (arg: object, options?: KlassOptions) => ReactiveKlassInstance<T>,
     displayName: string,
     isKlass: true,
     public: T,

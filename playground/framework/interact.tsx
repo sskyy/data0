@@ -18,7 +18,7 @@ const sendInteraction = Interaction.createReactive({
         // TODO 写个 attributive
     }),
     role: globalUserRole,
-    roleAs: 'A',
+    roleRefName: 'A',
     action: Action.createReactive({ name: 'sendRequest'}),
     payload: Payload.createReactive({
         items: []

@@ -7,6 +7,7 @@ import {ActionInput} from "./ActionInput";
 import {createDraftControl} from "../createDraftControl";
 import {Role} from "./InteractionClass";
 import {incConcat} from "rata";
+import {Input} from "../form/Input";
 
 export function InteractionNode({ interaction, roles, entities, roleAttributives, entityAttributives, selectedAttributive }){
 
@@ -14,6 +15,7 @@ export function InteractionNode({ interaction, roles, entities, roleAttributives
         pushEvent: 'input:onBlur'
     })
 
+    const aliasDraftControl = createDraftControl(Input)
 
 window.interaction = interaction
 
@@ -26,6 +28,10 @@ window.interaction = interaction
                     selectedAttributive={selectedAttributive}
                 />
                 <Select value={interaction.role} options={roles} display={Role.display}></Select>
+                {aliasDraftControl({
+                    value: interaction.roleRef().name,
+                    placeholder: 'ref name'
+                })}
             </div>
             <div>
                 {renderActionDraftControl({ value: interaction.action().name})}

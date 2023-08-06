@@ -1,4 +1,3 @@
-import {createElement} from "@framework";
 import {
     CanvasEventType,
     default as G6,
@@ -106,6 +105,7 @@ class XGraph {
     public resizeObserver: ResizeObserver
     public graphContainer:HTMLElement
     createDefaultPosition: ReturnType<typeof createDefaultPositionGenerator>
+    scheduleLayoutTask: any = null
     constructor(
         public options: Omit<GraphOptions, 'container'>,
         public nodes: Node[],
@@ -116,6 +116,7 @@ class XGraph {
         public Combo: (any) => JSX.Element,
         public isEditingNode = atom(false),
         public canvasEventListeners?: CanvasEventListeners,
+        public nodeProps?: object
     ) {
         // TODO 配置
         this.createDefaultPosition = createDefaultPositionGenerator(0, 200)
@@ -134,9 +135,15 @@ class XGraph {
 
         this.attachCanvasListeners()
 
-        this.graph.layout()
+        this.scheduleLayout()
+    }
+    scheduleLayout() {
+        if (this.scheduleLayoutTask) return
 
-
+        this.scheduleLayoutTask = setTimeout(() => {
+            this.graph.layout()
+            this.scheduleLayoutTask = null
+        }, 1)
     }
     attachCanvasListeners() {
         if (this.canvasEventListeners) {
@@ -168,14 +175,13 @@ class XGraph {
     listenCreateEdge() {
         this.graph.on('aftercreateedge', (event) => {
             debugger
-
         })
     }
-    render() {
+    render(createElement) {
         this.graphContainer = <div style={{position:'absolute', top:0, left:0, width: '100%', height: '100%' }}></div> as HTMLElement
 
-        const { Component, Edge, Combo } = this
-        const nodeAndDOMNodes = incMap(this.nodes, (node) => ({node, dom: <div style={{display:'inline-block', position:'absolute'}}><Component node={node}/></div> }))
+        const { Component, Edge, Combo, nodeProps } = this
+        const nodeAndDOMNodes = incMap(this.nodes, (node) => ({node, dom: <div style={{display:'inline-block', position:'absolute'}}><Component node={node} nodeProps={nodeProps}/></div> }))
         this.nodeToDOMNode = incIndexBy(nodeAndDOMNodes, 'node', ({dom}) => dom) as Map<string, HTMLElement>
 
         const comboAndDOMNodes = incMap(this.combos, (combo) => ({combo, dom: <div style={{display:'inline-block', position:'absolute'}}><Combo node={combo}/></div> }))
@@ -346,7 +352,7 @@ class XGraph {
                 this.syncNodePosToDOM(node)
                 // 关联 edge label 也要重算
                 item.getEdges().forEach(graphEdge => {
-                    this.syncEdgeLabelPos(graphEdge)
+                    this.syncEdgeLabelPos(graphEdge.getModel().raw)
                 })
             }
         })
@@ -496,10 +502,10 @@ class XGraph {
 
 
 export type GraphType = { options: object, nodes: Node[], edges: Edge[], Component: (any) => JSX.Element, Combo: (any) => JSX.Element, Edge: (any) => JSX.Element, isEditingNode: Atom<boolean>, canvasEventListeners: CanvasEventListeners}
-export function Graph( { options, nodes, edges, combos, Component, Combo, Edge, isEditingNode, canvasEventListeners} : GraphType) {
-    const graph = new XGraph(options, nodes, edges, combos, Component, Edge, Combo, isEditingNode, canvasEventListeners);
-    setTimeout(() => {
+export function Graph( { options, nodes, edges, combos, Component, Combo, Edge, nodeProps, isEditingNode, canvasEventListeners} : GraphType, {createElement,  useLayoutEffect}) {
+    const graph = new XGraph(options, nodes, edges, combos, Component, Edge, Combo, isEditingNode, canvasEventListeners, nodeProps);
+    useLayoutEffect(() => {
         graph.drawGraph()
-    }, 1)
-    return graph.render()
+    })
+    return graph.render(createElement)
 }

@@ -21,88 +21,23 @@ import hotkeys from "hotkeys-js";
 import {service} from "../service";
 
 
-const globalUserRole = Role.createReactive({ name: 'User'})
-
-const sendInteraction = Interaction.createReactive({
-    name: 'sendRequest',
-    roleAttributive: RoleAttributive.createReactive({
-        // TODO 写个 attributive
-    }),
-    role: globalUserRole,
-    roleAs: 'A',
-    action: Action.createReactive({ name: 'sendRequest'}),
-    payload: Payload.createReactive({
-        content: {
-            to: {
-                // TODO 还要支持 as B
-            },
-            message: {
-                // TODO 从实体导入的
-            }
-        }
-    })
-})
-
-const responseGroup = InteractionGroup.createReactive({
-    type: 'or',
-    interactions: [
-        Interaction.createReactive({
-            name: 'approve',
-            // TODO role 要改成 as B
-            roleAttributive: RoleAttributive.createReactive({}),
-            role: Role.createReactive({ name: 'User'}),
-            action: Action.createReactive({ name: 'approve'}),
-            payload: Payload.createReactive({})
-        }),
-        Interaction.createReactive({
-            name: 'reject',
-            roleAttributive: RoleAttributive.createReactive({}),
-            // TODO role 要改成 as B
-            role: Role.createReactive({ name: 'User'}),
-            action: Action.createReactive({ name: 'reject'}),
-            payload: Payload.createReactive({})
-        }),
-        Interaction.createReactive({
-            name: 'cancel',
-            roleAttributive: RoleAttributive.createReactive({}),
-            // TODO role 要改成 as A
-            role: Role.createReactive({ name: 'User'}),
-            action: Action.createReactive({ name: 'cancel'}),
-            payload: Payload.createReactive({})
-        }),
-    ]
-})
-
-const _activity: Activity = {
-    interactions: [
-        sendInteraction
-    ],
-    groups: [
-        responseGroup
-    ],
-    transfers: [
-        Transfer.createReactive({
-            name: 'fromSendToResponse',
-            source: sendInteraction,
-            target: responseGroup
-        })
-    ]
-}
 
 // FIXME 目前没有递归处理 group
-export function ActivityGraph({ value:activity = _activity }) {
+export function ActivityGraph({ value, roles, entities, roleAttributives, entityAttributives, selectedAttributive  }) {
     // TODO concat 如何仍然保持 incremental ?
     const nodes = computed(() => {
-        return activity.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction })).concat(
-            ...activity.groups.map( group => group.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction, comboId: group.uuid })))
+        return value.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction })).concat(
+            ...value.groups.map(group => group.interactions.map(interaction => ({ id: interaction.uuid, raw: interaction, comboId: group.uuid })))
         )
     })
 
-    const combos = incMap(activity.groups, group => ({ id: group.uuid, isGroup: true, raw: group}))
+    const nodeProps = {roles, entities, roleAttributives, entityAttributives, selectedAttributive }
 
-    window.activity = activity
+    const combos = incMap(value.groups, group => ({ id: group.uuid, isGroup: true, raw: group}))
 
-    const edges = incMap(activity.transfers, transfer => ({
+    window.activity = value
+
+    const edges = incMap(value.transfers, transfer => ({
         id: crypto.randomUUID(),
         source: transfer.source().uuid,
         target: transfer.target().uuid
@@ -110,14 +45,15 @@ export function ActivityGraph({ value:activity = _activity }) {
 
 
     let sourceAnchorIdx, targetAnchorIdx;
+    // TODO 外部配置
     const options: Omit<GraphOptions, 'container'> = {
         width: 800,
-        height: 800,
+        height: 1800,
         fitView: true,
         fitCenter: true,
         layout: {
             type: 'dagre',
-            ranksep: 80,
+            ranksep: 250,
             rankdir: 'TB',
             // TODO align center 现在无效
             align: undefined
@@ -193,5 +129,5 @@ export function ActivityGraph({ value:activity = _activity }) {
     })
 
 
-    return <Graph options={options} nodes={nodes} edges={edges} combos={combos} Combo={ActivityNode} Component={ActivityNode} isEditingNode={isEditingNode} Edge={InteractionEdge} canvasEventListeners={listeners}/>
+    return <Graph options={options} nodes={nodes} edges={edges} combos={combos} Combo={ActivityNode} Component={ActivityNode} nodeProps={nodeProps} isEditingNode={isEditingNode} Edge={InteractionEdge} canvasEventListeners={listeners}/>
 }

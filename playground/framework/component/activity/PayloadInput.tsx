@@ -11,19 +11,15 @@ import {Select} from "../form/Select";
 
 export function PayloadInput({ value, errors, roles, entities, roleAttributives, entityAttributives, selectedAttributive}: Props, { createElement }: InjectHandles) {
 
-    // TODO 怎么表示添加新的？？？我们只做了 draft，就是 create 一个新的？？
-
     const onAddClick = () => {
-        value().items.push(PayloadItem.createReactive({ name: '', base: null, attributive: null }))
+        value().items.push(PayloadItem.createReactive({ name: '', base: null, attributive: null, alias: '' }))
     }
 
     return <div>
         {incMap(value().items, (item) => {
 
             const renderNameDraftControl = createDraftControl(Input)
-            const renderConceptDraftControl = createDraftControl(Select)
-            const renderIsRefDraftControl = createDraftControl(Checkbox)
-            const renderIsCollectionDraftControl = createDraftControl(Checkbox)
+            const aliasDraftControl = createDraftControl(Input)
 
             const attributiveOptions = computed(() => {
                 return Role.is(item.base()) ? roleAttributives : entityAttributives
@@ -38,7 +34,7 @@ export function PayloadInput({ value, errors, roles, entities, roleAttributives,
                 }
             })
 
-
+            // CAUTION 对于没有实时变化的，没有校验规则的数据编辑，没有必要用 draftControl
             return (
                 <div>
                     {renderNameDraftControl({
@@ -47,19 +43,15 @@ export function PayloadInput({ value, errors, roles, entities, roleAttributives,
                     })}
                     <span>:</span>
                     <AttributiveInput value={item.attributive} options={attributiveOptions} selectedAttributive={selectedAttributive}/>
-                    {renderConceptDraftControl({
-                        placeholder: 'choose',
-                        value: item.base,
-                        options: incConcat(roles, entities),
-                        display: (item) => item.name
-                    })}
-                    {renderIsRefDraftControl({
-                        value: item.isRef,
-                        label: 'isRef'
-                    })}
-                    {renderIsCollectionDraftControl({
-                        value: item.isCollection,
-                        label: 'isCollection'
+                    <Select placeholder={ 'choose'}
+                        value={item.base}
+                        options={incConcat(roles, entities)}
+                        display={(item) => item.name}
+                    />
+                    <Checkbox value={item.isRef} label={'isRef'} />
+                    <Checkbox value={item.isCollection} label={'isCollection'} />
+                    {aliasDraftControl({
+                        value: item.itemRef().name
                     })}
                 </div>
             )
