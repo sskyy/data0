@@ -131,7 +131,7 @@ export class ComputedInternal {
   public get debugName() {
     return getDebugName(this.data)
   }
-  constructor(public getter: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator) {
+  constructor(public getter: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator, public forceAtom?: boolean) {
 
     if (typeof scheduleRecompute === 'function') {
       this.scheduleRecompute = scheduleRecompute
@@ -198,7 +198,11 @@ export class ComputedInternal {
       return [updaterWithRecompute, handlerWithRecompute]
     }
 
-    this.data = isReactivableType(initialValue) ? reactive(initialValue, interceptReactive) : atom(initialValue, interceptAtom)
+    this.data = this.forceAtom ?
+        atom(initialValue, interceptAtom) :
+        isReactivableType(initialValue) ?
+          reactive(initialValue, interceptReactive) :
+          atom(initialValue, interceptAtom)
 
     // destroy 的时候用户是拿 computed 去 destroy 的。
     computedToInternal.set(this.data, this)
@@ -257,9 +261,14 @@ export class ComputedInternal {
 type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => ReturnType<typeof computed>[] | void
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
-export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator) : ComputedResult<T>
-export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator) {
-  const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)
+export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean) : ComputedResult<T>
+export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean) {
+  const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, forceAtom)
+  return internal.data
+}
+
+export function atomComputed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator) {
+  const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, true)
   return internal.data
 }
 
