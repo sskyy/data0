@@ -71,7 +71,7 @@ export class StaticHost implements Host{
     computed = undefined
     reactiveHosts?: Host[]
     attrComputeds?: ReturnType<typeof computed>[]
-    constructor(public source: HTMLElement|SVGElement, public placeholder: UnhandledPlaceholder, public context: Context) {
+    constructor(public source: HTMLElement|SVGElement|DocumentFragment, public placeholder: UnhandledPlaceholder, public context: Context) {
     }
     get parentElement() {
         return this.placeholder.parentElement
@@ -79,7 +79,7 @@ export class StaticHost implements Host{
     element: HTMLElement|Comment|SVGElement = this.placeholder
     render(): void {
         if (this.element === this.placeholder) {
-            this.element = this.source
+            this.element = this.source instanceof DocumentFragment ? new Comment('fragment start') : this.source
             insertBefore(this.source, this.placeholder)
             const { reactiveHosts, attrComputeds, renderHosts } = renderReactiveChildAndAttr(this.source, this.context)!
             this.reactiveHosts = reactiveHosts

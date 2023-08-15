@@ -47,7 +47,7 @@ function isEventName(name: string) {
   return name[0] === 'o' && name[1] === 'n'
 }
 
-export function setAttribute(node: ExtendedElement, name: string, value: any,  isSvg?: boolean) {
+export function setAttribute(node: ExtendedElement, name: string, value: any,  isSvg?: boolean): void {
   if (Array.isArray(value) && name !== 'style' && name !== 'className' && !isEventName(name) ) {
     // 全都是覆盖模式，只处理最后一个
     return setAttribute(node, name, value.at(-1), isSvg)
@@ -162,7 +162,7 @@ export function setAttribute(node: ExtendedElement, name: string, value: any,  i
 
   }else if (name === 'dangerouslySetInnerHTML') {
     console.warn(value)
-    if (value) node.innerHTML = value.__html || ''
+    if (value) node.innerHTML = value || ''
   } else if (name !== 'list' && name !== 'type' && !isSvg && name in node) {
     setProperty(node, name, value == null ? '' : value)
     if (value == null || value === false) node.removeAttribute(name)

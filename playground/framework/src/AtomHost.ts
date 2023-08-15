@@ -3,18 +3,18 @@ import {Context, Host} from "./Host";
 
 export class AtomHost implements Host{
     computed: ReturnType<typeof computed>
-    fragmentParent = document.createDocumentFragment()
     element: Text|Comment = this.placeholder
     constructor(public source: Atom, public placeholder:Comment, public context: Context) {
     }
     get parentElement() {
-        return this.placeholder.parentElement || this.fragmentParent
+        // CAUTION 这里必须用 parentNode，因为可能是在数组下，这个父节点是 staticArrayHost 创建的 frag
+        return this.placeholder.parentNode || this.element.parentElement
     }
 
     replace(value: any) {
         if (this.element === this.placeholder) {
             const textNode = new Text((value as string).toString())
-            this.parentElement.replaceChild(textNode, this.placeholder)
+            this.parentElement!.replaceChild(textNode, this.placeholder)
             this.element = textNode
         } else {
             this.element.nodeValue = (value as string).toString()
@@ -24,7 +24,11 @@ export class AtomHost implements Host{
     render(): void {
         this.computed = computed(() => {
                 this.replace(this.source())
-            }
+            },
+            undefined,
+            undefined,
+            undefined,
+            this.context.skipIndicator
         )
     }
     destroy(parentHandle?: boolean) {

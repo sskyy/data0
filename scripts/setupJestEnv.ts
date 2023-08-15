@@ -42,12 +42,12 @@ expect.extend({
         if (passed) {
             return {
                 pass: true,
-                message: () => `expected "${received[Symbol.toPrimitive]()}" shallow equal "${toMatch}".`
+                message: () => `expected "${received[Symbol.toPrimitive]?.()}" shallow equal "${toMatch}".`
             }
         } else {
             return {
                 pass: false,
-                message: () => `expected "${received[Symbol.toPrimitive]()}" shallow equal "${toMatch}".`
+                message: () => `expected "${received[Symbol.toPrimitive]?.()}" shallow equal "${toMatch}".`
             }
         }
     },

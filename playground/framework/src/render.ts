@@ -9,10 +9,6 @@ type EventCallback = (e: any) => void
 export type Root = ReturnType<typeof createRoot>
 
 export function createRoot(element: HTMLElement) {
-    const placeholder = new Comment('root')
-    element.appendChild(placeholder)
-
-
     const eventCallbacks = new Map<string, Set<EventCallback>>()
 
     const context: Context = {}
@@ -21,6 +17,8 @@ export function createRoot(element: HTMLElement) {
         element,
         context,
         render(componentOrEl: HTMLElement|ComponentNode|Function) {
+            const placeholder = new Comment('root')
+            element.appendChild(placeholder)
             const host = createHost(componentOrEl, placeholder, context)
             host.render()
             return host

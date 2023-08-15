@@ -22,8 +22,10 @@ declare var __FEATURE_SUSPENSE__: boolean
 declare module 'expect' {
     interface AsymmetricMatchers {
         toShallowEqual(toMatch: string|number): void;
+        toShallowMatchObject<T extends any[]>(received: T, toMatch: T): void;
     }
     interface Matchers<R> {
         toShallowEqual(toMatch: string|number): R;
+        oShallowMatchObject<T extends any[]>(received: T, toMatch: T): R;
     }
 }

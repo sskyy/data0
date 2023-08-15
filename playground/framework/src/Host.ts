@@ -5,7 +5,7 @@ export interface Host {
     element: HTMLElement|Comment|Text|SVGElement
     placeholder:Comment
     context: Context
-    computed?: ReturnType<computed<undefined>>
+    computed?: ReturnType<typeof computed>
     render: () => void
     destroy : (parentHandleElement?: boolean) => void
     revoke?: () => void

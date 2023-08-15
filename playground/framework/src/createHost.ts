@@ -7,6 +7,7 @@ import {AtomHost} from "./AtomHost";
 import {FunctionHost} from "./FunctionHost";
 import {StaticHost} from "./StaticHost";
 import {StaticArrayHost} from "./StaticArrayHost";
+import {assert} from "./util";
 
 class EmptyHost implements Host{
     element = new Comment('empty')
@@ -49,17 +50,15 @@ export function createHost(source: any, placeholder: UnhandledPlaceholder, conte
         host = new AtomHost(source, placeholder, context)
     } else if (typeof source === 'function'){
         host  = new FunctionHost(source, placeholder, context)
-    } else if( source instanceof HTMLElement || source instanceof SVGElement){
+    } else if( source instanceof HTMLElement || source instanceof SVGElement || source instanceof DocumentFragment){
         host = new StaticHost(source, placeholder, context)
-    } else if( source instanceof DocumentFragment){
-        host = new StaticArrayHost([...(source.childNodes as unknown as Array<HTMLElement>)], placeholder, context)
     } else if (source === undefined || source === null) {
         host = new EmptyHost()
     }else if( typeof source === 'string' || typeof source === 'number' || typeof source === 'boolean'){
         host = new PrimitiveHost(source, placeholder, context)
     } else {
-        throw new Error(`unknown child type ${source}`)
+        assert(false, `unknown child type ${source}`)
     }
 
-    return host
+    return host!
 }

@@ -10,7 +10,7 @@
 
 import internalCheckPropTypes from './checkPropTypes'
 
-function isStringLike(v) {
+function isStringLike(v: any) {
     const type = typeof v
     return (type === 'string' || type === 'number')
 }
@@ -18,16 +18,16 @@ function isStringLike(v) {
 
 // TODO zero-value
 // 这个写法是为了兼容 react 的 prop-types
-export function createTypeClass(definition) {
-    function Type(...argv) {
-        function TypeChecker(v) {
+export function createTypeClass(definition: TypeDefinition) {
+    function Type(...argv: any[]) {
+        function TypeChecker(v: any) {
             if (!TypeChecker.check(v)) return new Error('type check failed')
         }
 
         TypeChecker.argv = argv
-        TypeChecker.stringify = definition.stringify.bind(TypeChecker)
-        TypeChecker.parse = definition.parse.bind(TypeChecker)
-        TypeChecker.check = definition.check.bind(TypeChecker)
+        TypeChecker.stringify = definition.stringify!.bind(TypeChecker)
+        TypeChecker.parse = definition.parse!.bind(TypeChecker)
+        TypeChecker.check = definition.check!.bind(TypeChecker)
         TypeChecker.is = definition.is || (t => t === Type)
         TypeChecker.zeroValue = definition.zeroValue
         TypeChecker.required = definition.required
@@ -54,6 +54,7 @@ export function createTypeClass(definition) {
 type TypeChecker = {
     (v: any): any,
     [k: string] : any
+    argv: any[],
     stringify: typeof JSON.stringify,
     parse: typeof JSON.parse,
     check: (obj: any) => boolean,
@@ -67,10 +68,11 @@ type TypeChecker = {
 type TypeDefinition = {
     stringify?: (...args: any[]) => any,
     parse?: (...args: any[]) => any,
+    check?: (v: any) => boolean,
+    is? : (obj: any) => boolean,
     required?: boolean,
     createDefaultValue?: () => any,
     zeroValue? : any,
-
 }
 
 export function createNormalType(type: any, definition: TypeDefinition = {}) : TypeChecker {
@@ -116,7 +118,7 @@ export function createNormalType(type: any, definition: TypeDefinition = {}) : T
         // 提供一个 default 函数，可以动态将 TypeChecker 变成带 defaultValue 的(其实是动态再创建的)。
         Object.defineProperty(TypeChecker, 'default', {
             get() {
-                return (createDefaultValue) => createNormalType(type, {
+                return (createDefaultValue: () => any) => createNormalType(type, {
                     ...definition,
                     required: TypeChecker.required,
                     createDefaultValue,
@@ -128,7 +130,7 @@ export function createNormalType(type: any, definition: TypeDefinition = {}) : T
         Object.defineProperty(TypeChecker, 'defaultValue', {
             get() {
                 if (TypeChecker.createDefaultValue) {
-                    return TypeChecker.createDefaultValue()
+                    return TypeChecker.createDefaultValue!()
                 }
             },
         })
@@ -139,16 +141,16 @@ export function createNormalType(type: any, definition: TypeDefinition = {}) : T
 
 
 export const oneOf = createTypeClass({
-    stringify(v) {
+    stringify(this: TypeChecker, v: any) {
         if (v === null) return ''
         return isStringLike(this.argv[0][0]) ? v.toString() : JSON.stringify(v)
     },
-    parse(v) {
+    parse(this: TypeChecker, v: any) {
         return !isStringLike(this.argv[0][0])
             ? JSON.parse(v)
             : ((typeof this.argv[0][0]) === 'string' ? v : parseFloat(v))
     },
-    check(v) {
+    check(this: TypeChecker, v: any) {
         return this.argv[0].includes(v)
     },
     zeroValue: [],
@@ -168,11 +170,11 @@ export const number = createNormalType('number', {
     zeroValue: 0,
 })
 
-export const object = createNormalType((v) => {
+export const object = createNormalType((v: any) => {
     return (typeof v === 'object' && !Array.isArray(v))
 }, { zeroValue: null })
 
-export const array = createNormalType((v) => {
+export const array = createNormalType((v: any) => {
     return Array.isArray(v)
 })
 
@@ -192,33 +194,36 @@ export const any = createNormalType(() => true, {
     },
     parse() {
         throw new Error('type any can not parse')
+        return false
     },
     check() {
         throw new Error('type any can not check')
+        return false
     },
 })
 
 export const oneOfType = createTypeClass({
-    check(v) {
-        return this.argv[0].some(propType => propType.check(v))
+    check(this: TypeChecker, v: any) {
+        return this.argv[0].some((propType: TypeChecker) => propType.check(v))
     },
-    stringify(v) {
-        const propType = this.argv[0].find(propType => !(propType(v) instanceof Error))
+    stringify(this: TypeChecker, v: any) {
+        const propType = this.argv[0].find((propType: TypeChecker) => !(propType(v) instanceof Error))
         return propType.stringify(v)
     },
-    parse(v) {
+    parse(this: TypeChecker, v: any) {
         // TODO 每个都准备 parse 一下
         let result
-        const haveResult = this.argv[0].some((propType) => {
+        const haveResult = this.argv[0].some((propType: TypeChecker) => {
             try {
                 const parsed = propType.parse(v)
-                if (!(this.check(parsed) instanceof Error)) {
+                if (this.check(parsed)) {
                     result = parsed
                     return true
                 }
             } catch (e) {
 
             }
+            return false
         })
 
         if (!haveResult) throw new Error(`can not parse ${v}`)
@@ -227,7 +232,7 @@ export const oneOfType = createTypeClass({
 })
 
 export const arrayOf = createTypeClass({
-    check(v) {
+    check(this: TypeChecker, v: any) {
         if (!Array.isArray(v)) return false
         // TODO of type?
         return v.every(e => this.argv[0].check(e))
@@ -258,16 +263,16 @@ export const shapeOf = createTypeClass({
 })
 
 export const map = createTypeClass({
-    check(v) {
-        return Object.entries(this.argv[0]).every(([key, propType]) => propType.check(v[key]))
+    check(this: TypeChecker, v: any) {
+        return Object.entries(this.argv[0]).every(([key, propType]: [string, unknown]) => (propType as TypeChecker).check(v[key]))
     },
-    stringify(v) {
+    stringify(this: TypeChecker, v: any) {
         // 注意里面对 propType.stringify 结果又用了一次 JSON.stringify 是为了转义双引号
-        return `{${Object.entries(this.argv[0]).map(([key, propType]) => {
-            return `${key}:${JSON.stringify(propType.stringify(v[key]))}`
+        return `{${Object.entries(this.argv[0]).map(([key, propType]: [string, unknown]) => {
+            return `${key}:${JSON.stringify((propType as TypeChecker).stringify(v[key]))}`
         }).join(',')}`
     },
-    parse(v) {
+    parse(this: TypeChecker, v: any) {
         const map = JSON.parse(v)
         Object.keys(map).forEach((key) => {
             map[key] = this.argv[0][key].parse(map[key])

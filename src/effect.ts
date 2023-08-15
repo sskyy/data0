@@ -1,5 +1,5 @@
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import {assert, extend, getStackTrace, isArray, isIntegerKey, isMap, toNumber} from './util'
+import {extend, getStackTrace, isArray, isIntegerKey, isMap, toNumber} from './util'
 import { EffectScope, recordEffectScope } from './effectScope'
 import {
   createDep,
@@ -81,12 +81,14 @@ export class ReactiveEffect<T = any> {
   constructor(
     public fn: (trackOnce?: typeof track) => T,
     public scheduler: EffectScheduler | null = null,
+    public skipIndicator?: {skip: boolean},
     scope?: EffectScope
   ) {
     recordEffectScope(this, scope)
   }
-  // 用来增加 track 的
   run() {
+    if (this.skipIndicator?.skip) return
+
     if (!this.active) {
       return this.fn()
     }
@@ -236,6 +238,21 @@ export function stop(runner: ReactiveEffectRunner) {
   runner.effect.stop()
 }
 
+
+export let shouldTrigger = true
+const shouldTriggerStack: boolean[] = []
+
+export function pauseTrigger() {
+  shouldTriggerStack.push(shouldTrigger)
+  shouldTrigger = false
+}
+
+export function resetTrigger() {
+  const last = shouldTriggerStack.pop()
+  shouldTrigger = last === undefined ? true : last
+}
+
+
 export let shouldTrack = true
 const trackStack: boolean[] = []
 
@@ -311,6 +328,8 @@ export function trigger(
   info: TriggerInfo,
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
+  if (!shouldTrigger) return
+
   const {key, newValue, oldValue} = info
   const depsMap = targetMap.get(target)
   if (!depsMap) {

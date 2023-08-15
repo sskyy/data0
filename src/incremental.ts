@@ -71,7 +71,7 @@ function getAtomIndexOfArray(source: any[]) {
 }
 
 function removeAtomIndexDep(source: any[]) {
-    const indexInfo = atomIndexMap.get(source)
+    const indexInfo = atomIndexMap.get(source)!
     assert(!!indexInfo, 'no dep for this array source found.')
     indexInfo.depCount--
     if (indexInfo.depCount < 1) {
