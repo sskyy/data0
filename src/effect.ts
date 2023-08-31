@@ -49,8 +49,8 @@ export type DebuggerEventExtraInfo = {
 
 export let activeEffect: ReactiveEffect | undefined
 
-export const ITERATE_KEY = Symbol(__DEV__ ? 'iterate' : '')
-export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
+export const ITERATE_KEY = Symbol( 'iterate' )
+export const MAP_KEY_ITERATE_KEY = Symbol('Map key iterate' )
 
 export class ReactiveEffect<T = any> {
   active = true

@@ -14,10 +14,9 @@ import { setDebugName} from "./debug";
 export type UpdateFn<T> = (prev: T) => T
 
 // export type Atom<T = any> = ((newValue?: any| UpdateFn<T>) => any) & { __v_isAtom: boolean } & T
-export type Atom<T = any> = {
-    (newValue?: any) : any,
-    __v_isAtom: true
-} & T
+export type Atom<T = any> = T
+    & { __v_isAtom: true }
+    & { (newValue?: any) : any }
 
 export type AtomInitialType = any
 

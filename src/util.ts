@@ -11,12 +11,6 @@ export function makeMap(
     return expectsLowerCase ? val => !!map[val.toLowerCase()] : val => !!map[val]
 }
 
-export const EMPTY_OBJ: { readonly [key: string]: any } = __DEV__
-    ? Object.freeze({})
-    : {}
-export const EMPTY_ARR = __DEV__ ? Object.freeze([]) : []
-
-export const NOOP = () => {}
 
 /**
  * Always return false.

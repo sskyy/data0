@@ -161,7 +161,7 @@ export function setAttribute(node: ExtendedElement, name: string, value: any,  i
     }
 
   }else if (name === 'dangerouslySetInnerHTML') {
-    console.warn(value)
+    // console.warn(value)
     if (value) node.innerHTML = value || ''
   } else if (name !== 'list' && name !== 'type' && !isSvg && name in node) {
     setProperty(node, name, value == null ? '' : value)
@@ -180,6 +180,7 @@ export function setAttribute(node: ExtendedElement, name: string, value: any,  i
       node.setAttributeNS('http://www.w3.org/1999/xlink', name.toLowerCase(), value)
 
     } else {
+
       node.setAttribute(name, value)
     }
   }
