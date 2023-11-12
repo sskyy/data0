@@ -17,14 +17,12 @@
     "removeComments": false,
     "jsx": "preserve",
     "lib": ["esnext", "dom"],
-    "types": ["jest/globals", "node"],
+    "types": [],
     "declaration": true,
-    "rootDir": "."
+    "rootDir": "./src"
   },
   "include": [
     "global.d.ts",
-    "test.d.ts",
     "src/**/*",
-    "__tests__/**/*"
   ]
 }
