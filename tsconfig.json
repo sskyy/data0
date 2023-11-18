@@ -25,6 +25,8 @@
     "global.d.ts",
     "test.d.ts",
     "src/**/*",
-    "__tests__/**/*"
+    "__tests__/**/*",
+    "./vite.config.ts",
+    "./env.d.ts",
   ]
 }

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "outDir": "./dist",
+    "outDir": "./dist1",
     "sourceMap": true,
     "module": "esnext",
     "target": "es2019",
@@ -19,6 +19,7 @@
     "lib": ["esnext", "dom"],
     "types": [],
     "declaration": true,
+    "declarationMap": true,
     "rootDir": "./src"
   },
   "include": [
