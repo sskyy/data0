@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "outDir": "./dist1",
+    "outDir": "./dist",
     "sourceMap": true,
     "module": "esnext",
     "target": "es2019",

@@ -24,9 +24,9 @@
   "include": [
     "global.d.ts",
     "test.d.ts",
-    "src/**/*",
-    "__tests__/**/*",
+    "./src/**/*",
+    "./__tests__/**/*",
     "./vite.config.ts",
-    "./env.d.ts",
+    "./env.d.ts"
   ]
 }

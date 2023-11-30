@@ -1,7 +1,8 @@
 import {computed, destroyComputed} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
-import { describe, test, expect } from "@jest/globals";
+import {describe, expect, test} from "vitest";
+
 
 describe('computed basic', () => {
     test('atom & computed', () => {

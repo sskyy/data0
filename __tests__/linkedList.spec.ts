@@ -1,6 +1,7 @@
 import {computed} from "../src/computed";
 import {LinkedList} from '../src/LinkedList'
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
+
 
 describe('computed based on linkedList', () => {
     test('atom & computed', () => {

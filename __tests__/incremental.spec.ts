@@ -1,6 +1,7 @@
 import { incMap } from "../src/incremental";
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 import {reactive} from "../src/reactive";
+
 
 describe('incremental map', () => {
     test('Array map', () => {
@@ -61,24 +62,22 @@ describe('incremental map', () => {
     })
 
 
-
-
-    test('Map map', () => {
-
-    })
-
-    test('Set map', () => {
-
-    })
+    // test('Map map', () => {
+    //
+    // })
+    //
+    // test('Set map', () => {
+    //
+    // })
 })
 
 
-describe('incremental merge & index related', () => {
-
-})
-
-
-describe('non-index incremental computation', () => {
-
-})
+// describe('incremental merge & index related', () => {
+//
+// })
+//
+//
+// describe('non-index incremental computation', () => {
+//
+// })
 

@@ -1,7 +1,6 @@
-
 import {Atom, atom} from "../src/atom";
 import {reactive} from "../src/reactive";
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 
 describe('atom basic', () => {
 
