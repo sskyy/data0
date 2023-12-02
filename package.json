@@ -1,7 +1,7 @@
 {
-  "name": "rata",
+  "name": "state0",
   "version": "1.0.0",
-  "description": "Reactive.",
+  "description": "Reactive state management library",
   "devDependencies": {
     "typescript": "^5.3.2",
     "vite": "^5.0.0",
@@ -14,7 +14,7 @@
     "test": "vitest",
     "build": "vite build"
   },
-  "main": "dist/index.js",
+  "main": "dist/state0.js",
   "types": "dist/index.d.ts",
   "typings": "dist/index.d.ts",
   "files": [
@@ -24,8 +24,9 @@
   "license": "MIT",
   "exports": {
     ".": {
-      "import": "./dist/rata.js",
-      "require": "./dist/rata.umd.cjs"
+      "import": "./dist/state0.js",
+      "require": "./dist/state0.umd.cjs",
+      "types": "./dist/index.d.ts"
     }
   }
 }
