@@ -9,9 +9,9 @@ export default defineConfig({
         lib: {
             // Could also be a dictionary or array of multiple entry points
             entry: resolve(__dirname, 'src/index.ts'),
-            name: 'state0',
+            name: 'data0',
             // the proper extensions will be added
-            fileName: 'state0',
+            fileName: 'data0',
         },
         sourcemap: 'inline',
         rollupOptions: {

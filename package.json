@@ -1,5 +1,5 @@
 {
-  "name": "state0",
+  "name": "data0",
   "version": "1.0.0",
   "description": "Reactive state management library",
   "devDependencies": {
@@ -14,7 +14,7 @@
     "test": "vitest",
     "build": "vite build"
   },
-  "main": "dist/state0.js",
+  "main": "dist/data0.js",
   "types": "dist/index.d.ts",
   "typings": "dist/index.d.ts",
   "files": [
@@ -24,8 +24,8 @@
   "license": "MIT",
   "exports": {
     ".": {
-      "import": "./dist/state0.js",
-      "require": "./dist/state0.umd.cjs",
+      "import": "./dist/data0.js",
+      "require": "./dist/data0.umd.cjs",
       "types": "./dist/index.d.ts"
     }
   }
