@@ -13,7 +13,11 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "build": "vite build"
+    "build": "vite build",
+    "release": "node scripts/release.js",
+    "patch": "node scripts/release.js patch",
+    "minor": "node scripts/release.js minor",
+    "major": "node scripts/release.js major"
   },
   "main": "dist/data0.js",
   "types": "dist/index.d.ts",
