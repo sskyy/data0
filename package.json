@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "Reactive state management library",
   "devDependencies": {
+    "@microsoft/api-extractor": "^7.38.5",
     "typescript": "^5.3.2",
     "vite": "^5.0.0",
     "vite-plugin-dts": "^3.6.3",
     "vite-tsconfig-paths": "^4.2.1",
-    "vitest": "^1.0.0-beta.6"
+    "vitest": "^1.0.4"
   },
   "type": "module",
   "scripts": {

@@ -17,7 +17,7 @@
     "removeComments": false,
     "jsx": "preserve",
     "lib": ["esnext", "dom"],
-    "types": ["jest/globals", "node"],
+    "types": ["node"],
     "declaration": true,
     "rootDir": "."
   },
