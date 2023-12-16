@@ -60,7 +60,12 @@ export type AtomInterceptor<T>  = (updater: Updater<T>, h: Handler) => [Updater<
 type Updater<T> = (newValue?: T | UpdateFn<T>) => any
 type Handler = ProxyHandler<object>
 
-export function atom<T>(initValue: T, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<T>
+type ConvertFromInitialValue<T>  = T extends true ? boolean :
+    T extends false ? boolean :
+        T
+
+export function atom<T>(initValue: T, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<ConvertFromInitialValue<T>>
+export function atom<T>(initValue: null, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<T|null>
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
     // FIXME 是不是能够允许？下面已经改成允许了。
     assert(!isAtom(initValue), 'cant wrap atom inside atom')

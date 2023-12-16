@@ -17,6 +17,16 @@ describe("types test", () => {
         expectTypeOf(b()).toEqualTypeOf<ComplexObject>()
         expectTypeOf(b().key).toEqualTypeOf<string>()
         expectTypeOf(b().value).toEqualTypeOf<number>()
+
+
+        const c = atom<ComplexObject>(null)
+        expectTypeOf(c()).toEqualTypeOf<ComplexObject|null>()
+
+        const d = atom(1)
+        expectTypeOf(d()).toEqualTypeOf<number>()
+
+        const e = atom(true)
+        expectTypeOf(e()).toEqualTypeOf<boolean>()
     })
 })
 

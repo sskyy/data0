@@ -14,10 +14,7 @@
   "scripts": {
     "test": "vitest",
     "build": "vite build",
-    "release": "node scripts/release.js",
-    "patch": "node scripts/release.js patch",
-    "minor": "node scripts/release.js minor",
-    "major": "node scripts/release.js major"
+    "release": "node scripts/release.js"
   },
   "main": "dist/data0.js",
   "types": "dist/index.d.ts",
