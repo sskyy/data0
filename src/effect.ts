@@ -323,25 +323,27 @@ export const triggerStack: {type?: string, debugTarget: any, opType?: TriggerOpT
 export type TriggerStack = typeof triggerStack
 
 export function trigger(
-  target: object,
-  type: TriggerOpTypes,
-  info: TriggerInfo,
-  oldTarget?: Map<unknown, unknown> | Set<unknown>
+    source: object,
+    type: TriggerOpTypes,
+    inputInfo: InputTriggerInfo,
+    oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
   if (!shouldTrigger) return
 
+  const info: TriggerInfo = {...inputInfo, source}
+
   const {key, newValue, oldValue} = info
-  const depsMap = targetMap.get(target)
+  const depsMap = targetMap.get(source)
   if (!depsMap) {
     // never been tracked
     return
   }
 
   if (__DEV__) {
-    const getter = getComputedGetter(target)
+    const getter = getComputedGetter(source)
     triggerStack.push({
-      debugTarget: getter? getter : isAtom(target) ? target: toRaw(target),
-      type: isAtom(target) ? 'atom' : isComputed(target) ? 'computed' : 'reactive',
+      debugTarget: getter? getter : isAtom(source) ? source: toRaw(source),
+      type: isAtom(source) ? 'atom' : isComputed(source) ? 'computed' : 'reactive',
       opType: type,
       key: info.key,
       newValue: info.newValue,
@@ -356,7 +358,7 @@ export function trigger(
     // collection being cleared
     // trigger all effects for target
     deps = [...depsMap.values()]
-  } else if (key === 'length' && isArray(target)) {
+  } else if (key === 'length' && isArray(source)) {
     const newLength = toNumber(newValue)
     depsMap.forEach((dep, key) => {
       if (key === 'length' || key >= newLength) {
@@ -372,9 +374,9 @@ export function trigger(
     // also run for iteration key on ADD | DELETE | Map.SET
     switch (type) {
       case TriggerOpTypes.ADD:
-        if (!isArray(target)) {
+        if (!isArray(source)) {
           deps.push(depsMap.get(ITERATE_KEY))
-          if (isMap(target)) {
+          if (isMap(source)) {
             deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
           }
         } else if (isIntegerKey(key)) {
@@ -383,15 +385,15 @@ export function trigger(
         }
         break
       case TriggerOpTypes.DELETE:
-        if (!isArray(target)) {
+        if (!isArray(source)) {
           deps.push(depsMap.get(ITERATE_KEY))
-          if (isMap(target)) {
+          if (isMap(source)) {
             deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
           }
         }
         break
       case TriggerOpTypes.SET:
-        if (isMap(target)) {
+        if (isMap(source)) {
           deps.push(depsMap.get(ITERATE_KEY))
         }
         break
@@ -405,7 +407,7 @@ export function trigger(
   }
 
   const eventInfo = __DEV__
-    ? { target, type, key, newValue, oldValue, oldTarget }
+    ? { target: source, type, key, newValue, oldValue, oldTarget }
     : undefined
 
   if (deps.length === 1) {
@@ -466,7 +468,7 @@ export type TriggerResult = {
   remove?: KeyItemPair[]
 }
 
-export type TriggerInfo = {
+export type InputTriggerInfo = {
   method?: string,
   argv?: any[]
   result? : TriggerResult,
@@ -474,6 +476,10 @@ export type TriggerInfo = {
   newValue?: unknown,
   oldValue?: unknown,
 }
+
+export type TriggerInfo = {
+  source: any
+} & InputTriggerInfo
 
 function triggerEffect(
   effect: ReactiveEffect,
@@ -492,12 +498,5 @@ function triggerEffect(
   }
 }
 
-let cause :any[]  = []
-export function trackCause(currentCause: any) {
-  cause.push(currentCause)
-}
 
 
-export function stopTrackCause() {
-  cause.pop()
-}

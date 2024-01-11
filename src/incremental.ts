@@ -30,8 +30,8 @@ function getAtomIndexOfArray(source: any[]) {
                     track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 },
                 function applyAtomIndexChange(data, triggerInfos) {
-                    triggerInfos.forEach(({ method , argv, result}) => {
-                        assert(!!(method || result), 'trigger info has no method and result')
+                    triggerInfos.forEach(({ method , argv}) => {
+                        assert(!!(method), 'trigger info has no method and result')
 
                         if (method === 'push') {
                             const newIndexes = argv!.map((i: any, index: number) => atom(index+indexes.length))
@@ -122,12 +122,10 @@ export function incMap<T, U>(source: Map<U, T>, mapFn: (arg0:T, arg1:U) => any) 
 export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : ReturnType<typeof computed>
 
 
-
 // CAUTION incMap 是故意不考虑 source 中深层变化的，只关心数据本身的变化。所以在 mapFn 的时候读深层的对象不会硬气整个重算。
 // FIXME 需要收集用户在 mapFn 中建立的 innerComputed，并且在相应 item remove 的时候，在 applyPatch 函数中 return 出来，
 //  这样才会被外部 destroy 掉，否则永远只会记录新增的，不会 destroy 删除的。
 export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
-
     if (!isReactive(source)) {
         if (Array.isArray(source)) {
             // 注意这里为了和后面的数据结构保持一致，所以把  index 伪装成 atom
@@ -146,16 +144,18 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
 
     // CAUTION 一定要放在这里，因为要比下面的 computed 先建立才会先计算，才能被下面的 computed 依赖。
     // CAUTION 因为 getAtomIndexOfArray 里面读了 source，会使得 track 泄露出去。所以一定要 pauseTracking
-    pauseTracking()
-    const indexes = Array.isArray(source) ? getAtomIndexOfArray(source) : undefined
-    resetTracking()
+    let indexes:any
+    if (mapFn.length>1) {
+        pauseTracking()
+        indexes = Array.isArray(source) ? getAtomIndexOfArray(source) : undefined
+        resetTracking()
+    }
     return computed(
         function computation(track) {
-            // TODO 应该自动写了
             track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
             track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
             if (Array.isArray(source) ) {
-                return source.map((item: any, index) => mapFn(item, indexes![index]))
+                return source.map((item: any, index) => mapFn(item, indexes?.[index]))
             } else if (source instanceof Map) {
                 return new Map(Array.from(source.entries()).map(([key, value]) => [key, mapFn(value)]))
             } else if (source instanceof Set) {
@@ -179,7 +179,9 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                     // CAUTION indexes 应该已经准备好了
                     if (method === 'push') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
-                        const newData = source.slice(source.length - argv!.length)!.map((item:any, index) => mapFn(item, indexes![index+data.length]))
+                        // const newData = source.slice(source.length - argv!.length)!.map((item:any, index) => mapFn(item, indexes?.[index+data.length]))
+                        const dataLength = data.length
+                        const newData = argv!.map((item:any, index) => mapFn(item, indexes?.[dataLength+index]))
                         data.push(...newData)
                     } else if (method === 'pop') {
                         data.pop()
@@ -187,21 +189,23 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         data.shift()
                     } else  if (method === 'unshift') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
-                        data.unshift(...source.slice(0, argv!.length).map((item:any, index) => mapFn(item, indexes![index])))
+                        // data.unshift(...source.slice(0, argv!.length).map((item:any, index) => mapFn(item, indexes?.[index])))
+                        const newData = argv!.map((item:any, index) => mapFn(item, indexes?.[index]))
+                        data.unshift(...newData)
                     } else if (method === 'splice') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
-                        const newItems = source.slice(argv![0], argv![0] + argv!.slice(2).length).map((item:any, index) => mapFn(item, indexes![index+ argv![0]]))
+                        const newItems = source.slice(argv![0], argv![0] + argv!.slice(2).length).map((item:any, index) => mapFn(item, indexes?.[index+ argv![0]]))
                         const removeLength = getSpliceRemoveLength(argv!, data.length)
                         data.splice(argv![0], removeLength, ...newItems)
                     } else if(!method && result){
                         // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。
                         // 没有 method 说明是 explicit_key_change 变化
                         result.add?.forEach(({ key }) => {
-                            data[key] = mapFn(source[key], indexes![key])
+                            data[key] = mapFn(source[key], indexes?.[key])
                         })
 
                         result.update?.forEach(({ key }) => {
-                            data[key] = mapFn(source[key], indexes![key])
+                            data[key] = mapFn(source[key], indexes?.[key])
                         })
 
                         result.remove?.forEach(({ key }) => {
@@ -256,7 +260,9 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         {
             onDestroy() {
                 cache?.clear()
-                removeAtomIndexDep(source)
+                if (mapFn.length>1) {
+                    removeAtomIndexDep(source)
+                }
             }
         }
     )

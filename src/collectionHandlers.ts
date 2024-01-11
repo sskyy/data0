@@ -17,13 +17,12 @@ type SetTypes = Set<any> | WeakSet<any>
 const getProto = <T extends CollectionTypes>(v: T): any =>
   Reflect.getPrototypeOf(v)
 
+
 function get(
   target: MapTypes,
   key: unknown,
   isReadonly = false,
 ) {
-  // #1772: readonly(reactive(Map)) should return readonly + reactive version
-  // of the value
   target = (target as any)[ReactiveFlags.RAW]
   const rawTarget = toRaw(target)
   const rawKey = toRaw(key)
@@ -39,19 +38,16 @@ function get(
   } else if (has.call(rawTarget, rawKey)) {
     return toReactive(target.get(rawKey))
   } else if (target !== rawTarget) {
-    // #3602 readonly(reactive(Map))
-    // ensure that the nested reactive `Map` can do tracking for itself
     target.get(key)
   }
 }
+
 
 function $get(
     target: MapTypes,
     key: unknown,
     isReadonly = false,
 ) {
-  // #1772: readonly(reactive(Map)) should return readonly + reactive version
-  // of the value
   target = (target as any)[ReactiveFlags.RAW]
   const rawTarget = toRaw(target)
   const rawKey = toRaw(key)
@@ -108,7 +104,6 @@ function createLeafAtom(target: MapTypes, key: any) {
 }
 
 
-
 function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
   const target = (this as any)[ReactiveFlags.RAW]
   const rawTarget = toRaw(target)
@@ -124,11 +119,13 @@ function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
     : target.has(key) || target.has(rawKey)
 }
 
+
 function size(target: IterableCollections, isReadonly = false) {
   target = (target as any)[ReactiveFlags.RAW]
   !isReadonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
   return Reflect.get(target, 'size', target)
 }
+
 
 function add(this: SetTypes, value: unknown) {
   value = toRaw(value)
@@ -145,6 +142,7 @@ function add(this: SetTypes, value: unknown) {
   }
   return this
 }
+
 
 function set(this: MapTypes, key: unknown, value: unknown) {
   value = toRaw(value)
@@ -177,6 +175,7 @@ function set(this: MapTypes, key: unknown, value: unknown) {
   return this
 }
 
+
 function deleteEntry(this: CollectionTypes, key: unknown) {
   const target = toRaw(this)
   const { has, get } = getProto(target)
@@ -201,6 +200,7 @@ function deleteEntry(this: CollectionTypes, key: unknown) {
   return result
 }
 
+
 function clear(this: IterableCollections) {
   const target = toRaw(this)
   const hadItems = target.size !== 0
@@ -219,6 +219,7 @@ function clear(this: IterableCollections) {
   }
   return result
 }
+
 
 function createForEach(isReadonly: boolean, isShallow: boolean) {
   return function forEach(
@@ -251,6 +252,7 @@ interface IterationResult {
   value: any
   done: boolean
 }
+
 
 function createIterableMethod(
   method: string | symbol,
@@ -335,8 +337,9 @@ const [
   mutableInstrumentations,
 ] = /* #__PURE__*/ createInstrumentations()
 
-function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
+const DELEGATE_MAP_GET = '$get'
 
+function createInstrumentationGetter(isReadonly: boolean) {
   return (
     target: CollectionTypes,
     key: string | symbol,
@@ -352,7 +355,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
 
     // CAUTION 为 Map 增加了 $get 方法
     return Reflect.get(
-      hasOwn(mutableInstrumentations, key) && (key in target || key === '$get' && target instanceof Map)
+      hasOwn(mutableInstrumentations, key) && (key in target || key === DELEGATE_MAP_GET && target instanceof Map)
         ? mutableInstrumentations
         : target,
       key,
@@ -361,9 +364,11 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
   }
 }
 
+
 export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
-  get: /*#__PURE__*/ createInstrumentationGetter(false, false)
+  get: /*#__PURE__*/ createInstrumentationGetter(false)
 }
+
 
 function checkIdentityKeys(
   target: CollectionTypes,

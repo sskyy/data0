@@ -3,7 +3,7 @@ import { describe, test, expect } from "vitest";
 
 describe('computed on computed', () => {
     test('atom & computed', () => {
-        const atom1 = atom(null)
+        const atom1 = atom<{items: any[]}>(null)
         const computed1 = computed(() => {
             return atom1()?.items || []
         })
@@ -44,8 +44,8 @@ describe('computed on computed', () => {
     })
 
     test('incUnique should recompute', () => {
-        const origin = [1,2, 2]
-        const atom1 = atom(undefined)
+        const origin: any[] = [1,2, 2]
+        const atom1 = atom(null)
         const source = reactive(origin.concat(atom1))
         const uniqueSet = incUnique(source)
         expect(Array.from(uniqueSet)).toShallowMatchObject([1,2, undefined])
@@ -62,7 +62,8 @@ describe('computed on computed', () => {
         const value  = reactive({})
         // @ts-ignore
         const properties = reactive([{name: 'a'}].concat(value))
-        const uniqueNames = incUnique(incPick(properties, '$name'))
+        const pickedNames = incPick(properties, '$name')
+        const uniqueNames = incUnique(pickedNames)
         const isNameUnique = computed(() => {
             return uniqueNames.size === properties.length
         })

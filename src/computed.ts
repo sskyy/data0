@@ -5,7 +5,7 @@ import {
   isDebugTarget,
   printTriggerStack,
 } from "./debug";
-import {ReactiveEffect, track, TriggerInfo, triggerStack} from './effect'
+import {ReactiveEffect, track, InputTriggerInfo, triggerStack} from './effect'
 import {reactive, ReactiveInterceptor, UnwrapReactive} from './reactive'
 import {assert, isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, AtomInterceptor, isAtom} from "./atom";
@@ -120,7 +120,7 @@ export class ComputedInternal {
   effect: ReactiveEffect
   immediate = false
   recomputing = false
-  triggerInfos: TriggerInfo[] = []
+  triggerInfos: InputTriggerInfo[] = []
   innerComputeds: ComputedInternal[] = []
   parent?: ComputedInternal
   // 在 parent.innerComputeds 中的 index, 用来加速 destroy 的过程
@@ -139,7 +139,7 @@ export class ComputedInternal {
       this.immediate = true
     }
 
-    this.effect = new ReactiveEffect(this.effectRun, (triggerInfo: TriggerInfo) => {
+    this.effect = new ReactiveEffect(this.effectRun, (triggerInfo: InputTriggerInfo) => {
       this.isDirty = true
       if (this.immediate) {
         this.recompute()
@@ -227,7 +227,6 @@ export class ComputedInternal {
       if (isDebugTarget(this.getter)) {
         printTriggerStack(triggerStack)
         console.log(getDebugName(this.getter))
-        debugger
       }
     }
 
@@ -258,7 +257,7 @@ export class ComputedInternal {
 }
 
 
-type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => ReturnType<typeof computed>[] | void
+type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[]) => ReturnType<typeof computed>[] | void
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean) : ComputedResult<T>

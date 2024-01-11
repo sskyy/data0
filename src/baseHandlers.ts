@@ -15,7 +15,6 @@ import {
   hasChanged,
   hasOwn,
   isArray,
-  isArrayMethod,
   isIntegerKey,
   isPlainObject,
   isSymbol,
@@ -70,38 +69,23 @@ function createArrayInstrumentations() {
       const rawTarget = toRaw(this)
       pauseTracking()
 
-      const originLength = rawTarget.length
       inCollectionMethodTargets.add(rawTarget)
 
       //  CAUTION 因为 splice 原本的参数非常有歧义所以警告一下
-      if (key === 'splice') {
-        if (args.length > 1 && (typeof args[1] !== 'number' || args[1] < 0)) {
-          console.warn(`don't use ${args[1]} as second parameter of splice, it is prone to bug.`)
+      if (__DEV__) {
+        if (key === 'splice') {
+          if (args.length > 1 && (typeof args[1] !== 'number' || args[1] < 0)) {
+            console.warn(`don't use ${args[1]} as second parameter of splice, it is prone to bug.`)
+          }
         }
       }
 
+      // TODO 针对 长列表 unshift 的场景，需要判断一下有没有 computed 显式监听了 key.
+      //  不然这里一路触发所有的 key 会很慢。
       const res = (rawTarget as any)[key].apply(this, args)
       inCollectionMethodTargets.delete(rawTarget)
-      // TODO 手动创建 key 的 atom，并手动修改？？
-      let result
-      if (key === 'push') {
-        result = { add: args.map((pushItem, offset) => ({key: originLength + offset, newValue: pushItem })) }
-      } else if (key === 'pop') {
-        result = { remove: [{ key:toRaw(this).length, oldValue:res} ]}
-      } else if (key === 'shift') {
-        result = { remove: [{key: 0, oldValue: res }] }
-      } else if (key === 'unshift') {
-        result = { add: args.map((unshiftItem, offset) => ({key: offset, newValue: unshiftItem }))}
-      } else if (key === 'splice') {
-        // CAUTION 这里跳过了第二个参数
-        const [startIndex, , ...insertItems] = args
-        result = {
-          add: insertItems.map((insertedItem: any, offset) => ({key: startIndex as number + offset, newValue: insertedItem})),
-          remove: res.map((removedItem: any, offset: number) => ({key: startIndex as number + offset, oldValue: removedItem}))
-        }
-      }
 
-      trigger(rawTarget, TriggerOpTypes.METHOD, { method:key, argv: args, result})
+      trigger(rawTarget, TriggerOpTypes.METHOD, { method:key, argv: args})
       resetTracking()
       return res
     }
@@ -113,7 +97,9 @@ function createGetter(isReadonly = false, shallow = false) {
   return function get(target: Target, rawKey: string | symbol, receiver: object) {
     if (rawKey === ReactiveFlags.IS_REACTIVE) {
       return !isReadonly
-    } else if (rawKey === ReactiveFlags.IS_READONLY) {
+    } else if (rawKey === ReactiveFlags.IS_ATOM) {
+      return false
+    }else if (rawKey === ReactiveFlags.IS_READONLY) {
       return isReadonly
     } else if (rawKey === ReactiveFlags.IS_SHALLOW) {
       return shallow
@@ -138,18 +124,17 @@ function createGetter(isReadonly = false, shallow = false) {
     const key = isReactiveKey ? (rawKey as string).slice(1, Infinity) : rawKey
     const res = Reflect.get(target, key, receiver)
 
-    if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(key as string))) {
+    if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && hasOwn(arrayInstrumentations, rawKey))) {
       track(target, TrackOpTypes.GET, key)
     }
 
     if (isReactiveKey) {
-      // TODO computed array method
       return createLeafAtom(target, key)
     }
 
-    if (targetIsArray && (!isIntegerKey(key)) ||
-        isNonTrackableStringOrSymbolKey(key) ||
-        isAtom(res)
+    if (isNonTrackableStringOrSymbolKey(key) ||
+        isAtom(res) ||
+        targetIsArray && (!isIntegerKey(key))
     ) {
       return res
     }
@@ -166,7 +151,6 @@ export function isNonTrackableStringOrSymbolKey(key:string |symbol) {
   return isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key)
 }
 
-export type LeafType = number | string | undefined | null | object
 
 function createLeafAtom(target: Target, key: string|symbol) {
   function getterOrSetter(newValue?: any | UpdateFn<any>){

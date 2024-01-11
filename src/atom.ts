@@ -47,6 +47,7 @@ export function triggerAtomValue(ref: Atom<any>, newValue?: any) {
             triggerStack.push({debugTarget: ref, newValue, targetLoc: getStackTrace()})
         }
         triggerEffects(dep, {
+            source: ref,
             key: 'value',
             newValue: newValue
         })
