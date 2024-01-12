@@ -7,6 +7,8 @@ export class ReactiveEffect {
     static activeScopes: ReactiveEffect[] = []
 
     static destroy(effect: ReactiveEffect, fromParent?: boolean) {
+        if (!effect.active) return
+
         effect.cleanup()
         effect.active = false
 
