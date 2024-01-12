@@ -7,14 +7,14 @@ import {
 
 } from './reactive'
 import {ReactiveFlags} from './flags'
+import { Notifier, ITERATE_KEY } from "./notify";
 
 import {TrackOpTypes, TriggerOpTypes,} from './operations'
-import {ITERATE_KEY, pauseTracking, resetTracking, track, trigger,} from './effect'
 import {
   def,
   hasChanged,
   hasOwn,
-  isArray,
+  isArray, isArrayMethod,
   isIntegerKey,
   isPlainObject,
   isSymbol,
@@ -49,7 +49,7 @@ function createArrayInstrumentations() {
     instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
       const arr = toRaw(this) as any
       for (let i = 0, l = this.length; i < l; i++) {
-        track(arr, TrackOpTypes.GET, i + '')
+        Notifier.instance.track(arr, TrackOpTypes.GET, i + '')
       }
       // we run the method using the original args first (which may be reactive)
       const res = arr[key](...args)
@@ -67,7 +67,7 @@ function createArrayInstrumentations() {
   ;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
     instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
       const rawTarget = toRaw(this)
-      pauseTracking()
+      Notifier.instance.pauseTracking()
 
       inCollectionMethodTargets.add(rawTarget)
 
@@ -80,13 +80,19 @@ function createArrayInstrumentations() {
         }
       }
 
-      // TODO 针对 长列表 unshift 的场景，需要判断一下有没有 computed 显式监听了 key.
+      // 针对 长列表 unshift 的场景，需要判断一下有没有 computed 显式监听了 key.
       //  不然这里一路触发所有的 key 会很慢。
-      const res = (rawTarget as any)[key].apply(this, args)
+      let res
+      if (!Notifier.instance.arrayExplicitKeyDepCount.get(rawTarget)) {
+        res = (rawTarget as any)[key].apply(rawTarget, args)
+        Notifier.instance.trigger(rawTarget, TriggerOpTypes.SET, { key: 'length', newValue: res.length})
+      } else {
+        res = (rawTarget as any)[key].apply(this, args)
+      }
       inCollectionMethodTargets.delete(rawTarget)
 
-      trigger(rawTarget, TriggerOpTypes.METHOD, { method:key, argv: args})
-      resetTracking()
+      Notifier.instance.trigger(rawTarget, TriggerOpTypes.METHOD, { method:key, argv: args})
+      Notifier.instance.resetTracking()
       return res
     }
   })
@@ -124,8 +130,8 @@ function createGetter(isReadonly = false, shallow = false) {
     const key = isReactiveKey ? (rawKey as string).slice(1, Infinity) : rawKey
     const res = Reflect.get(target, key, receiver)
 
-    if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && hasOwn(arrayInstrumentations, rawKey))) {
-      track(target, TrackOpTypes.GET, key)
+    if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(rawKey as string))) {
+      Notifier.instance.track(target, TrackOpTypes.GET, key)
     }
 
     if (isReactiveKey) {
@@ -155,28 +161,28 @@ export function isNonTrackableStringOrSymbolKey(key:string |symbol) {
 function createLeafAtom(target: Target, key: string|symbol) {
   function getterOrSetter(newValue?: any | UpdateFn<any>){
     if (arguments.length === 0) {
-      track(target, TrackOpTypes.GET, key)
+      Notifier.instance.track(target, TrackOpTypes.GET, key)
       return Reflect.get(target, key)
     }
 
     const oldValue = Reflect.get(target, key)
     Reflect.set(target, key, newValue)
 
-    trigger(target, TriggerOpTypes.SET,  {key, newValue, oldValue })
+    Notifier.instance.trigger(target, TriggerOpTypes.SET,  {key, newValue, oldValue })
     if (!inCollectionMethodTargets.has(toRaw(target))) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE,  {result: {update: [{key, oldValue, newValue}]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE,  {result: {update: [{key, oldValue, newValue}]} })
     }
 
     return
   }
 
   getterOrSetter.toString = () =>{
-    track(target, TrackOpTypes.GET, key)
+    Notifier.instance.track(target, TrackOpTypes.GET, key)
     return Reflect.get(target, key)?.toString()
   }
 
   getterOrSetter.valueOf = () =>{
-    track(target, TrackOpTypes.GET, key)
+    Notifier.instance.track(target, TrackOpTypes.GET, key)
     return Reflect.get(target, key)?.valueOf()
   }
 
@@ -214,16 +220,15 @@ function createSetter(shallow = false) {
 
     if (target === toRaw(receiver)) {
       if (!hadKey) {
-        trigger(target, TriggerOpTypes.ADD, { key, newValue: value })
+        Notifier.instance.trigger(target, TriggerOpTypes.ADD, { key, newValue: value })
         if (!inCollectionMethodTargets.has(toRaw(target))) {
-          trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {add: [{ key, newValue: value, }]} })
+          Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {add: [{ key, newValue: value, }]} })
         }
 
-
       } else if (hasChanged(value, oldValue)) {
-        trigger(target, TriggerOpTypes.SET, { key, newValue: value, oldValue})
+        Notifier.instance.trigger(target, TriggerOpTypes.SET, { key, newValue: value, oldValue})
         if (!inCollectionMethodTargets.has(toRaw(target))) {
-          trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {update: [{ key, oldValue, newValue: value }]} })
+          Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {update: [{ key, oldValue, newValue: value }]} })
         }
 
       }
@@ -237,10 +242,10 @@ function deleteProperty(target: object, key: string | symbol): boolean {
   const oldValue = (target as any)[key]
   const result = Reflect.deleteProperty(target, key)
   if (result && hadKey) {
-    trigger(target, TriggerOpTypes.DELETE, {key, newValue: undefined, oldValue })
+    Notifier.instance.trigger(target, TriggerOpTypes.DELETE, {key, newValue: undefined, oldValue })
 
     if (!inCollectionMethodTargets.has(toRaw(target))) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: { remove: [{ key: key, oldValue }]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: { remove: [{ key: key, oldValue }]} })
     }
 
   }
@@ -250,13 +255,13 @@ function deleteProperty(target: object, key: string | symbol): boolean {
 function has(target: object, key: string | symbol): boolean {
   const result = Reflect.has(target, key)
   if (!isSymbol(key) || !builtInSymbols.has(key)) {
-    track(target, TrackOpTypes.HAS, key)
+    Notifier.instance.track(target, TrackOpTypes.HAS, key)
   }
   return result
 }
 
 function ownKeys(target: object): (string | symbol)[] {
-  track(target, TrackOpTypes.ITERATE, isArray(target) ? 'length' : ITERATE_KEY)
+  Notifier.instance.track(target, TrackOpTypes.ITERATE, isArray(target) ? 'length' : ITERATE_KEY)
   return Reflect.ownKeys(target)
 }
 

@@ -3,7 +3,7 @@ import {computed, ComputedData, destroyComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom, isAtom} from "./atom";
 import {isReactive} from "./reactive";
-import {pauseTracking, resetTracking} from "./effect";
+import { Notifier} from "./notify";
 import {assert} from "./util";
 
 
@@ -146,9 +146,9 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
     // CAUTION 因为 getAtomIndexOfArray 里面读了 source，会使得 track 泄露出去。所以一定要 pauseTracking
     let indexes:any
     if (mapFn.length>1) {
-        pauseTracking()
+        Notifier.instance.pauseTracking()
         indexes = Array.isArray(source) ? getAtomIndexOfArray(source) : undefined
-        resetTracking()
+        Notifier.instance.resetTracking()
     }
     return computed(
         function computation(track) {

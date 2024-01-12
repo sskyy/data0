@@ -2,6 +2,7 @@
 // debugger events
 
 export const enum TrackOpTypes {
+  ATOM = 'atom',
   GET = 'get',
   HAS = 'has',
   ITERATE = 'iterate',
@@ -10,6 +11,7 @@ export const enum TrackOpTypes {
 }
 
 export const enum TriggerOpTypes {
+  ATOM = 'atom',
   SET = 'set',
   ADD = 'add',
   DELETE = 'delete',

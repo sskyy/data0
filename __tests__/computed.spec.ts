@@ -20,6 +20,16 @@ describe('computed basic', () => {
 
     })
 
+    test('reactive & computed', () => {
+        const x2 = reactive(Array(5).fill(0))
+        const c2 = computed(() => {
+            return x2.map(item => (item+1))
+        })
+        x2.unshift(1)
+        expect(c2.length).toBe(6)
+        expect(c2).toShallowMatchObject([2,1,1,1,1,1])
+    })
+
 
     test('reactive leaf & computed', () => {
         const data = reactive({

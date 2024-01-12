@@ -1,7 +1,7 @@
 import {toRaw, toReactive} from './reactive'
-import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from './effect'
-import { TrackOpTypes, TriggerOpTypes } from './operations'
-import {hasOwn, hasChanged, toRawType, isMap, def, assert} from './util'
+import {ITERATE_KEY, MAP_KEY_ITERATE_KEY, Notifier} from './notify'
+import {TrackOpTypes, TriggerOpTypes} from './operations'
+import {assert, def, hasChanged, hasOwn, isMap, toRawType} from './util'
 import {inCollectionMethodTargets} from "./baseHandlers";
 import {ReactiveFlags} from "./flags";
 import {Atom, UpdateFn} from "./atom";
@@ -28,9 +28,9 @@ function get(
   const rawKey = toRaw(key)
   if (!isReadonly) {
     if (key !== rawKey) {
-      track(rawTarget, TrackOpTypes.GET, key)
+      Notifier.instance.track(rawTarget, TrackOpTypes.GET, key)
     }
-    track(rawTarget, TrackOpTypes.GET, rawKey)
+    Notifier.instance.track(rawTarget, TrackOpTypes.GET, rawKey)
   }
   const { has } = getProto(rawTarget)
   if (has.call(rawTarget, key)) {
@@ -54,9 +54,9 @@ function $get(
   if (!isReadonly) {
     // TODO 什么情况下？
     if (key !== rawKey) {
-      track(rawTarget, TrackOpTypes.GET, key)
+      Notifier.instance.track(rawTarget, TrackOpTypes.GET, key)
     }
-    track(rawTarget, TrackOpTypes.GET, rawKey)
+    Notifier.instance.track(rawTarget, TrackOpTypes.GET, rawKey)
   }
   const { has } = getProto(rawTarget)
   if (has.call(rawTarget, key)) {
@@ -72,28 +72,28 @@ function $get(
 function createLeafAtom(target: MapTypes, key: any) {
   function getterOrSetter(newValue?: any | UpdateFn<any>){
     if (arguments.length === 0) {
-      track(target, TrackOpTypes.GET, key)
+      Notifier.instance.track(target, TrackOpTypes.GET, key)
       return target.get(key)
     }
 
     const oldValue = target.get(key)
     target.set(key, newValue)
 
-    trigger(target, TriggerOpTypes.SET,  {key, newValue, oldValue })
+    Notifier.instance.trigger(target, TriggerOpTypes.SET,  {key, newValue, oldValue })
     if (!inCollectionMethodTargets.has(toRaw(target))) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE,  {result: {update: [{key, oldValue, newValue}]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE,  {result: {update: [{key, oldValue, newValue}]} })
     }
 
     return
   }
 
   getterOrSetter.toString = () =>{
-    track(target, TrackOpTypes.GET, key)
+    Notifier.instance.track(target, TrackOpTypes.GET, key)
     return target.get(key)?.toString()
   }
 
   getterOrSetter.valueOf = () =>{
-    track(target, TrackOpTypes.GET, key)
+    Notifier.instance.track(target, TrackOpTypes.GET, key)
     return target.get(key)?.valueOf()
   }
 
@@ -110,9 +110,9 @@ function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
   const rawKey = toRaw(key)
   if (!isReadonly) {
     if (key !== rawKey) {
-      track(rawTarget, TrackOpTypes.HAS, key)
+      Notifier.instance.track(rawTarget, TrackOpTypes.HAS, key)
     }
-    track(rawTarget, TrackOpTypes.HAS, rawKey)
+    Notifier.instance.track(rawTarget, TrackOpTypes.HAS, rawKey)
   }
   return key === rawKey
     ? target.has(key)
@@ -122,7 +122,7 @@ function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
 
 function size(target: IterableCollections, isReadonly = false) {
   target = (target as any)[ReactiveFlags.RAW]
-  !isReadonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
+  !isReadonly && Notifier.instance.track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
   return Reflect.get(target, 'size', target)
 }
 
@@ -134,9 +134,9 @@ function add(this: SetTypes, value: unknown) {
   const hadKey = proto.has.call(target, value)
   if (!hadKey) {
     target.add(value)
-    trigger(target, TriggerOpTypes.ADD, { newValue: value })
+    Notifier.instance.trigger(target, TriggerOpTypes.ADD, { newValue: value })
     if (!inCollectionMethodTargets.has(toRaw(target))) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {add: [{newValue: value}]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {add: [{newValue: value}]} })
     }
 
   }
@@ -160,15 +160,15 @@ function set(this: MapTypes, key: unknown, value: unknown) {
   const oldValue = get.call(target, key)
   target.set(key, value)
   if (!hadKey) {
-    trigger(target, TriggerOpTypes.ADD, {key, newValue: value })
+    Notifier.instance.trigger(target, TriggerOpTypes.ADD, {key, newValue: value })
     if (!inCollectionMethodTargets.has(target)) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: { add: [{key,  oldValue}]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: { add: [{key,  oldValue}]} })
     }
 
   } else if (hasChanged(value, oldValue)) {
-    trigger(target, TriggerOpTypes.SET, { key, newValue: value, oldValue })
+    Notifier.instance.trigger(target, TriggerOpTypes.SET, { key, newValue: value, oldValue })
     if (!inCollectionMethodTargets.has(target)) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: { update: [{key, oldValue, newValue: value}]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: { update: [{key, oldValue, newValue: value}]} })
     }
 
   }
@@ -191,9 +191,9 @@ function deleteEntry(this: CollectionTypes, key: unknown) {
   // forward the operation before queueing reactions
   const result = target.delete(key)
   if (hadKey) {
-    trigger(target, TriggerOpTypes.DELETE, { key, newValue: undefined, oldValue})
+    Notifier.instance.trigger(target, TriggerOpTypes.DELETE, { key, newValue: undefined, oldValue})
     if (!inCollectionMethodTargets.has(toRaw(target))) {
-      trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {remove: [{ key, oldValue}]} })
+      Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {remove: [{ key, oldValue}]} })
     }
 
   }
@@ -214,8 +214,8 @@ function clear(this: IterableCollections) {
   const result = target.clear()
   inCollectionMethodTargets.delete(target)
   if (hadItems) {
-    trigger(target, TriggerOpTypes.CLEAR, {}, oldTarget)
-    trigger(target, TriggerOpTypes.METHOD, { method: 'clear'}, oldTarget)
+    Notifier.instance.trigger(target, TriggerOpTypes.CLEAR, {}, oldTarget)
+    Notifier.instance.trigger(target, TriggerOpTypes.METHOD, { method: 'clear'}, oldTarget)
   }
   return result
 }
@@ -230,7 +230,7 @@ function createForEach(isReadonly: boolean, isShallow: boolean) {
     const observed = this as any
     const target = observed[ReactiveFlags.RAW]
     const rawTarget = toRaw(target)
-    !isReadonly && track(rawTarget, TrackOpTypes.ITERATE, ITERATE_KEY)
+    !isReadonly && Notifier.instance.track(rawTarget, TrackOpTypes.ITERATE, ITERATE_KEY)
     return target.forEach((value: unknown, key: unknown) => {
       // important: make sure the callback is
       // 1. invoked with the reactive map as `this` and 3rd arg
@@ -271,7 +271,7 @@ function createIterableMethod(
     const isKeyOnly = method === 'keys' && targetIsMap
     const innerIterator = target[method](...args)
     !isReadonly &&
-      track(
+      Notifier.instance.track(
         rawTarget,
         TrackOpTypes.ITERATE,
         isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY

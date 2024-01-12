@@ -1,5 +1,5 @@
 // @ts-ignore
-import {ITERATE_KEY, track, trigger} from './effect'
+import {ITERATE_KEY, track, Notifier} from './notify'
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 
 
@@ -55,8 +55,8 @@ export class LinkedList<T extends object> implements Iterable<ListNode<T>>{
             }
         }
 
-        trigger(this, TriggerOpTypes.METHOD, { method:'insertBefore', argv: [newItem, refNode], result: { add:[{newValue:newNode}]}})
-        trigger(this, TriggerOpTypes.ADD, { key: ITERATE_KEY })
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'insertBefore', argv: [newItem, refNode], result: { add:[{newValue:newNode}]}})
+        Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: ITERATE_KEY })
         return newNode
     }
     // removeBetween 移除的部分包含 startNode 和 endNode
@@ -77,15 +77,15 @@ export class LinkedList<T extends object> implements Iterable<ListNode<T>>{
         }
 
 
-        trigger(this, TriggerOpTypes.METHOD, { method:'removeBetween', argv: [startNode, endNode]})
-        trigger(this, TriggerOpTypes.ADD, { key: ITERATE_KEY})
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'removeBetween', argv: [startNode, endNode]})
+        Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: ITERATE_KEY})
     }
 
     getNodeByItem(item: T){
         return this.itemToNode.get(item)
     }
     *[Symbol.iterator]() {
-        track(this, TrackOpTypes.ITERATE,  ITERATE_KEY)
+        Notifier.instance.track(this, TrackOpTypes.ITERATE,  ITERATE_KEY)
         let current = this.head
         while(current) {
             yield current

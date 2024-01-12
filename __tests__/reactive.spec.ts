@@ -1,9 +1,9 @@
-import {Atom, atom} from "../src/atom";
+import {atom, Atom} from "../src/atom";
 import {reactive} from "../src/reactive";
-import { describe, test, expect } from "vitest";
+import {describe, expect, test} from "vitest";
+
 
 describe('atom basic', () => {
-
     test('initialize & update atom', () => {
         const num = atom(1)
         num(2)

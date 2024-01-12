@@ -1,15 +1,8 @@
-import {
-    activeEffect,
-    shouldTrack, shouldTrigger,
-    trackEffects,
-    triggerEffects, triggerStack
-} from './effect'
-
-import { TrackOpTypes } from './operations'
-import {createDep, Dep} from "./dep";
-import {assert, def, getStackTrace, isPlainObject, isStringOrNumber} from "./util";
+import {Notifier} from "./notify";
+import {TrackOpTypes, TriggerOpTypes} from './operations'
+import {assert, def, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
-import { setDebugName} from "./debug";
+import {setDebugName} from "./debug";
 
 export type UpdateFn<T> = (prev: T) => T
 
@@ -19,41 +12,6 @@ export type Atom<T = any> = T
     & { (newValue?: any) : T }
 
 export type AtomInitialType = any
-
-const refToDepMap = new WeakMap<Atom<any>, Dep>()
-
-export function trackAtomValue(ref: Atom<any>) {
-    if (shouldTrack && activeEffect) {
-        let dep = refToDepMap.get(ref)
-        if (!dep) refToDepMap.set(ref, dep = createDep())
-        if (__DEV__) {
-            trackEffects(dep, {
-                target: ref,
-                type: TrackOpTypes.GET,
-                key: 'value'
-            })
-        } else {
-            trackEffects(dep)
-        }
-    }
-}
-
-export function triggerAtomValue(ref: Atom<any>, newValue?: any) {
-    if (!shouldTrigger) return
-
-    const dep = refToDepMap.get(ref)
-    if (dep) {
-        if (__DEV__) {
-            triggerStack.push({debugTarget: ref, newValue, targetLoc: getStackTrace()})
-        }
-        triggerEffects(dep, {
-            source: ref,
-            key: 'value',
-            newValue: newValue
-        })
-    }
-}
-
 
 
 export type AtomInterceptor<T>  = (updater: Updater<T>, h: Handler) => [Updater<T>, Handler]
@@ -76,7 +34,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
     // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
     function updater (newValue?: typeof initValue) {
         if (arguments.length === 0) {
-            trackAtomValue(finalUpdater)
+            Notifier.instance.track(finalUpdater, TrackOpTypes.ATOM, 'value')
             return value
         }
 
@@ -88,7 +46,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
         // }
 
         value = newValue
-        triggerAtomValue(finalUpdater, value)
+        Notifier.instance.trigger(finalUpdater, TriggerOpTypes.ATOM, { key: 'value', newValue})
     }
 
     const handler:Handler = {
@@ -97,7 +55,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
             // TODO 是不是也要像 reactive 一样层层包装才行？？？，不然当把这个值传给 dom 元素的时候，它就已经不能被识别出来，也就不能 reactive 了。
             if (isPlainObject(value)) {
-                trackAtomValue(finalUpdater)
+                Notifier.instance.track(finalUpdater, TrackOpTypes.ATOM, 'value')
             }
             // CAUTION 针对非  class 的对象提供深度的获取的能力
             return Reflect.get(isPlainObject(value) ? value : finalUpdater, key)
@@ -124,7 +82,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
     Object.assign( finalUpdater, {
         [Symbol.toPrimitive](hint: string) {
-            trackAtomValue(finalUpdater)
+            Notifier.instance.track(finalUpdater, TrackOpTypes.ATOM, 'value')
             if ((!hint || hint === 'default') && isStringOrNumber(value)) {
                 return value
             } else if (hint === 'number' && typeof value === 'number' ) {

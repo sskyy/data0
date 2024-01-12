@@ -32,6 +32,11 @@ export const remove = <T>(arr: T[], el: T) => {
 }
 
 
+const arrayProperties = Object.getOwnPropertyNames(Array.prototype);
+const arrayMethods = new Set(arrayProperties.filter(prop => typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function'))
+export const isArrayMethod = (key: string) => arrayMethods.has(key)
+
+
 const hasOwnProperty = Object.prototype.hasOwnProperty
 export const hasOwn = (
     val: object,
@@ -71,6 +76,11 @@ export const toRawType = (value: unknown): string => {
 // CAUTION 这个判断不能识别是不是自己创建的对象
 // export const isPlainObject = (val: unknown): val is object => toTypeString(val) === '[object Object]'
 export const isPlainObject = (val: unknown): val is object => (val?.constructor === Object || val?.constructor === Array )
+
+export const isIntegerKeyQuick = (key: unknown) =>
+    isString(key) && (
+        key[0] === '0'|| key[0] === '1' || key[0] === '2' || key[0] === '3' || key[0] === '4' || key[0] === '5' || key[0] === '6' || key[0] === '7' || key[0] === '8' || key[0] === '9'
+    )
 
 export const isIntegerKey = (key: unknown) =>
     isString(key) &&

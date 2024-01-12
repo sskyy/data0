@@ -1,15 +1,17 @@
-import {computed, atom, reactive, incUnique, incPick} from "../src";
+import { atom, reactive, incUnique, incPick, computed} from "../src";
 import { describe, test, expect } from "vitest";
+
+
 
 describe('computed on computed', () => {
     test('atom & computed', () => {
         const atom1 = atom<{items: any[]}>(null)
-        const computed1 = computed(() => {
+        const computed1 = computed(function computed1()  {
             return atom1()?.items || []
         })
 
         // splice 不触发 forEach 为什么？？？
-        const computed2 = computed(() => {
+        const computed2 = computed(function computed2() {
             const result = new Map<string, any>()
             computed1.forEach((item: number) => {
                 result.set(item.toString(), item)

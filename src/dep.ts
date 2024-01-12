@@ -1,4 +1,5 @@
-import { ReactiveEffect, trackOpBit } from './effect'
+import { Notifier } from './notify'
+import {ReactiveEffect} from "./reactiveEffect.js";
 
 export type Dep = Set<ReactiveEffect> & TrackedMarkers
 
@@ -25,14 +26,14 @@ export const createDep = (effects?: ReactiveEffect[]): Dep => {
   return dep
 }
 
-export const wasTracked = (dep: Dep): boolean => (dep.w & trackOpBit) > 0
+export const wasTracked = (dep: Dep): boolean => (dep.w & Notifier.trackOpBit) > 0
 
-export const newTracked = (dep: Dep): boolean => (dep.n & trackOpBit) > 0
+export const newTracked = (dep: Dep): boolean => (dep.n & Notifier.trackOpBit) > 0
 
 export const initDepMarkers = ({ deps }: ReactiveEffect) => {
   if (deps.length) {
     for (let i = 0; i < deps.length; i++) {
-      deps[i].w |= trackOpBit // set was tracked
+      deps[i].w |= Notifier.trackOpBit // set was tracked
     }
   }
 }
@@ -49,8 +50,8 @@ export const finalizeDepMarkers = (effect: ReactiveEffect) => {
         deps[ptr++] = dep
       }
       // clear bits
-      dep.w &= ~trackOpBit
-      dep.n &= ~trackOpBit
+      dep.w &= ~Notifier.trackOpBit
+      dep.n &= ~Notifier.trackOpBit
     }
     deps.length = ptr
   }
