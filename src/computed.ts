@@ -1,5 +1,5 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
-import {DebuggerEventExtraInfo, InputTriggerInfo, Notifier, TriggerInfo} from './notify'
+import {InputTriggerInfo, Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, UnwrapReactive} from './reactive'
 import {assert, isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, isAtom} from "./atom";
@@ -45,11 +45,7 @@ export function replace(source: any, nextSourceValue: any) {
   }
 }
 
-
 export const computedToInternal = new WeakMap<any, ComputedInternal>()
-
-
-
 
 export type CallbacksType = {
   onRecompute? : (t: ComputedInternal) => void,
@@ -63,7 +59,7 @@ export type ComputedResult<T extends () => any> = ReturnType<T> extends object ?
 
 export type ComputedData = Atom|UnwrapReactive<any>
 
-type GetterType = (trackOnce?: Notifier["track"] ) => any
+type GetterType = (trackOnce?: Notifier["track"], collect?: typeof ReactiveEffect.collectEffect ) => any
 type DirtyCallback = (recompute: (force?: boolean) => void) => void
 type SkipIndicator = {skip: boolean}
 
@@ -98,52 +94,8 @@ export class ComputedInternal extends ReactiveEffect{
     if (callbacks?.onDestroy) this.onDestroy = callbacks.onDestroy
     if (callbacks?.onTrack) this.onTrack = callbacks.onTrack
 
+    const initialValue = super.run()!
 
-    const  initialValue = super.run()!
-
-    // FIXME 为什么自己在读的时候要触发一下 recompute？？？
-    // const interceptReactive: ReactiveInterceptor = (a0, a1, mutableHandlers: ProxyHandler<object>, ...rest) => {
-    //   const mutableHandlersWithRecompute: typeof mutableHandlers = {
-    //     ...mutableHandlers,
-    //     get: (target, key, receiver) => {
-    //       this.recompute()
-    //       return mutableHandlers.get!(target, key, receiver)
-    //     }
-    //   }
-    //
-    //   return [a0, a1, mutableHandlersWithRecompute, ...rest]
-    // }
-
-    // const that = this
-    // const interceptAtom: AtomInterceptor<any> = (updater, handler) => {
-    //   // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
-    //   function updaterWithRecompute(newValue: Parameters<typeof updater>[0]) {
-    //     const args = []
-    //     if (arguments.length === 0) {
-    //       that.recompute()
-    //     } else {
-    //       args.push(newValue)
-    //     }
-    //     return updater(...args)
-    //   }
-    //
-    //   const handlerWithRecompute: typeof handler = {
-    //     ...handler,
-    //     //以下 包括了读 toPrimitive 的时候， TODO 要不要把函数读取的排除出去？
-    //     get: (target, key, receiver) => {
-    //       this.recompute()
-    //       return handler.get!(target,key, receiver)
-    //     },
-    //   }
-    //
-    //   return [updaterWithRecompute, handlerWithRecompute]
-    // }
-
-    // this.data = this.forceAtom ?
-    //     atom(initialValue, interceptAtom) :
-    //     isReactivableType(initialValue) ?
-    //       reactive(initialValue, interceptReactive) :
-    //       atom(initialValue, interceptAtom)
     this.data = this.forceAtom ?
         atom(initialValue) :
         isReactivableType(initialValue) ?
@@ -164,7 +116,7 @@ export class ComputedInternal extends ReactiveEffect{
         Notifier.instance.track(toRaw(target), type, key)
         Notifier.instance.resetTracking()
       }
-      const result = this.getter(manualTrack)
+      const result = this.getter(manualTrack, ReactiveEffect.collectEffect)
 
       Notifier.instance.resetTracking()
 
@@ -175,15 +127,15 @@ export class ComputedInternal extends ReactiveEffect{
     }
   }
   // trigger 时调用
-  run(info: TriggerInfo, debuggerEventExtraInfo?: DebuggerEventExtraInfo) {
+  run(infos: TriggerInfo[]) {
     if (this.skipIndicator?.skip) return
+    this.triggerInfos.push(...infos)
     this.isDirty = true
     if (this.immediate) {
       this.recompute()
     } else {
-      this.triggerInfos.push(info)
+      this.scheduleRecompute!(this.recompute)
     }
-    this.scheduleRecompute && this.scheduleRecompute(this.recompute)
   }
   recompute = (forceRecompute = false) => {
     if (!this.isDirty && !forceRecompute) return
@@ -197,7 +149,11 @@ export class ComputedInternal extends ReactiveEffect{
       }
     } else {
       // CAUTION patch 要自己负责 destroy inner computed
-      this.applyPatch(this.data, this.triggerInfos, ReactiveEffect.destroy)
+      const patchHandles = {
+        destroy: ReactiveEffect.destroy,
+        collect: ReactiveEffect.collectEffect
+      }
+      this.applyPatch(this.data, this.triggerInfos, patchHandles)
       this.triggerInfos.length = 0
     }
 
@@ -205,8 +161,11 @@ export class ComputedInternal extends ReactiveEffect{
   }
 }
 
-
-type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[], destroy: typeof ReactiveEffect["destroy"]) => ReturnType<typeof computed>[] | void
+type PatchHandles = {
+  destroy: typeof ReactiveEffect["destroy"]
+  collect: typeof ReactiveEffect.collectEffect
+}
+type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[], handles: PatchHandles) => ReturnType<typeof computed>[] | void
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean) : ComputedResult<T>

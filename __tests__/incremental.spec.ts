@@ -34,7 +34,7 @@ describe('incremental map', () => {
         expect(mappedArr).toShallowMatchObject([9, 11, 8,5,6,12])
         expect(mapFnRuns).toBe(8)
 
-        source.splice(1)
+        source.splice(1, Infinity)
         expect(mappedArr).toShallowMatchObject([9])
         expect(mapFnRuns).toBe(8)
     })

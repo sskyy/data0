@@ -1,4 +1,3 @@
-import {TriggerStack} from "./effect";
 
 export const debugTarget = new WeakSet<Function>()
 export function isDebugTarget(target: Function) {
@@ -14,8 +13,6 @@ export function debug(getter: Function) {
 type FunctionWithDebug<T extends Function> = T & {
     debug: T
 }
-
-
 
 
 export const reactiveTargetName = new WeakMap<any, string>()
@@ -89,31 +86,4 @@ export function setDebugName(target: any, name: string) {
 }
 
 
-
-export function printTriggerStack(stack: TriggerStack) {
-
-    console.table(stack.map(({ debugTarget, key, type,opType, newValue, oldValue, targetLoc}) => {
-        return {
-            // name: getDebugName(debugTarget),
-            // debugTarget,
-            type,
-            opType,
-            // key,
-            // newValue,
-            // oldValue,
-            location
-        }
-    }))
-
-
-    stack.forEach(({ targetLoc}) => {
-        console.group()
-        targetLoc.forEach(([fnName, loc]) => {
-            console.log(`${fnName} : ${loc}`)
-        })
-        console.groupEnd()
-    })
-
-
-}
 

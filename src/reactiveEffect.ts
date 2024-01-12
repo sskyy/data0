@@ -1,6 +1,8 @@
 import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
 import {DebuggerEvent, maxMarkerBits, Notifier} from "./notify.js";
+import { assert} from "./util.js";
 
+export type EffectCollectFrame = ReactiveEffect[]
 export class ReactiveEffect {
     static activeScopes: ReactiveEffect[] = []
 
@@ -23,7 +25,16 @@ export class ReactiveEffect {
             ReactiveEffect.destroy(child, true)
         })
         effect.children.length = 0
+    }
 
+    static effectCollectFrames: EffectCollectFrame[] = []
+    static collectEffect() {
+        const frame: EffectCollectFrame = []
+        ReactiveEffect.effectCollectFrames.push(frame)
+        return () => {
+            assert(ReactiveEffect.effectCollectFrames.at(-1) === frame, 'collect effect frame error')
+            return ReactiveEffect.effectCollectFrames.pop()!
+        }
     }
 
     deps: Dep[] = []
@@ -37,6 +48,11 @@ export class ReactiveEffect {
             this.parent = ReactiveEffect.activeScopes.at(-1)
             this.parent!.children.push(this)
             this.index = this.parent!.children.length - 1
+        }
+
+        const collectFrame = ReactiveEffect.effectCollectFrames.at(-1)
+        if (collectFrame) {
+            collectFrame.push(this)
         }
     }
 

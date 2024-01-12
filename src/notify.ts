@@ -78,8 +78,46 @@ export class Notifier {
   triggerStack: TriggerStack = []
   shouldTrigger: boolean = true
   trackStack: boolean[] = []
-  getDepKeys = (target:object) => {
-    return (this.targetMap.get(target)?.keys() || []) as any[]
+  effectsInSession: Set<ReactiveEffect> = new Set()
+  effectsInSessionPayloads = new WeakMap<ReactiveEffect, TriggerInfo[]>
+  inEffectSession: boolean = false
+  isDigesting: boolean = false
+  sessionDepth = 0
+  createEffectSession() {
+    if (this.isDigesting) return
+    this.inEffectSession = true
+    this.sessionDepth++
+  }
+  scheduleEffect(effect: ReactiveEffect, info: TriggerInfo, debuggerEventExtraInfo?: DebuggerEventExtraInfo) {
+    if (__DEV__) {
+      assert(this.inEffectSession, 'should be in effect session')
+    }
+    this.effectsInSession.add(effect)
+    let effectInfos = this.effectsInSessionPayloads.get(effect)
+    if (!effectInfos) {
+      this.effectsInSessionPayloads.set(effect, effectInfos = [])
+    }
+    effectInfos.push(info)
+  }
+  digestEffectSession() {
+    if (this.isDigesting) return
+    this.sessionDepth--
+    if (this.sessionDepth > 0) return
+
+    this.isDigesting = true
+    const effectItor = this.effectsInSession[Symbol.iterator]()
+    let effect: ReactiveEffect | undefined
+    while(effect = effectItor.next().value) {
+        const infos = this.effectsInSessionPayloads.get(effect)
+        effect.run(infos)
+        this.effectsInSession.delete(effect)
+        this.effectsInSessionPayloads.delete(effect)
+    }
+    if(__DEV__) {
+      assert(this.effectsInSession.size === 0, 'effectsInSession should be empty')
+    }
+    this.inEffectSession = false
+    this.isDigesting = false
   }
   track = (target: object, type: TrackOpTypes, key: unknown) => {
     const activeEffect = ReactiveEffect.activeScopes.at(-1)
@@ -277,7 +315,12 @@ export class Notifier {
     if (__DEV__ && effect.onTrigger) {
       effect.onTrigger(extend({ effect }, debuggerEventExtraInfo))
     }
-    effect.run(info, debuggerEventExtraInfo)
+
+    if (this.inEffectSession) {
+      this.scheduleEffect(effect, info, debuggerEventExtraInfo)
+    } else {
+      effect.run([info], debuggerEventExtraInfo)
+    }
   }
   enableTracking() {
     this.trackStack.push(this.shouldTrack)
