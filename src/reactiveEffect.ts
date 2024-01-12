@@ -26,7 +26,7 @@ export class ReactiveEffect {
         effect.children.forEach(child => {
             ReactiveEffect.destroy(child, true)
         })
-        effect.children.length = 0
+        effect.children = []
     }
 
     static effectCollectFrames: EffectCollectFrame[] = []
@@ -91,8 +91,8 @@ export class ReactiveEffect {
                 this.cleanup()
             }
 
-            this.children.forEach(child => ReactiveEffect.destroy(child))
-            this.children.length = 0
+            this.children.forEach(child => ReactiveEffect.destroy(child, true))
+            this.children = []
 
 
             return this.effectFn()
