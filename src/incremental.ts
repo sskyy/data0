@@ -198,7 +198,9 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         // const newData = source.slice(source.length - argv!.length)!.map((item:any, index) => mapFn(item, indexes?.[index+data.length]))
                         const dataLength = data.length
                         const effectFrames: ReactiveEffect[][] = []
-                        const newData = argv!.map((item:any, index) => {
+
+                        const newData = argv!.map((_, index) => {
+                            const item = source[dataLength+index]
                             const getFrame = collect!()
                             const newItem = mapFn(item, indexes?.[dataLength+index])
                             effectFrames.push(getFrame())
@@ -220,7 +222,8 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         })
                     } else  if (method === 'unshift') {
                         const effectFrames: ReactiveEffect[][] = []
-                        const newData = argv!.map((item:any, index) => {
+                        const newData = argv!.map((_, index) => {
+                            const item = source[index]
                             const getFrame = collect!()
                             const newItem = mapFn(item, indexes?.[index])
                             effectFrames.push(getFrame())
@@ -232,7 +235,8 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                         const newItemsInArgs = argv!.slice(2)
                         const effectFrames: ReactiveEffect[][] = []
-                        const newItems = newItemsInArgs.map((item:any, index) => {
+                        const newItems = newItemsInArgs.map((_, index) => {
+                            const item = source[index+ argv![0]]
                             const getFrame = collect!()
                             const newItem = mapFn(item, indexes?.[index+ argv![0]])
                             effectFrames![index] = getFrame()
