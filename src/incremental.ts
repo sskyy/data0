@@ -47,14 +47,17 @@ function getAtomIndexOfArray(source: any[]) {
                         } else if (method === 'splice') {
                             const removeLength = getSpliceRemoveLength(argv!, indexes.length)
                             const newIndexes = argv!.slice(2)!.map((i:any, index) => atom(index + argv![0]))
+                            indexes.splice(argv![0], argv![1], ...newIndexes)
+
+                            // 如果不是刚好删除的等于新增的，那么就要重新计算后面的 index
                             if (removeLength !== newIndexes.length) {
-                                indexes.slice(argv![0] + removeLength).forEach(indexAtom => indexAtom((origin: number) => origin - removeLength + newIndexes.length))
+                                for(let i = argv![0] + removeLength; i < indexes.length; i++) {
+                                    indexes[i](i)
+                                }
                             }
 
-                            // CAUTION 这里不能按照原本的 argv 去传递，因为 argv[1] 的"没传"和传"undefined"其实表现不同。
-                            indexes.splice(argv![0], removeLength, ...newIndexes)
                         } else {
-                            // 其他不管了
+                            // 其他不用管了，mapFn 执行的时候会重新用新的 index 来获取对应的。
                         }
                     })
                 },

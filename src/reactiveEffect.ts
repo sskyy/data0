@@ -27,6 +27,7 @@ export class ReactiveEffect {
             ReactiveEffect.destroy(child, true)
         })
         effect.children = []
+        effect.onDestroy?.()
     }
 
     static effectCollectFrames: EffectCollectFrame[] = []
@@ -58,7 +59,7 @@ export class ReactiveEffect {
         }
     }
 
-    onStop?: () => void
+    onDestroy?: () => void
     // dev only
     onTrack?: (event: DebuggerEvent) => void
     // dev only
