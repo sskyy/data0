@@ -50,7 +50,7 @@ export const computedToInternal = new WeakMap<any, ComputedInternal>()
 export type CallbacksType = {
   onRecompute? : (t: ComputedInternal) => void,
   onPatch? : (t: ComputedInternal) => void,
-  onDestroy? : (t: ComputedInternal) => void,
+  onDestroy? : (t: ReactiveEffect) => void,
   onTrack? : ReactiveEffect["onTrack"],
 }
 
@@ -76,7 +76,7 @@ export class ComputedInternal extends ReactiveEffect{
   recomputing = false
   triggerInfos: InputTriggerInfo[] = []
   // 在 parent.innerComputeds 中的 index, 用来加速 destroy 的过程
-  onDestroy?: (i: ComputedInternal) => void
+  onDestroy?: (i: ReactiveEffect) => void
   scheduleRecompute? :DirtyCallback
   // TODO 需要一个更好的约定
   public get debugName() {
