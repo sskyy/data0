@@ -116,19 +116,18 @@ export function incBool() {
 
 }
 
+export function incFind() {
+
+}
+
 export function findIndex() {
 
 }
 
-
-export function incMap<T>(source: T[], mapFn:(arg0: Atom<T>, index?:Atom<number>) => any) : ReturnType<typeof computed>
+// CAUTION incMap 是故意不考虑 source 中深层变化的，只关心数据本身的变化。所以在 mapFn 的时候读深层的对象不会硬气整个重算。
+export function incMap<T>(source: T[], mapFn:(arg0: Atom<T>) => any) : ReturnType<typeof computed>
 export function incMap<T, U>(source: Map<U, T>, mapFn: (arg0:T, arg1:U) => any) : ReturnType<typeof computed>
 export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : ReturnType<typeof computed>
-
-
-// CAUTION incMap 是故意不考虑 source 中深层变化的，只关心数据本身的变化。所以在 mapFn 的时候读深层的对象不会硬气整个重算。
-// FIXME 需要收集用户在 mapFn 中建立的 innerComputed，并且在相应 item remove 的时候，在 applyPatch 函数中 return 出来，
-//  这样才会被外部 destroy 掉，否则永远只会记录新增的，不会 destroy 删除的。
 export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
     if (!isReactive(source)) {
         if (Array.isArray(source)) {
@@ -307,14 +306,14 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 }
             })
         },
-        // TODO 外部决定
+        // TODO 让外部决定什么时候 recompute
         function onDirty(recompute) {
             recompute()
         },
         {
             onDestroy() {
                 cache?.clear()
-                if (mapFn.length>1) {
+                if (Array.isArray(source)&&mapFn.length>1) {
                     removeAtomIndexDep(source)
                 }
             }
@@ -328,7 +327,6 @@ export function incWeakMap() {
 }
 
 
-
 // TODO 要做 incremental 的话还要做每个元素的计数，才能处理 remove 的情况
 export function incUnique(source: any[]) : ReturnType<typeof computed>{
     return computed(() => {
@@ -339,7 +337,6 @@ export function incUnique(source: any[]) : ReturnType<typeof computed>{
 }
 
 
-// TODO pick 所有对象的指定属性，相当于封装的 incMap
 export function incPick(source: any[], propName: string) : ReturnType<typeof computed>{
     return incMap(source, (item) => item[propName])
 }

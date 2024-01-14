@@ -21,6 +21,7 @@ import {
   makeMap
 } from './util'
 import {Atom, isAtom, UpdateFn} from "./atom";
+import {incMap} from "./incremental.js";
 
 export const isNonTrackableKeys = /*#__PURE__*/ makeMap(`constructor,__proto__,__v_isAtom,${ReactiveFlags.IS_REACTIVE}}`)
 
@@ -118,7 +119,12 @@ function createArrayInstrumentations() {
     }
   })
 
-  // TODO 增加 reactive instruments, $map $filter $some $every $find $findIndex $indexBy $groupBy $sort $includes
+  instrumentations.$map = function $map(this: unknown[], mapFn: (arg0: unknown) => any) {
+    return incMap<unknown>(this, mapFn)
+  }
+
+  // TODO 增加 reactive instruments, $filter $some $every $find $findIndex $indexBy $groupBy $sort $includes
+
 
   return instrumentations
 }

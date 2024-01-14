@@ -130,6 +130,9 @@ export declare const RawSymbol: unique symbol
 
 type PrimitiveLeaf = symbol | number | string
 
+type ArrayReactiveMethods<U> = {
+  $map: <T>(fn: (item: UnwrapReactive<U>, index?: Atom<number>) => any) => UnwrapReactive<T>
+}
 
 export type UnwrapReactive<T> =
     T extends Map<any, any> ?
@@ -138,8 +141,7 @@ export type UnwrapReactive<T> =
     :
     T extends Array<infer U>
         ?
-        Array<UnwrapReactiveLeaf<U>> &
-        { [P in number as `$${P}`]: Atom<T[P]> }
+        Array<UnwrapReactiveLeaf<U>> & { [P in number as `$${P}`]: Atom<T[P]> } & ArrayReactiveMethods<U>
         :
     T extends object
     ?
