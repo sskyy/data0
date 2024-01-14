@@ -78,6 +78,9 @@ export class ComputedInternal extends ReactiveEffect{
   // 在 parent.innerComputeds 中的 index, 用来加速 destroy 的过程
   onDestroy?: (i: ReactiveEffect) => void
   scheduleRecompute? :DirtyCallback
+  // 用来 patch 模式下，收集新增和删除是产生的 effectFrames
+  effectFramesArray?: ReactiveEffect[][]
+  keyToEffectFrames?: WeakMap<any, ReactiveEffect[]>
   // TODO 需要一个更好的约定
   public get debugName() {
     return getDebugName(this.data)
@@ -116,14 +119,14 @@ export class ComputedInternal extends ReactiveEffect{
         Notifier.instance.track(toRaw(target), type, key)
         Notifier.instance.resetTracking()
       }
-      const result = this.getter(manualTrack, ReactiveEffect.collectEffect)
+      const result = this.getter.call(this, manualTrack, ReactiveEffect.collectEffect)
 
       Notifier.instance.resetTracking()
 
       return result
     } else {
       // 全部全量计算的情况
-      return this.getter()
+      return this.getter.call(this)
     }
   }
   // trigger 时调用
@@ -154,7 +157,7 @@ export class ComputedInternal extends ReactiveEffect{
         collect: ReactiveEffect.collectEffect
       }
       Notifier.instance.pauseTracking()
-      this.applyPatch(this.data, this.triggerInfos, patchHandles)
+      this.applyPatch.call(this, this.data, this.triggerInfos, patchHandles)
       Notifier.instance.resetTracking()
       this.triggerInfos.length = 0
     }

@@ -67,6 +67,7 @@ function createArrayInstrumentations() {
   ;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
     instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
       const rawTarget = toRaw(this)
+      const originLength = rawTarget.length
       Notifier.instance.pauseTracking()
 
       inCollectionMethodTargets.add(rawTarget)
@@ -93,7 +94,21 @@ function createArrayInstrumentations() {
       }
       inCollectionMethodTargets.delete(rawTarget)
 
-      Notifier.instance.trigger(rawTarget, TriggerOpTypes.METHOD, { method:key, argv: args})
+      // 全部统一 成 splice，这样增量计算的地方容易写。
+      let asSpliceArgs
+      if (key === 'splice') {
+        asSpliceArgs = args
+      } else if (key === 'push') {
+        asSpliceArgs = [originLength, 0, ...args]
+      } else if (key === 'pop') {
+        asSpliceArgs = [originLength - 1, 1]
+      } else if (key === 'shift') {
+        asSpliceArgs = [0, 1]
+      } else if (key === 'unshift') {
+        asSpliceArgs = [0, 0, ...args]
+      }
+
+      Notifier.instance.trigger(rawTarget, TriggerOpTypes.METHOD, { method: 'splice', argv: asSpliceArgs})
 
       Notifier.instance.digestEffectSession()
 
@@ -102,6 +117,9 @@ function createArrayInstrumentations() {
       return res
     }
   })
+
+  // TODO 增加 reactive instruments, $map $filter $some $every $find $findIndex $indexBy $groupBy $sort $includes
+
   return instrumentations
 }
 
@@ -228,13 +246,13 @@ function createSetter(shallow = false) {
       if (!hadKey) {
         Notifier.instance.trigger(target, TriggerOpTypes.ADD, { key, newValue: value })
         if (!inCollectionMethodTargets.has(toRaw(target))) {
-          Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {add: [{ key, newValue: value, }]} })
+          Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, {key, newValue:value,  result: {add: [{ key, newValue: value, }]} })
         }
 
       } else if (hasChanged(value, oldValue)) {
         Notifier.instance.trigger(target, TriggerOpTypes.SET, { key, newValue: value, oldValue})
         if (!inCollectionMethodTargets.has(toRaw(target))) {
-          Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { result: {update: [{ key, oldValue, newValue: value }]} })
+          Notifier.instance.trigger(target, TriggerOpTypes.EXPLICIT_KEY_CHANGE, {key, newValue:value, result: {update: [{ key, oldValue, newValue: value }]} })
         }
 
       }

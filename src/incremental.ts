@@ -1,5 +1,5 @@
 // 需要按原来的序，监听增删改
-import {computed, ComputedData, destroyComputed} from "./computed";
+import {computed, ComputedData, ComputedInternal, destroyComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom, isAtom} from "./atom";
 import {isReactive} from "./reactive";
@@ -143,8 +143,6 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         }
     }
 
-    const effectFramesArray: ReactiveEffect[][]|undefined = Array.isArray(source) ? [] : undefined
-    const keyToEffectFrames = new WeakMap<any, ReactiveEffect[]>()
 
     let cache: any
 
@@ -157,24 +155,31 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         Notifier.instance.resetTracking()
     }
     return computed(
-        function computation(track,  collect) {
+        function computation(this: ComputedInternal, track,  collect) {
             track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
             track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
             if (Array.isArray(source) ) {
+                this.effectFramesArray = []
+            }else {
+                this.keyToEffectFrames = new WeakMap<any, ReactiveEffect[]>()
+            }
+
+            if (Array.isArray(source) ) {
+                // 用来收集新增和删除是产生的 effectFrames
                 return source.map((item: any, index) => {
                     const getFrame = collect!()
                     // TODO 这里并没有针对 item 是数组/字符等的情况自动创建 leafAtom，未来会不会有需求？
                     //  目前好像没问题，因为如果是非对象情况，用户只能通过 [key]=? 来修改，这样会触发 EXPLICIT_KEY_CHANGE，然后重新计算。
                     //  只不过用户如果在这种情况下还想让 map 都不执行，而是获取更细力度的更新，那就暂时不行了。
                     const newItem = mapFn(item, indexes?.[index])
-                    effectFramesArray![index] = getFrame()
+                    this.effectFramesArray![index] = getFrame()
                     return newItem
                 })
             } else if (source instanceof Map) {
                 return new Map(Array.from(source.entries()).map(([key, value]) => {
                     const getFrame = collect!()
                     const newItem = mapFn(value, key)
-                    keyToEffectFrames.set(key,  getFrame())
+                    this.keyToEffectFrames!.set(key,  getFrame())
                     return [key, newItem]
                 }))
             } else if (source instanceof Set) {
@@ -183,7 +188,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 const mappedData = Array.from(source.values()).map((value) => {
                     const getFrame = collect!()
                     const data = mapFn(value)
-                    keyToEffectFrames.set(value,  getFrame())
+                    this.keyToEffectFrames!.set(value,  getFrame())
 
                     cache.set(value, data)
                     return data
@@ -193,51 +198,13 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 assert(false, 'non-support map source type')
             }
         },
-        function applyMapArrayPatch(data, triggerInfos, { destroy, collect }) {
-            triggerInfos.forEach(({ method , argv, result   }) => {
-                assert(!!(method || result), 'trigger info has no method and result')
+        function applyMapArrayPatch(this: ComputedInternal, data, triggerInfos, { destroy, collect }) {
+            triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
+                assert(!!(method === 'splice' || result), 'trigger info has no method and result')
                 // Array
                 if (Array.isArray(source)) {
-                    // CAUTION indexes 应该已经准备好了
-                    if (method === 'push') {
-                        // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
-                        // const newData = source.slice(source.length - argv!.length)!.map((item:any, index) => mapFn(item, indexes?.[index+data.length]))
-                        const dataLength = data.length
-                        const effectFrames: ReactiveEffect[][] = []
-
-                        const newData = argv!.map((_, index) => {
-                            const item = source[dataLength+index]
-                            const getFrame = collect!()
-                            const newItem = mapFn(item, indexes?.[dataLength+index])
-                            effectFrames.push(getFrame())
-                            return newItem
-                        })
-                        data.push(...newData)
-                        effectFramesArray!.push(...effectFrames)
-                    } else if (method === 'pop') {
-                        data.pop()
-                        const effectFrame = effectFramesArray!.pop()!
-                        effectFrame.forEach((effect) => {
-                            destroy(effect)
-                        })
-                    } else if(method === 'shift') {
-                        data.shift()
-                        const effectFrame = effectFramesArray!.shift()!
-                        effectFrame.forEach((effect) => {
-                            destroy(effect)
-                        })
-                    } else  if (method === 'unshift') {
-                        const effectFrames: ReactiveEffect[][] = []
-                        const newData = argv!.map((_, index) => {
-                            const item = source[index]
-                            const getFrame = collect!()
-                            const newItem = mapFn(item, indexes?.[index])
-                            effectFrames.push(getFrame())
-                            return newItem
-                        })
-                        data.unshift(...newData)
-                        effectFramesArray!.unshift(...effectFrames)
-                    } else if (method === 'splice') {
+                    // 数组里面全部统一成了 splice
+                    if (method === 'splice') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                         const newItemsInArgs = argv!.slice(2)
                         const effectFrames: ReactiveEffect[][] = []
@@ -249,44 +216,23 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                             return newItem
                         })
                         data.splice(argv![0], argv![1], ...newItems)
-                        const deletedFrames = effectFramesArray!.splice(argv![0], argv![1], ...effectFrames)
+                        const deletedFrames = this.effectFramesArray!.splice(argv![0], argv![1], ...effectFrames)
                         deletedFrames.forEach((frame) => {
                             frame.forEach((effect) => {
                                 destroy(effect)
                             })
                         })
-                    } else if(!method && result){
-                        // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。
-                        // 没有 method 说明是 explicit_key_change 变化
-                        result.add?.forEach(({ key }) => {
-                            const getFrame = collect!()
-                            data[key] = mapFn(source[key], indexes?.[key])
-                            const newFrame = getFrame()
-                            effectFramesArray![key].forEach((effect) => {
-                                destroy(effect)
-                            })
-                            effectFramesArray![key] = newFrame
-                        })
-
-                        result.update?.forEach(({ key }) => {
-                            const getFrame = collect!()
-                            data[key] = mapFn(source[key], indexes?.[key])
-                            const newFrame = getFrame()
-                            effectFramesArray![key].forEach((effect) => {
-                                destroy(effect)
-                            })
-                            effectFramesArray![key] = newFrame
-                        })
-
-                        result.remove?.forEach(({ key }) => {
-                            data.splice(key, 1)
-                            const effectFrame = effectFramesArray!.splice(key, 1)[0]
-                            effectFrame.forEach((effect) => {
-                                destroy(effect)
-                            })
-                        })
                     } else {
-                        assert(false, 'unknown trigger info')
+                        // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。
+                        const index = key as number
+                        const getFrame = collect!()
+                        data[index] = mapFn(source[index], indexes?.[index])
+                        const newFrame = getFrame()
+                        this.effectFramesArray![index].forEach((effect) => {
+                            destroy(effect)
+                        })
+                        this.effectFramesArray![index] = newFrame
+
                     }
 
                 // Map
@@ -296,7 +242,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         const keys = Array.from(data.keys())
                         data.clear()
                         keys.forEach((key) => {
-                            const effectFrame = keyToEffectFrames.get(key)!
+                            const effectFrame = this.keyToEffectFrames!.get(key)!
                             effectFrame.forEach((effect) => {
                                 destroy(effect)
                             })
@@ -307,23 +253,23 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                             const getFrame = collect!()
                             data.set(key, mapFn(newValue))
                             const newFrame = getFrame()
-                            keyToEffectFrames.set(key, newFrame)
+                            this.keyToEffectFrames!.set(key, newFrame)
                         })
 
                         result.update?.forEach(({ key, newValue }) => {
                             const getFrame = collect!()
                             data.set(key, mapFn(newValue))
                             const newFrame = getFrame()
-                            const originFrame = keyToEffectFrames.get(key)!
+                            const originFrame = this.keyToEffectFrames!.get(key)!
                             originFrame.forEach((effect) => {
                                 destroy(effect)
                             })
-                            keyToEffectFrames.set(key, newFrame)
+                            this.keyToEffectFrames!.set(key, newFrame)
                         })
 
                         result.remove?.forEach(({ key }) => {
                             data.remove(key)
-                            const effectFrame = keyToEffectFrames.get(key)!
+                            const effectFrame = this.keyToEffectFrames!.get(key)!
                             effectFrame.forEach((effect) => {
                                 destroy(effect)
                             })
@@ -334,7 +280,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         const values = Array.from(data.values())
                         data.clear()
                         values.forEach((value) => {
-                            const effectFrame = keyToEffectFrames.get(value)!
+                            const effectFrame = this.keyToEffectFrames!.get(value)!
                             effectFrame.forEach((effect) => {
                                 destroy(effect)
                             })
@@ -346,13 +292,13 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                             const getFrame = collect!()
                             data.add(mapFn(newValue))
                             const newFrame = getFrame()
-                            keyToEffectFrames.set(newValue, newFrame)
+                            this.keyToEffectFrames!.set(newValue, newFrame)
                         })
 
                         result.remove?.forEach(({ oldValue }) => {
                             const mappedData = cache.get(oldValue)
                             data.remove(mappedData)
-                            const effectFrame = keyToEffectFrames.get(oldValue)!
+                            const effectFrame = this.keyToEffectFrames!.get(oldValue)!
                             effectFrame.forEach((effect) => {
                                 destroy(effect)
                             })
