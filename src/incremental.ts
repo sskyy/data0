@@ -163,6 +163,9 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
             if (Array.isArray(source) ) {
                 return source.map((item: any, index) => {
                     const getFrame = collect!()
+                    // TODO 这里并没有针对 item 是数组/字符等的情况自动创建 leafAtom，未来会不会有需求？
+                    //  目前好像没问题，因为如果是非对象情况，用户只能通过 [key]=? 来修改，这样会触发 EXPLICIT_KEY_CHANGE，然后重新计算。
+                    //  只不过用户如果在这种情况下还想让 map 都不执行，而是获取更细力度的更新，那就暂时不行了。
                     const newItem = mapFn(item, indexes?.[index])
                     effectFramesArray![index] = getFrame()
                     return newItem

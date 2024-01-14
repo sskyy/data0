@@ -148,12 +148,14 @@ export class ComputedInternal extends ReactiveEffect{
         replace(this.data, newData)
       }
     } else {
-      // CAUTION patch 要自己负责 destroy inner computed
+      // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
       const patchHandles = {
         destroy: ReactiveEffect.destroy,
         collect: ReactiveEffect.collectEffect
       }
+      Notifier.instance.pauseTracking()
       this.applyPatch(this.data, this.triggerInfos, patchHandles)
+      Notifier.instance.resetTracking()
       this.triggerInfos.length = 0
     }
 
