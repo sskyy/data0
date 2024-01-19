@@ -1,5 +1,5 @@
 // 需要按原来的序，监听增删改
-import {computed, ComputedData, ComputedInternal, destroyComputed} from "./computed";
+import {computed, ComputedData, Computed, destroyComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom, isAtom} from "./atom";
 import {isReactive} from "./reactive";
@@ -154,7 +154,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         Notifier.instance.resetTracking()
     }
     return computed(
-        function computation(this: ComputedInternal, track,  collect) {
+        function computation(this: Computed, track, collect) {
             track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
             track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
             if (Array.isArray(source) ) {
@@ -197,7 +197,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 assert(false, 'non-support map source type')
             }
         },
-        function applyMapArrayPatch(this: ComputedInternal, data, triggerInfos, { destroy, collect }) {
+        function applyMapArrayPatch(this: Computed, data, triggerInfos, { destroy, collect }) {
             triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
                 assert(!!(method === 'splice' || result), 'trigger info has no method and result')
                 // Array

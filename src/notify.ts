@@ -1,6 +1,6 @@
 import {createDep, Dep, newTracked, wasTracked} from "./dep";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {ComputedInternal, getComputedGetter, isComputed} from "./computed";
+import {Computed, getComputedGetter, isComputed} from "./computed";
 import {isAtom} from "./atom";
 import {toRaw} from "./reactive";
 import {assert, extend, getStackTrace, isArray, isIntegerKey, isIntegerKeyQuick, isMap, toNumber} from "./util";
@@ -124,7 +124,7 @@ export class Notifier {
     if (!activeEffect || !this.shouldTrack) return
     // CAUTION 不能 track 自己。computed 在第二次执行的时候会有一个 replace 行为，会
     if (__DEV__) {
-      assert(!(activeEffect instanceof ComputedInternal && target ===toRaw(activeEffect.data)), 'should not read self in computed')
+      assert(!(activeEffect instanceof Computed && target ===toRaw(activeEffect.data)), 'should not read self in computed')
     }
 
     let depsMap = this.targetMap.get(target)
@@ -150,6 +150,7 @@ export class Notifier {
     }
 
     this.trackEffects(dep, eventInfo)
+    return dep
   }
   trackEffects(
       dep: Dep,

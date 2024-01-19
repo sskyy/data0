@@ -7,7 +7,8 @@ import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
 
 
-// TODO 不深度 replace 吗？？？
+// CAUTION 为了一般场景中的新能，不深度 replace!
+//  用户可以通过 computed 的再封装实现对某个 computed 结果的深度监听。
 export function replace(source: any, nextSourceValue: any) {
   if (Array.isArray(source)){
     source.splice(0, Infinity, ...nextSourceValue)
@@ -45,11 +46,11 @@ export function replace(source: any, nextSourceValue: any) {
   }
 }
 
-export const computedToInternal = new WeakMap<any, ComputedInternal>()
+export const computedToInternal = new WeakMap<any, Computed>()
 
 export type CallbacksType = {
-  onRecompute? : (t: ComputedInternal) => void,
-  onPatch? : (t: ComputedInternal) => void,
+  onRecompute? : (t: Computed) => void,
+  onPatch? : (t: Computed) => void,
   onDestroy? : (t: ReactiveEffect) => void,
   onTrack? : ReactiveEffect["onTrack"],
 }
@@ -59,9 +60,15 @@ export type ComputedResult<T extends () => any> = ReturnType<T> extends object ?
 
 export type ComputedData = Atom|UnwrapReactive<any>
 
-type GetterType = (trackOnce?: Notifier["track"], collect?: typeof ReactiveEffect.collectEffect ) => any
-type DirtyCallback = (recompute: (force?: boolean) => void) => void
-type SkipIndicator = {skip: boolean}
+type PatchHandles = {
+  destroy: typeof ReactiveEffect["destroy"]
+  collect: typeof ReactiveEffect.collectEffect
+}
+export type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[], handles: PatchHandles) => ReturnType<typeof computed>[] | void
+
+export type GetterType = (trackOnce?: Notifier["track"], collect?: typeof ReactiveEffect.collectEffect ) => any
+export type DirtyCallback = (recompute: (force?: boolean) => void) => void
+export type SkipIndicator = {skip: boolean}
 
 
 export function destroyComputed (computedItem: ComputedData)  {
@@ -69,7 +76,7 @@ export function destroyComputed (computedItem: ComputedData)  {
     ReactiveEffect.destroy(internal)
 }
 
-export class ComputedInternal extends ReactiveEffect{
+export class Computed extends ReactiveEffect{
   isDirty = false
   data: ComputedData
   immediate = false
@@ -79,14 +86,16 @@ export class ComputedInternal extends ReactiveEffect{
   onDestroy?: (i: ReactiveEffect) => void
   scheduleRecompute? :DirtyCallback
   // 用来 patch 模式下，收集新增和删除是产生的 effectFrames
-  effectFramesArray?: ReactiveEffect[][]
-  keyToEffectFrames?: WeakMap<any, ReactiveEffect[]>
+  effectFramesArray: ReactiveEffect[][] = []
+  keyToEffectFrames: WeakMap<any, ReactiveEffect[]> = new WeakMap()
   // TODO 需要一个更好的约定
   public get debugName() {
     return getDebugName(this.data)
   }
-  constructor(public getter: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator, public forceAtom?: boolean) {
-    super()
+  constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator, public forceAtom?: boolean, public keepRaw?: boolean) {
+    super(!!getter)
+    // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
+    if (!getter) return
 
     if (typeof scheduleRecompute === 'function') {
       this.scheduleRecompute = scheduleRecompute
@@ -99,14 +108,19 @@ export class ComputedInternal extends ReactiveEffect{
 
     const initialValue = super.run()!
 
-    this.data = this.forceAtom ?
-        atom(initialValue) :
-        isReactivableType(initialValue) ?
-            reactive(initialValue) :
-            atom(initialValue)
+    this.data = this.keepRaw ?
+        initialValue:
+        (this.forceAtom ?
+          atom(initialValue) :
+          isReactivableType(initialValue) ?
+              reactive(initialValue) :
+              atom(initialValue)
+        )
 
     // destroy 的时候用户是拿 computed 去 destroy 的。
-    computedToInternal.set(this.data, this)
+    if (!this.keepRaw) {
+      computedToInternal.set(this.data, this)
+    }
   }
   effectFn() {
     if (this.applyPatch) {
@@ -116,17 +130,18 @@ export class ComputedInternal extends ReactiveEffect{
       const manualTrack =  (target: object, type: TrackOpTypes, key: unknown) => {
         Notifier.instance.enableTracking()
         // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
-        Notifier.instance.track(toRaw(target), type, key)
+        const dep = Notifier.instance.track(toRaw(target), type, key)
         Notifier.instance.resetTracking()
+        return dep
       }
-      const result = this.getter.call(this, manualTrack, ReactiveEffect.collectEffect)
+      const result = this.getter!.call(this, manualTrack, ReactiveEffect.collectEffect)
 
       Notifier.instance.resetTracking()
 
       return result
     } else {
       // 全部全量计算的情况
-      return this.getter.call(this)
+      return this.getter!.call(this)
     }
   }
   // trigger 时调用
@@ -152,6 +167,7 @@ export class ComputedInternal extends ReactiveEffect{
       }
     } else {
       // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
+      // FIXME 改成用 this 指针上的！
       const patchHandles = {
         destroy: ReactiveEffect.destroy,
         collect: ReactiveEffect.collectEffect
@@ -164,23 +180,20 @@ export class ComputedInternal extends ReactiveEffect{
 
     this.isDirty = false
   }
+  // 给继承者在 apply catch 中用的 工具函数
+  collectEffect = ReactiveEffect.collectEffect
+  destroyEffect = ReactiveEffect.destroy
 }
-
-type PatchHandles = {
-  destroy: typeof ReactiveEffect["destroy"]
-  collect: typeof ReactiveEffect.collectEffect
-}
-type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[], handles: PatchHandles) => ReturnType<typeof computed>[] | void
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean) : ComputedResult<T>
 export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean) {
-  const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, forceAtom)
+  const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, forceAtom)
   return internal.data
 }
 
 export function atomComputed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType, skipIndicator?: SkipIndicator) {
-  const internal = new ComputedInternal(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, true)
+  const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, true)
   return internal.data
 }
 

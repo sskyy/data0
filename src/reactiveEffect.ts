@@ -41,12 +41,14 @@ export class ReactiveEffect {
     }
 
     deps: Dep[] = []
-    active = true
     parent?: ReactiveEffect
     children: ReactiveEffect[] = []
     index = 0
 
-    constructor() {
+    constructor(public active: boolean) {
+        // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
+        if (!active) return
+
         if (ReactiveEffect.activeScopes.length) {
             this.parent = ReactiveEffect.activeScopes.at(-1)
             this.parent!.children.push(this)
@@ -118,5 +120,8 @@ export class ReactiveEffect {
             }
             deps.length = 0
         }
+    }
+    destroy() {
+        ReactiveEffect.destroy(this)
     }
 }
