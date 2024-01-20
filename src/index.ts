@@ -7,3 +7,5 @@ export * from './incremental'
 export { isReactivableType }from './util'
 export { LinkedList } from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";
+export { RxList } from './RxList'
+export { AsyncRxSlice } from "./AsyncRxSlice.js";
