@@ -1,7 +1,7 @@
 import {ApplyPatchType, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
 import {Atom} from "./atom.js";
 import {Dep} from "./dep.js";
-import {Notifier} from "./notify.js";
+import {InputTriggerInfo, Notifier, TriggerInfo} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
@@ -114,7 +114,7 @@ export class RxList<T> extends Computed {
 
 
     // reactive methods and attr
-    map<U>(mapFn: (item: T, index?: Atom<number>) => U, scheduleRecompute?: DirtyCallback ) : RxList<U>{
+    map<U>(mapFn: (item: T, index?: Atom<number>) => U, beforePatch?: (triggerInfo: InputTriggerInfo) => any, scheduleRecompute?: DirtyCallback ) : RxList<U>{
         const source = this
         if(mapFn.length>1) {
             this.atomIndexesDepCount++
@@ -134,9 +134,13 @@ export class RxList<T> extends Computed {
                 })
             },
             function applyMapArrayPatch(this: RxList<U>, data, triggerInfos) {
-                triggerInfos.forEach(({ method , argv, result  ,key, newValue }) => {
+                triggerInfos.forEach((triggerInfo) => {
+
+                    const { method , argv  ,key } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
-                    // Array
+
+                    if (beforePatch) beforePatch(triggerInfo)
+
                     if (method === 'splice') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                         const newItemsInArgs = argv!.slice(2)
