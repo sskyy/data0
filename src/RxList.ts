@@ -48,7 +48,7 @@ export class RxList<T> extends Computed {
         }
 
         const changedIndexEnd = deleteItemsCount !== items.length ? this.data.length : start + items.length
-        if (this.indexKeyDeps.size > 0){
+        if (this.indexKeyDeps?.size > 0){
             // 手动查找 dep 和触发，这样效率更高
             for (let i = start; i < changedIndexEnd; i++) {
                 const dep = this.indexKeyDeps.get(i)!
@@ -182,6 +182,40 @@ export class RxList<T> extends Computed {
                     }
                 }
             },
+        )
+    }
+    // 另一种 map
+    reduce<U>(reduceFn: (last: RxList<U>, item: T, index: number) => any) {
+        const source = this
+        return new RxList(
+            null,
+            function computation(this: RxList<U>, track) {
+                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                this.data =[]
+                for(let i = 0; i < source.data.length; i++) {
+                    const getFrame = ReactiveEffect.collectEffect!()
+                    reduceFn(this, source.data[i], i)
+                    this.effectFramesArray![i] = getFrame()
+                }
+                return this.data
+            },
+            function applyMapArrayPatch(this: RxList<U>, data, triggerInfos) {
+                // FIXME 支持不了的还是要走全量更新怎么写？？？
+                // FIXME 收集 effectFrames 没有销毁
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv   } = triggerInfo
+                    assert(method === 'splice' && argv![0] === source.length - argv!.slice(2).length && argv![1] === 0, 'reduce can only support append')
+                    const originLength = this.data.length
+                    // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
+                    const newItemsInArgs = argv!.slice(2)
+                    for(let i = 0; i < newItemsInArgs.length; i++) {
+                        const getFrame = ReactiveEffect.collectEffect!()
+                        reduceFn(this, newItemsInArgs[i], i + originLength)
+                        this.effectFramesArray![i] = getFrame()
+                    }
+                })
+            }
         )
     }
 
