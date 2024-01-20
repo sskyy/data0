@@ -1,6 +1,6 @@
 {
   "name": "data0",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Reactive state management library",
   "devDependencies": {
     "@microsoft/api-extractor": "^7.38.5",
