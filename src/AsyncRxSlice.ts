@@ -27,7 +27,7 @@ export class AsyncRxSlice<T> extends RxList<T>{
         this.loadError(null)
         return this.getRemoteData().then((data) => {
             if (this.fetchReceipt !== thisReceipt) return
-            this.data.splice(0, Infinity, ...data)
+            this.splice(0, Infinity, ...data)
         }).catch(err => {
             if (this.fetchReceipt !== thisReceipt) return
             this.loadError(err)
