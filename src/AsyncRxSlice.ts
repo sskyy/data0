@@ -44,12 +44,12 @@ export class AsyncRxSlice<T> extends RxList<T>{
             return
         }
         if (replace) {
-            this.data.splice(0, Infinity, ...newData)
+            this.splice(0, Infinity, ...newData)
         } else {
             if (fetchBeforeCursor) {
-                this.data.unshift(...newData)
+                this.unshift(...newData)
             }else {
-                this.data.push(...newData)
+                this.push(...newData)
             }
         }
         this.isLoading(false)

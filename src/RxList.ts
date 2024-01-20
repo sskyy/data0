@@ -1,7 +1,7 @@
 import {ApplyPatchType, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
 import {Atom} from "./atom.js";
 import {Dep} from "./dep.js";
-import {InputTriggerInfo, Notifier, TriggerInfo} from "./notify.js";
+import {InputTriggerInfo, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
