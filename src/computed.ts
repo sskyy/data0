@@ -121,15 +121,8 @@ export class Computed extends ReactiveEffect{
     if (this.applyPatch) {
       // 增量计算，只有第一次计算建立初始 dep 会走到这。这里用的是手动 track。所以先把自动 track 停掉
       Notifier.instance.pauseTracking()
-
-      const manualTrack =  (target: object, type: TrackOpTypes, key: unknown) => {
-        Notifier.instance.enableTracking()
-        // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
-        const dep = Notifier.instance.track(toRaw(target), type, key)
-        Notifier.instance.resetTracking()
-        return dep
-      }
-      const result = this.getter!.call(this, manualTrack, ReactiveEffect.collectEffect)
+      // 用户在即在 computation 里面的 this 上可以拿到 manualTrack 来手动 track
+      const result = this.getter!.call(this)
 
       Notifier.instance.resetTracking()
 
@@ -171,7 +164,7 @@ export class Computed extends ReactiveEffect{
     this.isDirty = false
   }
   // 给继承者在 apply catch 中用的 工具函数
-  manualTack = (target: object, type: TrackOpTypes, key: unknown) => {
+  manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {
     Notifier.instance.enableTracking()
     // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
     const dep = Notifier.instance.track(toRaw(target), type, key)

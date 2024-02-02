@@ -123,9 +123,9 @@ export class RxList<T> extends Computed {
 
         return new RxList(
             null,
-            function computation(this: RxList<U>, track) {
-                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+            function computation(this: RxList<U>) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
                 return source.data.map((_: T, index) => {
                     const getFrame = ReactiveEffect.collectEffect!()
                     // CAUTION 注意这里的 item 要用 at 拿包装过的 reactive 对象
@@ -191,8 +191,8 @@ export class RxList<T> extends Computed {
         return new RxList(
             null,
             function computation(this: RxList<U>, track) {
-                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
                 this.data =[]
                 for(let i = 0; i < source.data.length; i++) {
                     const getFrame = ReactiveEffect.collectEffect!()
@@ -223,9 +223,9 @@ export class RxList<T> extends Computed {
     find(matchFn:(item: T, index: number) => boolean) {
         const source = this
         return atomComputed(
-            function computation(track) {
-                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
                 return source.data.find(matchFn)
             },
             function applyPatch(){

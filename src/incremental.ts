@@ -27,8 +27,8 @@ function getAtomIndexOfArray(source: any[]) {
             depCount:0,
             indexes,
             computed: computed(
-                function trackArrayMethod(track) {
-                    track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                function trackArrayMethod(this: Computed) {
+                    this.manualTrack!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 },
                 function applyAtomIndexChange(data, triggerInfos) {
                     triggerInfos.forEach(({ method , argv}) => {
@@ -154,7 +154,8 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         Notifier.instance.resetTracking()
     }
     return computed(
-        function computation(this: Computed, track, collect) {
+        function computation(this: Computed) {
+            const { manualTrack: track, collectEffect: collect } = this
             track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
             track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
             if (Array.isArray(source) ) {
