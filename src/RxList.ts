@@ -5,6 +5,7 @@ import {InputTriggerInfo, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
+import { atomComputed } from "./computed.js";
 
 export class RxList<T> extends Computed {
     data!: T[]
@@ -219,8 +220,17 @@ export class RxList<T> extends Computed {
         )
     }
 
-    find() {
+    find(matchFn:(item: T, index: number) => boolean) {
+        const source = this
+        return atomComputed(
+            function computation(track) {
+                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+                return source.data.find(matchFn)
+            },
+            function applyPatch(){
 
+            })
     }
     findIndex() {
 

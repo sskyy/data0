@@ -59,12 +59,7 @@ export type CallbacksType = {
 export type ComputedResult<T extends () => any> = ReturnType<T> extends object ? UnwrapReactive<ReturnType<T>> : Atom<ReturnType<T>>
 
 export type ComputedData = Atom|UnwrapReactive<any>
-
-type PatchHandles = {
-  destroy: typeof ReactiveEffect["destroy"]
-  collect: typeof ReactiveEffect.collectEffect
-}
-export type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[], handles: PatchHandles) => ReturnType<typeof computed>[] | void
+export type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[]) => ReturnType<typeof computed>[] | void
 
 export type GetterType = (trackOnce?: Notifier["track"], collect?: typeof ReactiveEffect.collectEffect ) => any
 export type DirtyCallback = (recompute: (force?: boolean) => void) => void
@@ -167,13 +162,8 @@ export class Computed extends ReactiveEffect{
       }
     } else {
       // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
-      // FIXME 改成用 this 指针上的！
-      const patchHandles = {
-        destroy: ReactiveEffect.destroy,
-        collect: ReactiveEffect.collectEffect
-      }
       Notifier.instance.pauseTracking()
-      this.applyPatch.call(this, this.data, this.triggerInfos, patchHandles)
+      this.applyPatch.call(this, this.data, this.triggerInfos)
       Notifier.instance.resetTracking()
       this.triggerInfos.length = 0
     }
@@ -181,6 +171,13 @@ export class Computed extends ReactiveEffect{
     this.isDirty = false
   }
   // 给继承者在 apply catch 中用的 工具函数
+  manualTack = (target: object, type: TrackOpTypes, key: unknown) => {
+    Notifier.instance.enableTracking()
+    // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
+    const dep = Notifier.instance.track(toRaw(target), type, key)
+    Notifier.instance.resetTracking()
+    return dep
+  }
   collectEffect = ReactiveEffect.collectEffect
   destroyEffect = ReactiveEffect.destroy
 }

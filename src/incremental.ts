@@ -197,7 +197,8 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                 assert(false, 'non-support map source type')
             }
         },
-        function applyMapArrayPatch(this: Computed, data, triggerInfos, { destroy, collect }) {
+        function applyMapArrayPatch(this: Computed, data, triggerInfos) {
+            const {collectEffect: collect, destroyEffect: destroy} = this
             triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
                 assert(!!(method === 'splice' || result), 'trigger info has no method and result')
                 // Array
