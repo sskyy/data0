@@ -57,7 +57,7 @@ export class RxList<T> extends Computed {
             }
         }
 
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'splice', argv: [start, deleteCount, ...items]})
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'splice', argv: [start, deleteCount, ...items], methodResult: result })
 
         Notifier.instance.digestEffectSession()
         Notifier.instance.resetTracking()
@@ -65,13 +65,14 @@ export class RxList<T> extends Computed {
     }
     // 显式 set 某一个 index 的值
     set(index: number, value: T) {
+        const oldValue = this.data[index]
         this.data[index] = value
         const dep = this.indexKeyDeps.get(index)
         if (dep) {
             Notifier.instance.triggerEffects(dep, {source: this, key: index, newValue: value})
         }
         // trigger explicit key set。这是给 rxList incremental computed 计算用的
-        Notifier.instance.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value})
+        Notifier.instance.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue})
     }
 
     // 需要 track 的方法
@@ -220,24 +221,152 @@ export class RxList<T> extends Computed {
         )
     }
 
-    find(matchFn:(item: T, index: number) => boolean) {
+    find(matchFn:(item: T) => boolean): Atom<T> {
         const source = this
+        let foundIndex = -1
         return atomComputed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-                return source.data.find(matchFn)
+                return source.data.find((item, index) => {
+                    if (matchFn(item)) {
+                        foundIndex = index
+                        return true
+                    }
+                    return false
+                })
             },
-            function applyPatch(){
+            function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv  ,key } = triggerInfo
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
-            })
+                    let startFindingIndex = -1
+
+                    if (method === 'splice') {
+                        const startIndex = argv![0] as number
+                        if (foundIndex >= startIndex) {
+                            startFindingIndex = startIndex
+                        }
+
+                    } else {
+                        // explicit key change
+                        if (foundIndex === key) {
+                            startFindingIndex = key as number
+                        }
+                    }
+
+                    if (startFindingIndex !== -1) {
+                        foundIndex = -1
+                        for (let i = startFindingIndex; i < source.data.length; i++) {
+                            if (matchFn(source.data[i]!)) {
+                                foundIndex = i
+                                data(source.data[i]!)
+                                return
+                            }
+                        }
+
+                        data(null)
+                    }
+                })
+            }
+        )
     }
-    findIndex() {
+    findIndex(matchFn:(item: T) => boolean): Atom<number> {
+        const source = this
+        let foundIndex = -1
+        return atomComputed(
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+                return source.data.findIndex((item, index) => {
+                    if (matchFn(item)) {
+                        foundIndex = index
+                        return true
+                    }
+                    return false
+                })
+            },
+            function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv  ,key } = triggerInfo
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
+                    let startFindingIndex = -1
+
+                    if (method === 'splice') {
+                        const startIndex = argv![0] as number
+                        if (foundIndex >= startIndex) {
+                            startFindingIndex = startIndex
+                        }
+
+                    } else {
+                        // explicit key change
+                        if (foundIndex === key) {
+                            startFindingIndex = key as number
+                        }
+                    }
+
+                    if (startFindingIndex !== -1) {
+                        foundIndex = -1
+                        for (let i = startFindingIndex; i < source.data.length; i++) {
+                            if (matchFn(source.data[i]!)) {
+                                foundIndex = i
+                                data(foundIndex)
+                                return
+                            }
+                        }
+
+                        data(foundIndex)
+                    }
+
+                })
+            }
+        )
     }
 
-    filter() {
+    filter(filterFn: (item:T) => boolean) {
+        const source = this
+        return new RxList(
+            null,
+            function computation(this: RxList<T>) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+                return source.data.filter(filterFn)
+            },
+            function applyPatch(this: RxList<T>, data, triggerInfos) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv  ,key, oldValue, methodResult} = triggerInfo
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
+                    // TODO 在删除大量数据的时候，直接重新执行更快？
+                    if (method === 'splice') {
+                        const deleteItems = methodResult as T[] || []
+                        deleteItems.forEach((item) => {
+                            if (this.data.includes(item)) {
+                                this.splice(this.data.indexOf(item), 1)
+                            }
+                        })
+                        const newItemsInArgs = argv!.slice(2)
+                        newItemsInArgs.forEach((item) => {
+                            if(filterFn(item)) {
+                                this.push(item)
+                            }
+                        })
+                    } else {
+                        // explicit key change
+                        const index = key as number
+                        const item = source.data[index]
+                        if (filterFn(item)) {
+                            this.push(item)
+                        }
+                        if (this.data.includes(oldValue as T)) {
+                            this.splice(this.data.indexOf(oldValue as T), 1)
+                        }
+                    }
+                })
+            }
+        )
     }
 
     groupBy() {
@@ -255,7 +384,6 @@ export class RxList<T> extends Computed {
 
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
     onUntrack(effect: ReactiveEffect) {
-
 
     }
 }
