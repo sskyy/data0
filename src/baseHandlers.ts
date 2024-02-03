@@ -1,25 +1,9 @@
-import {
-  reactive,
-  reactiveMap,
-  shallowReactiveMap,
-  Target,
-  toRaw,
-
-} from './reactive'
+import {reactive, reactiveMap, shallowReactiveMap, Target, toRaw,} from './reactive'
 import {ReactiveFlags} from './flags'
-import { Notifier, ITERATE_KEY } from "./notify";
+import {ITERATE_KEY_KEY_ONLY, Notifier} from "./notify";
 
 import {TrackOpTypes, TriggerOpTypes,} from './operations'
-import {
-  def,
-  hasChanged,
-  hasOwn,
-  isArray, isArrayMethod,
-  isIntegerKey,
-  isPlainObject,
-  isSymbol,
-  makeMap
-} from './util'
+import {def, hasChanged, hasOwn, isArray, isArrayMethod, isIntegerKey, isPlainObject, isSymbol, makeMap} from './util'
 import {Atom, isAtom, UpdateFn} from "./atom";
 import {incMap} from "./incremental.js";
 
@@ -291,7 +275,7 @@ function has(target: object, key: string | symbol): boolean {
 }
 
 function ownKeys(target: object): (string | symbol)[] {
-  Notifier.instance.track(target, TrackOpTypes.ITERATE, isArray(target) ? 'length' : ITERATE_KEY)
+  Notifier.instance.track(target, TrackOpTypes.ITERATE, isArray(target) ? 'length' : ITERATE_KEY_KEY_ONLY)
   return Reflect.ownKeys(target)
 }
 

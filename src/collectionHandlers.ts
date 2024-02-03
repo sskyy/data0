@@ -1,5 +1,5 @@
 import {toRaw, toReactive} from './reactive'
-import {ITERATE_KEY, MAP_KEY_ITERATE_KEY, Notifier} from './notify'
+import {ITERATE_KEY, ITERATE_KEY_KEY_ONLY, Notifier} from './notify'
 import {TrackOpTypes, TriggerOpTypes} from './operations'
 import {assert, def, hasChanged, hasOwn, isMap, toRawType} from './util'
 import {inCollectionMethodTargets} from "./baseHandlers";
@@ -274,7 +274,7 @@ function createIterableMethod(
       Notifier.instance.track(
         rawTarget,
         TrackOpTypes.ITERATE,
-        isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
+        isKeyOnly ? ITERATE_KEY_KEY_ONLY : ITERATE_KEY
       )
     // return a wrapped iterator which returns observed versions of the
     // values emitted from the real iterator

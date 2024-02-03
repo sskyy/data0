@@ -44,6 +44,7 @@ export const hasOwn = (
 ) => hasOwnProperty.call(val, key)
 
 export const isArray = Array.isArray
+// FIXME 支持自定义的 Map 和 Set
 export const isMap = (val: unknown): val is Map<any, any> =>
     toTypeString(val) === '[object Map]'
 export const isSet = (val: unknown): val is Set<any> =>

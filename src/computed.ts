@@ -1,5 +1,5 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
-import {InputTriggerInfo, Notifier, TriggerInfo} from './notify'
+import {Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, UnwrapReactive} from './reactive'
 import {assert, isPlainObject, isReactivableType} from "./util";
 import {Atom, atom, isAtom} from "./atom";
@@ -59,7 +59,7 @@ export type CallbacksType = {
 export type ComputedResult<T extends () => any> = ReturnType<T> extends object ? UnwrapReactive<ReturnType<T>> : Atom<ReturnType<T>>
 
 export type ComputedData = Atom|UnwrapReactive<any>
-export type ApplyPatchType = (computedData: ComputedData, info: InputTriggerInfo[]) => ReturnType<typeof computed>[] | void
+export type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => ReturnType<typeof computed>[] | void
 
 export type GetterType = (trackOnce?: Notifier["track"], collect?: typeof ReactiveEffect.collectEffect ) => any
 export type DirtyCallback = (recompute: (force?: boolean) => void) => void
@@ -76,7 +76,7 @@ export class Computed extends ReactiveEffect{
   data: ComputedData
   immediate = false
   recomputing = false
-  triggerInfos: InputTriggerInfo[] = []
+  triggerInfos: TriggerInfo[] = []
   // 在 parent.innerComputeds 中的 index, 用来加速 destroy 的过程
   onDestroy?: (i: ReactiveEffect) => void
   scheduleRecompute? :DirtyCallback

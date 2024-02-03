@@ -1,5 +1,6 @@
 import { RxList } from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
+import {autorun} from "../src/autorun.js";
 
 describe('RxList', () => {
     test('map to another list', () => {
@@ -160,6 +161,24 @@ describe('RxList', () => {
 
         list.splice(2, Infinity)
         expect(filtered.data).toMatchObject([])
+    })
+
+    // should track iterator key
+    test('forEach', () => {
+        const list = new RxList<number>([1,2,3])
+        let forEachRuns = 0
+        autorun(() => {
+            forEachRuns++
+            list.forEach((item) => {
+            })
+        })
+        expect(forEachRuns).toBe(1)
+
+        list.push(4)
+        expect(forEachRuns).toBe(2)
+
+        list.splice(1, 1)
+        expect(forEachRuns).toBe(3)
     })
 
 

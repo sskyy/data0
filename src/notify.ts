@@ -3,7 +3,7 @@ import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Computed, getComputedGetter, isComputed} from "./computed";
 import {isAtom} from "./atom";
 import {toRaw} from "./reactive";
-import {assert, extend, getStackTrace, isArray, isIntegerKey, isIntegerKeyQuick, isMap, toNumber} from "./util";
+import {assert, extend, getStackTrace, isArray, isIntegerKey, isIntegerKeyQuick, toNumber} from "./util";
 import {ReactiveEffect} from "./reactiveEffect.js";
 
 
@@ -35,6 +35,7 @@ export type InputTriggerInfo = {
 }
 
 export type TriggerInfo = {
+  type: TriggerOpTypes,
   source: any
 } & InputTriggerInfo
 
@@ -52,9 +53,11 @@ export type DebuggerEvent = {
 
 
 
-
+// Map/Set 或者自定义结构 iterator 的时候用到。
+// CAUTION array/object 不用，因为他们迭代的时候会触发具体 key 的 track。
 export const ITERATE_KEY = Symbol( 'iterate' )
-export const MAP_KEY_ITERATE_KEY = Symbol('Map key iterate' )
+// Object/Array 执行 ownKeys 或者 Map 执行 keys 的时候用到。
+export const ITERATE_KEY_KEY_ONLY = Symbol('Map key iterate' )
 /**
  * The bitwise track markers support at most 30 levels of recursion.
  * This value is chosen to enable modern JS engines to use a SMI on all platforms.
@@ -190,7 +193,7 @@ export class Notifier {
   ) {
     if (!this.shouldTrigger) return
 
-    const info: TriggerInfo = {...inputInfo, source}
+    const info: TriggerInfo = {...inputInfo, source, type}
 
     const {key, newValue, oldValue} = info
     const depsMap = this.targetMap.get(source)
@@ -218,13 +221,16 @@ export class Notifier {
       // collection being cleared
       // trigger all effects for target
       deps = [...depsMap.values()]
+
     } else if (key === 'length' && isArray(source)) {
+      // 数组时，可以直接 set length，相当于直接把后面的部分删掉了。
       const newLength = toNumber(newValue)
       depsMap.forEach((dep, key) => {
         if (key === 'length' || key >= newLength) {
           deps.push(dep)
         }
       })
+
     } else {
       // schedule runs for SET | ADD | DELETE
       if (key !== void 0) {
@@ -236,9 +242,7 @@ export class Notifier {
         case TriggerOpTypes.ADD:
           if (!isArray(source)) {
             deps.push(depsMap.get(ITERATE_KEY))
-            if (isMap(source)) {
-              deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
-            }
+            deps.push(depsMap.get(ITERATE_KEY_KEY_ONLY))
           } else if (isIntegerKey(key)) {
             // new index added to array -> length changes
             deps.push(depsMap.get('length'))
@@ -247,13 +251,11 @@ export class Notifier {
         case TriggerOpTypes.DELETE:
           if (!isArray(source)) {
             deps.push(depsMap.get(ITERATE_KEY))
-            if (isMap(source)) {
-              deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
-            }
+            deps.push(depsMap.get(ITERATE_KEY_KEY_ONLY))
           }
           break
         case TriggerOpTypes.SET:
-          if (isMap(source)) {
+          if (!isArray(source)) {
             deps.push(depsMap.get(ITERATE_KEY))
           }
           break

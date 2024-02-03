@@ -1,7 +1,7 @@
 import {ApplyPatchType, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
 import {Atom} from "./atom.js";
 import {Dep} from "./dep.js";
-import {InputTriggerInfo, Notifier} from "./notify.js";
+import {InputTriggerInfo, ITERATE_KEY, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
@@ -42,22 +42,23 @@ export class RxList<T> extends Computed {
         const originLength = this.data.length
         const deleteItemsCount = Math.min(deleteCount, originLength - start)
 
-        const result = this.data.splice(start, deleteCount, ...items)
 
-        if (deleteItemsCount !== items.length) {
-            Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: 'length', newValue: this.data.length})
-        }
-
+        // CAUTION 不需要触发 length 的变化，因为获取  length 的时候得到就已经是个 computed 了。
         const changedIndexEnd = deleteItemsCount !== items.length ? this.data.length : start + items.length
+        const oldValues = []
+        for (let i = start; i < changedIndexEnd; i++) {
+            oldValues[i] = this.data[i]
+        }
+        const result = this.data.splice(start, deleteCount, ...items)
+        // 只有当有 indexKeyDeps 的时候才需要手动查找 dep 和触发，这样效率更高
         if (this.indexKeyDeps?.size > 0){
-            // 手动查找 dep 和触发，这样效率更高
             for (let i = start; i < changedIndexEnd; i++) {
-                const dep = this.indexKeyDeps.get(i)!
-                Notifier.instance.triggerEffects(dep, {source: this, key: i, newValue: this.data[i]})
+                Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues[i]})
             }
         }
-
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'splice', argv: [start, deleteCount, ...items], methodResult: result })
+        // CAUTION 无论有没有 indexKeyDeps 都要触发 Iterator_Key，
+        //  特别这里注意，我们利用传了 key 就会把对应 key 的 dep 拿出来的特性来 trigger ITERATE_KEY.
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
 
         Notifier.instance.digestEffectSession()
         Notifier.instance.resetTracking()
@@ -67,15 +68,17 @@ export class RxList<T> extends Computed {
     set(index: number, value: T) {
         const oldValue = this.data[index]
         this.data[index] = value
-        const dep = this.indexKeyDeps.get(index)
-        if (dep) {
-            Notifier.instance.triggerEffects(dep, {source: this, key: index, newValue: value})
+
+        // 这里还是用 trigger TriggerOpTypes.SET，因为系统在处理 TriggerOpTypes.SET 的时候还会对 listLike 的数据 触发 ITERATE_KEY。
+        if (index > this.data.length - 1) {
+            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: index, newValue: value, oldValue})
+        } else {
+            Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: index, newValue: value, oldValue})
         }
-        // trigger explicit key set。这是给 rxList incremental computed 计算用的
         Notifier.instance.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue})
     }
 
-    // 需要 track 的方法
+    // CAUTION 这里手动 track index dep 的变化，是为了在 splice 的时候能手动去根据订阅的 index dep 触发，而不是直接触发所有的 index key。
     at(index: number): T|undefined{
         const dep = Notifier.instance.track(this, TrackOpTypes.GET, index)
         if (dep && !this.indexKeyDeps.has(index)) {
@@ -85,22 +88,19 @@ export class RxList<T> extends Computed {
         return this.data[index]
     }
 
-    getRaw(index: number) {
-        return this.data[index]
-    }
     forEach(handler: (item: T, index: number) => void) {
         for (let i = 0; i < this.data.length; i++) {
             // 转发到 at 上实现 track
             handler(this.at(i)!, i)
         }
         // track length
-        Notifier.instance.track(this, TrackOpTypes.GET, 'length')
+        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
     }
     [Symbol.iterator]() {
         let index = 0;
         let data = this.data;
         // track length
-        Notifier.instance.track(this, TrackOpTypes.ITERATE, 'length')
+        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
         return {
             next: () => {
                 if (index < data.length) {
@@ -377,9 +377,17 @@ export class RxList<T> extends Computed {
 
     }
 
-    get length() {
-        // TODO
-        return this.data.length
+    get length(): Atom<number> {
+        const source = this
+        return atomComputed(
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return source.data.length
+            },
+            function applyPatch(this: Computed, data: Atom<number>, triggerInfos){
+                data(source.data.length)
+            }
+        )
     }
 
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
