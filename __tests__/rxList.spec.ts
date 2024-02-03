@@ -182,4 +182,106 @@ describe('RxList', () => {
     })
 
 
+    // groupBy
+    test('groupBy', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        const grouped = list.groupBy(item => item.score > 2 ? 'high' : 'low')
+        expect(Array.from(grouped.data.keys())).toMatchObject(['low', 'high'])
+        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
+        expect(grouped.data.get('high')!.data).toMatchObject([{id:3, score: 3}, {id:4, score: 4}])
+
+        // explicit key change
+        list.set(2, {id: 3, score: 1})
+        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
+        expect(grouped.data.get('high')!.data).toMatchObject([{id:4, score: 4}])
+
+
+        list.splice(4, 0, {id: 0, score: 3})
+        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
+        expect(grouped.data.get('high')!.data).toMatchObject([{id:4, score: 4}, {id: 0, score: 3}])
+
+        // splice 在前面，有影响
+        list.splice(3, 0, {id: 5, score: 3})
+        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
+        expect(grouped.data.get('high')!.data).toMatchObject([{id:4, score: 4}, {id: 0, score: 3}, {id: 5, score: 3}])
+
+        list.splice(2, Infinity)
+        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
+        expect(grouped.data.get('high')!.data).toMatchObject([])
+    })
+
+
+    // indexBy
+    test('indexBy', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        const indexed = list.indexBy('id')
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [1, {id:1, score: 1}],
+                [2, {id:2, score: 2}],
+                [3, {id:3, score: 3}],
+                [4, {id:4, score: 4}]
+            ]
+        )
+
+        // explicit key change
+        list.set(2, {id: 3, score: 1})
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [1, {id:1, score: 1}],
+                [2, {id:2, score: 2}],
+                [4, {id:4, score: 4}],
+                [3, {id:3, score: 1}],
+            ]
+        )
+
+
+
+        list.splice(4, 0, {id: 0, score: 3})
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [1, {id:1, score: 1}],
+                [2, {id:2, score: 2}],
+                [4, {id:4, score: 4}],
+                [3, {id:3, score: 1}],
+                [0, {id:0, score: 3}]
+            ]
+        )
+
+
+
+        // splice 在前面，有影响
+        list.splice(3, 0, {id: 5, score: 3})
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [1, {id:1, score: 1}],
+                [2, {id:2, score: 2}],
+                [4, {id:4, score: 4}],
+                [3, {id:3, score: 1}],
+                [0, {id:0, score: 3}],
+                [5, {id:5, score: 3}]
+            ]
+        )
+
+
+        list.splice(2, Infinity)
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [1, {id:1, score: 1}],
+                [2, {id:2, score: 2}],
+            ]
+        )
+    })
 })

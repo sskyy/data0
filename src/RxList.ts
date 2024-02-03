@@ -6,6 +6,7 @@ import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import { atomComputed } from "./computed.js";
+import {RxMap} from "./RxMap.js";
 
 export class RxList<T> extends Computed {
     data!: T[]
@@ -369,12 +370,101 @@ export class RxList<T> extends Computed {
         )
     }
 
-    groupBy() {
+    groupBy<K>(getKey: (item: T) => K) {
+        const source = this
+        return new RxMap<K, RxList<T>>(
+            null,
+            function computation(this: RxMap<any, RxList<T>>) {
+                const groups = new Map()
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                for (let i = 0; i < source.data.length; i++) {
+                    const item = source.data[i]
+                    const key = getKey(item)
+                    if (!groups.has(key)) {
+                        groups.set(key, new RxList([]))
+                    }
+                    groups.get(key)!.push(item)
+                }
+                return groups
+            },
+            function applyPatch(this: RxMap<any, RxList<T>>, data, triggerInfos) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
+                    if (method === 'splice') {
+                        const deleteItems = methodResult as T[] || []
+                        deleteItems.forEach((item) => {
+                            const groupKey = getKey(item)
+                            if (this.data.has(groupKey)) {
+                                this.data.get(groupKey)!.splice(this.data.get(groupKey)!.data.indexOf(item), 1)
+                            }
+                        })
+                        const newItemsInArgs = argv!.slice(2)
+                        newItemsInArgs.forEach((item) => {
+                            const groupKey = getKey(item)
+                            if (!this.data.has(groupKey)) {
+                                this.data.set(groupKey, new RxList([]))
+                            }
+                            this.data.get(groupKey)!.push(item)
+                        })
+                    } else {
+                        // explicit key change
+                        if (oldValue) {
+                            const oldGroupKey = getKey(oldValue as T)
+                            this.data.get(oldGroupKey)!.splice(this.data.get(oldGroupKey)!.data.indexOf(oldValue as T), 1)
+                        }
+
+                        const newGroupKey = getKey(newValue as T)
+                        if (!this.data.has(newGroupKey)) {
+                            this.data.set(newGroupKey, new RxList([]))
+                        }
+                        this.data.get(newGroupKey)!.push(newValue as T)
+                    }
+                })
+            }
+        )
     }
 
-    indexBy() {
+    indexBy(indexKey: keyof T) {
+        const source = this
+        return new RxMap<any, T>(
+            null,
+            function computation(this: RxMap<any, T>) {
+                const map = new Map()
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                for (let i = 0; i < source.data.length; i++) {
+                    const item = source.data[i]
+                    assert(!map.has(item[indexKey]), 'indexBy key is already exist')
+                    map.set(item[indexKey], item)
+                }
+                return map
+            },
+            function applyPatch(this: RxMap<any, T>, data, triggerInfos) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
+                    if (method === 'splice') {
+                        const deleteItems = methodResult as T[] || []
+                        deleteItems.forEach((item) => {
+                            this.data.delete(item[indexKey])
+                        })
+                        const newItemsInArgs = argv!.slice(2)
+                        newItemsInArgs.forEach((item) => {
+                            assert(!this.data.has(item[indexKey]), 'indexBy key is already exist')
+                            this.data.set(item[indexKey], item)
+                        })
+                    } else {
+                        // explicit key change
+                        this.data.delete((oldValue as T)[indexKey])
+                        this.data.set((newValue as T)[indexKey], newValue as T)
+                    }
+                })
+            }
+        )
     }
 
     get length(): Atom<number> {

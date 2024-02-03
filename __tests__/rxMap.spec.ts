@@ -1,6 +1,4 @@
-import { RxList } from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {autorun} from "../src/autorun.js";
 import {RxMap} from "../src/RxMap.js";
 
 describe('RxMap', () => {

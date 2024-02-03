@@ -11,7 +11,7 @@ import {ITERATE_KEY, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {Atom} from "./atom.js";
 import {RxList} from "./RxList.js";
-import {assert} from "./util.js";
+import {assert, isMap} from "./util.js";
 
 type EntryType = [any, any][]
 type PlainObjectType = {
@@ -26,7 +26,7 @@ export class RxMap<K, V> extends Computed{
 
         // 自己是 source
         if (source) {
-            this.data = new Map(Array.isArray(source) ? source : Object.entries(source))
+            this.data = isMap(source) ? source : new Map(Array.isArray(source) ? source : Object.entries(source))
         }
     }
 
