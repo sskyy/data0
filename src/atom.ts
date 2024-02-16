@@ -44,6 +44,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
         // } else {
         //     value = newValue
         // }
+        if (value === newValue) return
 
         value = newValue
         Notifier.instance.trigger(finalUpdater, TriggerOpTypes.ATOM, { key: 'value', newValue})
