@@ -29,6 +29,32 @@ describe('RxList', () => {
         expect(mapRuns).toBe(5)
     })
 
+    test('map to another list with index', () => {
+        const list = new RxList<number>([1,2,3])
+        let mapRuns = 0
+        const list2 = list.map((item, index) => {
+            mapRuns++
+            return item * index!()
+        })
+        expect(list2.data).toMatchObject([0,2,6])
+        expect(mapRuns).toBe(3)
+
+        // splice 以后仍然保持正确
+        list.splice(1,1)
+        expect(list2.data).toMatchObject([0,6])
+        expect(mapRuns).toBe(3)
+
+        // splice 添加元素
+        list.splice(1,0, 3)
+        expect(list2.data).toMatchObject([0,3,6])
+        expect(mapRuns).toBe(4)
+
+        // 通过 set 修改元素
+        list.set(1, 4)
+        expect(list2.data).toMatchObject([0,4,6])
+        expect(mapRuns).toBe(5)
+    })
+
     test('reduce', () => {
         const list = new RxList<{id:number, score: number}>([
             {id:1, score: 1},

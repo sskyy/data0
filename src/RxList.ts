@@ -1,5 +1,5 @@
 import {ApplyPatchType, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
-import {Atom} from "./atom.js";
+import {Atom, atom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
@@ -55,6 +55,14 @@ export class RxList<T> extends Computed {
         if (this.indexKeyDeps?.size > 0){
             for (let i = start; i < changedIndexEnd; i++) {
                 Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues[i]})
+            }
+        }
+
+        if (this.atomIndexes) {
+            this.atomIndexes.splice(start, deleteCount, ...items.map((_, index) => atom(index + start)))
+            for (let i = start; i < changedIndexEnd; i++) {
+                // 注意这里的 ?. ，因为 splice 之后可能长度不够了。
+                this.atomIndexes[i]?.(i)
             }
         }
         // CAUTION 无论有没有 indexKeyDeps 都要触发 Iterator_Key，
@@ -114,13 +122,24 @@ export class RxList<T> extends Computed {
             }
         };
     }
-
+    addAtomIndexesDep() {
+        if (this.atomIndexesDepCount === 0) {
+            this.atomIndexes = this.data.map((_, index) => atom(index))
+        }
+        this.atomIndexesDepCount++
+    }
+    removeAtomIndexesDep() {
+        this.atomIndexesDepCount--
+        if (this.atomIndexesDepCount === 0) {
+            this.atomIndexes = undefined
+        }
+    }
 
     // reactive methods and attr
     map<U>(mapFn: (item: T, index?: Atom<number>) => U, beforePatch?: (triggerInfo: InputTriggerInfo) => any, scheduleRecompute?: DirtyCallback ) : RxList<U>{
         const source = this
         if(mapFn.length>1) {
-            this.atomIndexesDepCount++
+            source.addAtomIndexesDep()
         }
 
         return new RxList(
@@ -181,7 +200,7 @@ export class RxList<T> extends Computed {
             {
                 onDestroy: (effect) => {
                     if (mapFn.length > 1) {
-                        this.atomIndexesDepCount--
+                        source.removeAtomIndexesDep()
                     }
                 }
             },
