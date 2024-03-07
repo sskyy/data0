@@ -1,5 +1,6 @@
 import { RxList } from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
+import { computed} from "../src/computed.js";
 import {autorun} from "../src/autorun.js";
 
 describe('RxList', () => {
@@ -309,5 +310,81 @@ describe('RxList', () => {
                 [2, {id:2, score: 2}],
             ]
         )
+    })
+})
+
+describe('RxList Unique Match', () => {
+    test('createUniqueMatch using object item as key', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        let innerRuns = 0
+
+        const uniqueMatch = list.createUniqueMatch()
+        const selectedList = uniqueMatch.map((selected) => {
+            return computed(() => {
+                innerRuns++
+                return selected()
+            })
+        })
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false])
+
+        expect(innerRuns).toBe(4)
+
+        uniqueMatch.set(list.data[1])
+        expect(selectedList.data.map(value => value())).toMatchObject([false, true, false, false])
+
+        expect(innerRuns).toBe(5)
+
+        uniqueMatch.set(list.data[2])
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false])
+        expect(innerRuns).toBe(7)
+
+        list.push({id:5, score: 5})
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false, false])
+
+        list.unshift({id:0, score: 0})
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, true, false, false])
+    })
+
+    test('createUniqueMatch using index key', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        let innerRuns = 0
+
+        const uniqueMatch = list.createUniqueMatch(true)
+        const selectedList = uniqueMatch.map((selected) => {
+            return computed(() => {
+                innerRuns++
+                return selected()
+            })
+        })
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false])
+        expect(innerRuns).toBe(4)
+
+        uniqueMatch.set(1)
+        expect(selectedList.data.map(value => value())).toMatchObject([false, true, false, false])
+
+        expect(innerRuns).toBe(5)
+
+        uniqueMatch.set(2)
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false])
+        expect(innerRuns).toBe(7)
+
+        list.push({id:5, score: 5})
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false, false])
+
+        list.unshift({id:0, score: 0})
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false, false, false])
+
     })
 })

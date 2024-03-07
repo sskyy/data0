@@ -1,11 +1,10 @@
-import {ApplyPatchType, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
+import {ApplyPatchType, atomComputed, CallbacksType, Computed, computed, DirtyCallback, GetterType} from "./computed.js";
 import {Atom, atom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
-import { atomComputed } from "./computed.js";
 import {RxMap} from "./RxMap.js";
 
 export class RxList<T> extends Computed {
@@ -502,5 +501,106 @@ export class RxList<T> extends Computed {
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
     onUntrack(effect: ReactiveEffect) {
 
+    }
+
+    createUniqueMatch(useIndexAsKey = false) {
+        return new RxListUniqueMatch(this, useIndexAsKey)
+    }
+}
+
+export class RxListUniqueMatch<T> {
+    public currentIndicator = atom<Atom<boolean>>(null)
+    public currentValue = atom<T|number|null>(null)
+    public itemsWithIndicator?:RxList<[Atom<boolean>, T ]>
+    public itemsWithIndicatorAndIndex?:RxList<[Atom<boolean>, T, Atom<number>]>
+    public itemToIndicator?:WeakMap<any, Atom<boolean>>
+    public watchIndex?: Computed
+    constructor(public source: RxList<T>, public useIndexAsKey = false) {
+        const matchObj = this
+
+    }
+    createItemsWithIndicator() {
+        this.itemsWithIndicator = this.source.map((item) => {
+            const indicator = atom(false)
+            if(!this.useIndexAsKey && typeof item === 'object') {
+                if (!this.itemToIndicator) this.itemToIndicator = new WeakMap()
+                this.itemToIndicator.set(item, indicator)
+            }
+            return [indicator, item]
+        })
+
+
+        const matchObj = this
+        // 一定要放到 itemsWithIndicator 后面，才能保证 computed patch 的时候能拿到已经更新好的 itemsWithIndicator
+        if (this.useIndexAsKey && !this.watchIndex) {
+            this.watchIndex = computed(
+                function applyPatch( this: Computed) {
+                    this.manualTrack(matchObj.itemsWithIndicator!, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                    return null
+                },
+                function applyPatch(){
+                    const currentValue = matchObj.currentValue()
+                    if (currentValue !== null) {
+                        // 重新触发一下。
+                        matchObj.set(currentValue)
+                    }
+                })
+        }
+
+    }
+    createItemsWithIndicatorAndIndex() {
+        if (!this.itemsWithIndicator) this.createItemsWithIndicator()
+
+        this.itemsWithIndicatorAndIndex = this.itemsWithIndicator!.map(([indicator, item], index) => {
+            return [indicator, item, index!]
+        })
+    }
+    set(value: T|number) {
+        this.currentValue(value)
+
+        if (this.useIndexAsKey) {
+            assert(!!this.source.data[value as number], 'value not in source')
+        } else {
+            assert(this.source.data.includes(value as T), 'value not in source')
+        }
+
+        const lastIndicator = this.currentIndicator() as Atom<boolean>|null
+        if (lastIndicator) {
+            lastIndicator(false)
+        }
+
+        let newIndicator: Atom<boolean>|undefined
+        if (this.useIndexAsKey) {
+             newIndicator =  this.itemsWithIndicator?.at(value as number)![0]
+            // itemsWithIndicatorAndIndex 是用 itemsWithIndicator 派生的，所以只要管 itemsWithIndicator 就行了。
+        } else {
+             newIndicator = this.itemToIndicator ?
+                this.itemToIndicator?.get(value)! :
+                this.itemsWithIndicator?.at(this.source.data.indexOf(value as T))![0]
+        }
+
+        if (newIndicator) {
+            newIndicator(true)
+            this.currentIndicator(newIndicator)
+        }
+
+    }
+    map<U>(mapFn: (...args: any[]) => U) {
+        if (mapFn.length > 2 && !this.itemsWithIndicatorAndIndex) {
+            this.createItemsWithIndicatorAndIndex()
+        } else if (mapFn.length <= 2 && !this.itemsWithIndicator) {
+            this.createItemsWithIndicator()
+        }
+
+        const container = mapFn.length === 3 ? this.itemsWithIndicatorAndIndex! : this.itemsWithIndicator!
+
+        return container.map((arg: any[]) => mapFn(...arg))
+    }
+    destroy() {
+        this.currentIndicator(null)
+        this.itemsWithIndicator?.destroy()
+        this.itemsWithIndicatorAndIndex?.destroy()
+        this.itemToIndicator = undefined
+        this.watchIndex?.destroy()
     }
 }
