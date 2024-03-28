@@ -503,8 +503,8 @@ export class RxList<T> extends Computed {
 
     }
 
-    createUniqueMatch(useIndexAsKey = false) {
-        return new RxListUniqueMatch(this, useIndexAsKey)
+    createUniqueMatch(useIndexAsKey = false, initialValue?: T|number) {
+        return new RxListUniqueMatch(this, useIndexAsKey, initialValue)
     }
 }
 
@@ -515,13 +515,17 @@ export class RxListUniqueMatch<T> {
     public itemsWithIndicatorAndIndex?:RxList<[Atom<boolean>, T, Atom<number>]>
     public itemToIndicator?:WeakMap<any, Atom<boolean>>
     public watchIndex?: Computed
-    constructor(public source: RxList<T>, public useIndexAsKey = false) {
-        const matchObj = this
-
+    constructor(public source: RxList<T>, public useIndexAsKey = false, initialValue?: T|number) {
+        if (initialValue !== undefined) {
+            this.currentValue(initialValue)
+        }
     }
     createItemsWithIndicator() {
         this.itemsWithIndicator = this.source.map((item) => {
-            const indicator = atom(false)
+            const matched = this.useIndexAsKey ? false : item === this.currentValue.raw
+            const indicator = atom(matched)
+            if (matched) this.currentIndicator(indicator)
+
             if(!this.useIndexAsKey && typeof item === 'object') {
                 if (!this.itemToIndicator) this.itemToIndicator = new WeakMap()
                 this.itemToIndicator.set(item, indicator)
@@ -546,12 +550,18 @@ export class RxListUniqueMatch<T> {
                     }
                 })
         }
-
     }
     createItemsWithIndicatorAndIndex() {
         if (!this.itemsWithIndicator) this.createItemsWithIndicator()
 
         this.itemsWithIndicatorAndIndex = this.itemsWithIndicator!.map(([indicator, item], index) => {
+            if (this.useIndexAsKey)  {
+                if (index?.raw === this.currentValue.raw) {
+                    indicator(true)
+                    this.currentIndicator(indicator)
+                }
+            }
+
             return [indicator, item, index!]
         })
     }

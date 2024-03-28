@@ -324,25 +324,25 @@ describe('RxList Unique Match', () => {
 
         let innerRuns = 0
 
-        const uniqueMatch = list.createUniqueMatch()
+        const uniqueMatch = list.createUniqueMatch(false, list.at(0))
         const selectedList = uniqueMatch.map((selected) => {
             return computed(() => {
                 innerRuns++
                 return selected()
             })
         })
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false])
+        expect(selectedList.data.map(value => value())).toMatchObject([true, false, false, false])
 
         expect(innerRuns).toBe(4)
 
         uniqueMatch.set(list.data[1])
         expect(selectedList.data.map(value => value())).toMatchObject([false, true, false, false])
 
-        expect(innerRuns).toBe(5)
+        expect(innerRuns).toBe(6)
 
         uniqueMatch.set(list.data[2])
         expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false])
-        expect(innerRuns).toBe(7)
+        expect(innerRuns).toBe(8)
 
         list.push({id:5, score: 5})
         expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false, false])
