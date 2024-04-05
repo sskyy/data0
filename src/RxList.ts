@@ -6,6 +6,7 @@ import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
+import {ManualCleanup} from "./manualCleanup.js";
 
 export class RxList<T> extends Computed {
     data!: T[]
@@ -150,7 +151,7 @@ export class RxList<T> extends Computed {
                     const getFrame = ReactiveEffect.collectEffect!()
                     // CAUTION 注意这里的 item 要用 at 拿包装过的 reactive 对象
                     const newItem = mapFn(source.at(index)!, source.atomIndexes?.[index])
-                    this.effectFramesArray![index] = getFrame()
+                    this.effectFramesArray![index] = getFrame() as ReactiveEffect[]
                     return newItem
                 })
             },
@@ -170,7 +171,7 @@ export class RxList<T> extends Computed {
                             const item = source.at(index+ argv![0])!
                             const getFrame = this.collectEffect()
                             const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]])
-                            effectFrames![index] = getFrame()
+                            effectFrames![index] = getFrame() as ReactiveEffect[]
                             return newItem
                         })
                         this.splice(argv![0], argv![1], ...newItems)
@@ -187,7 +188,7 @@ export class RxList<T> extends Computed {
                         const index = key as number
                         const getFrame = this.collectEffect()
                         this.set(index, mapFn(source.at(index)!, source.atomIndexes?.[index]))
-                        const newFrame = getFrame()
+                        const newFrame = getFrame() as ReactiveEffect[]
                         this.effectFramesArray![index].forEach((effect) => {
                             this.destroyEffect(effect)
                         })
@@ -217,7 +218,7 @@ export class RxList<T> extends Computed {
                 for(let i = 0; i < source.data.length; i++) {
                     const getFrame = ReactiveEffect.collectEffect!()
                     reduceFn(this, source.data[i], i)
-                    this.effectFramesArray![i] = getFrame()
+                    this.effectFramesArray![i] = getFrame() as ReactiveEffect[]
                 }
                 return this.data
             },
@@ -233,7 +234,7 @@ export class RxList<T> extends Computed {
                     for(let i = 0; i < newItemsInArgs.length; i++) {
                         const getFrame = ReactiveEffect.collectEffect!()
                         reduceFn(this, newItemsInArgs[i], i + originLength)
-                        this.effectFramesArray![i] = getFrame()
+                        this.effectFramesArray![i] = getFrame() as ReactiveEffect[]
                     }
                 })
             }
@@ -508,7 +509,7 @@ export class RxList<T> extends Computed {
     }
 }
 
-export class RxListUniqueMatch<T> {
+export class RxListUniqueMatch<T> extends ManualCleanup{
     public currentIndicator = atom<Atom<boolean>>(null)
     public currentValue = atom<T|number|null>(null)
     public itemsWithIndicator?:RxList<[Atom<boolean>, T ]>
@@ -516,6 +517,7 @@ export class RxListUniqueMatch<T> {
     public itemToIndicator?:WeakMap<any, Atom<boolean>>
     public watchIndex?: Computed
     constructor(public source: RxList<T>, public useIndexAsKey = false, initialValue?: T|number) {
+        super()
         if (initialValue !== undefined) {
             this.currentValue(initialValue)
         }

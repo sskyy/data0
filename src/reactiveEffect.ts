@@ -1,9 +1,9 @@
 import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
 import {DebuggerEvent, maxMarkerBits, Notifier} from "./notify.js";
-import { assert} from "./util.js";
+import {ManualCleanup} from "./manualCleanup.js";
 
-export type EffectCollectFrame = ReactiveEffect[]
-export class ReactiveEffect {
+
+export class ReactiveEffect extends ManualCleanup {
     static activeScopes: ReactiveEffect[] = []
 
     static destroy(effect: ReactiveEffect, fromParent?: boolean) {
@@ -30,16 +30,6 @@ export class ReactiveEffect {
         effect.onDestroy?.(effect)
     }
 
-    static effectCollectFrames: EffectCollectFrame[] = []
-    static collectEffect() {
-        const frame: EffectCollectFrame = []
-        ReactiveEffect.effectCollectFrames.push(frame)
-        return () => {
-            assert(ReactiveEffect.effectCollectFrames.at(-1) === frame, 'collect effect frame error')
-            return ReactiveEffect.effectCollectFrames.pop()!
-        }
-    }
-
     deps: Dep[] = []
     parent?: ReactiveEffect
     children: ReactiveEffect[] = []
@@ -47,6 +37,7 @@ export class ReactiveEffect {
 
     constructor(public active: boolean) {
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
+        super();
         if (!active) return
 
         if (ReactiveEffect.activeScopes.length) {
@@ -55,10 +46,7 @@ export class ReactiveEffect {
             this.index = this.parent!.children.length - 1
         }
 
-        const collectFrame = ReactiveEffect.effectCollectFrames.at(-1)
-        if (collectFrame) {
-            collectFrame.push(this)
-        }
+
     }
 
     onDestroy?: (i: ReactiveEffect) => void
