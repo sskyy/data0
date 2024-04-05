@@ -145,6 +145,10 @@ export class Computed extends ReactiveEffect{
   }
   recompute = (forceRecompute = false) => {
     if (!this.isDirty && !forceRecompute) return
+
+    // 可以用于清理一些用户自己的副作用。比如说用户用 computed 创建有内部副作用的对象。
+    this.callbacks?.onRecompute?.(this.data)
+
     if (forceRecompute || !this.applyPatch) {
       // 默认行为，重算并且重新收集依赖
       const newData = super.run()
