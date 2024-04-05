@@ -1,4 +1,4 @@
-import {computed, destroyComputed} from "../src/computed";
+import {computed, destroyComputed, withCleanup} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {describe, expect, test} from "vitest";
@@ -107,6 +107,28 @@ describe('computed life cycle', () => {
         b(2)
         // destroy 外面之后，里面的 computed 也要全部回收
         expect(innerRuns).toBe(4)
+
+    })
+})
+
+describe('computed return object with internal side effect', () => {
+    test('should call cleanup method', () => {
+        let destroyCalled = 0
+        class InternalWithSideEffect {
+            destroy() {
+                destroyCalled ++
+            }
+        }
+
+        const run = atom(1)
+        computed(() => {
+            run()
+            return withCleanup(new InternalWithSideEffect())
+        })
+
+        expect(destroyCalled).toBe(0)
+        run(2)
+        expect(destroyCalled).toBe(1)
 
     })
 })
