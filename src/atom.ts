@@ -7,9 +7,10 @@ import {setDebugName} from "./debug";
 export type UpdateFn<T> = (prev: T) => T
 
 // export type Atom<T = any> = ((newValue?: any| UpdateFn<T>) => any) & { __v_isAtom: boolean } & T
-export type Atom<T = any> = T
-    & { __v_isAtom: true, raw: T }
+export type AtomBase<T> = { __v_isAtom: true, raw: T }
     & { (newValue?: any) : T }
+
+export type Atom<T = any> = T extends object ?  T & AtomBase<T> : AtomBase<T>
 
 export type AtomInitialType = any
 

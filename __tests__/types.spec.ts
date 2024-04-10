@@ -1,5 +1,5 @@
-import {atom} from "../src/atom";
-import {describe, test, expectTypeOf} from "vitest";
+import {atom, AtomBase} from "../src/atom";
+import {describe, test, expectTypeOf, assertType} from "vitest";
 
 type ComplexObject = {
     key: string,
@@ -28,6 +28,14 @@ describe("types test", () => {
         const e = atom(true)
         expectTypeOf(e()).toEqualTypeOf<boolean>()
     })
+
+    test('atom any type', () => {
+        const a = atom<any>(null)
+        expectTypeOf(a()).toEqualTypeOf<any>()
+        assertType<AtomBase<any>>(a)
+        assertType<true>(a.__v_isAtom)
+    })
+
 })
 
 

@@ -1,4 +1,13 @@
-import {ApplyPatchType, atomComputed, CallbacksType, Computed, computed, DirtyCallback, GetterType} from "./computed.js";
+import {
+    ApplyPatchType,
+    atomComputed,
+    CallbacksType,
+    Computed,
+    computed,
+    destroyComputed,
+    DirtyCallback,
+    GetterType
+} from "./computed.js";
 import {Atom, atom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier} from "./notify.js";
@@ -227,7 +236,7 @@ export class RxList<T> extends Computed {
                 // FIXME 收集 effectFrames 没有销毁
                 triggerInfos.forEach((triggerInfo) => {
                     const { method , argv   } = triggerInfo
-                    assert(method === 'splice' && argv![0] === source.length - argv!.slice(2).length && argv![1] === 0, 'reduce can only support append')
+                    assert(method === 'splice' && argv![0] === source.data.length - argv!.slice(2).length && argv![1] === 0, 'reduce can only support append')
                     const originLength = this.data.length
                     // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                     const newItemsInArgs = argv!.slice(2)
@@ -515,7 +524,7 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
     public itemsWithIndicator?:RxList<[Atom<boolean>, T ]>
     public itemsWithIndicatorAndIndex?:RxList<[Atom<boolean>, T, Atom<number>]>
     public itemToIndicator?:WeakMap<any, Atom<boolean>>
-    public watchIndex?: Computed
+    public watchIndex?: Atom<null>
     constructor(public source: RxList<T>, public useIndexAsKey = false, initialValue?: T|number) {
         super()
         if (initialValue !== undefined) {
@@ -540,7 +549,7 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
         // 一定要放到 itemsWithIndicator 后面，才能保证 computed patch 的时候能拿到已经更新好的 itemsWithIndicator
         if (this.useIndexAsKey && !this.watchIndex) {
             this.watchIndex = computed(
-                function applyPatch( this: Computed) {
+                function manualTrack( this: Computed) {
                     this.manualTrack(matchObj.itemsWithIndicator!, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                     return null
                 },
@@ -613,6 +622,6 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
         this.itemsWithIndicator?.destroy()
         this.itemsWithIndicatorAndIndex?.destroy()
         this.itemToIndicator = undefined
-        this.watchIndex?.destroy()
+        this.watchIndex&& destroyComputed(this.watchIndex)
     }
 }
