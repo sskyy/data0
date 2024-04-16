@@ -326,7 +326,7 @@ describe('RxList Unique Match', () => {
         let innerRuns = 0
 
         const uniqueMatch = list.createUniqueMatch(false, atom(list.at(0)!))
-        const selectedList = uniqueMatch.map((selected) => {
+        const selectedList = uniqueMatch.map((_, selected) => {
             return computed(() => {
                 innerRuns++
                 return selected()
@@ -363,7 +363,7 @@ describe('RxList Unique Match', () => {
         let innerRuns = 0
 
         const uniqueMatch = list.createUniqueMatch(true)
-        const selectedList = uniqueMatch.map((selected) => {
+        const selectedList = uniqueMatch.map((_, selected) => {
             return computed(() => {
                 innerRuns++
                 return selected()

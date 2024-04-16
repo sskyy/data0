@@ -521,8 +521,8 @@ export class RxList<T> extends Computed {
 export class RxListUniqueMatch<T> extends ManualCleanup{
     public currentIndicator = atom<Atom<boolean>>(null)
     public currentValue: Atom<T>|Atom<number|null>
-    public itemsWithIndicator?:RxList<[Atom<boolean>, T ]>
-    public itemsWithIndicatorAndIndex?:RxList<[Atom<boolean>, T, Atom<number>]>
+    public itemsWithIndicator?:RxList<[T, Atom<boolean> ]>
+    public itemsWithIndicatorAndIndex?:RxList<[T, Atom<boolean>, Atom<number>]>
     public itemToIndicator?:WeakMap<any, Atom<boolean>>
     public watchIndex?: Atom<null>
     constructor(public source: RxList<T>, public useIndexAsKey = false, currentValue?: Atom<T>|Atom<number|null>) {
@@ -543,7 +543,7 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
                 if (!this.itemToIndicator) this.itemToIndicator = new WeakMap()
                 this.itemToIndicator.set(item, indicator)
             }
-            return [indicator, item]
+            return [item, indicator]
         })
 
 
@@ -567,7 +567,7 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
     createItemsWithIndicatorAndIndex() {
         if (!this.itemsWithIndicator) this.createItemsWithIndicator()
 
-        this.itemsWithIndicatorAndIndex = this.itemsWithIndicator!.map(([indicator, item], index) => {
+        this.itemsWithIndicatorAndIndex = this.itemsWithIndicator!.map(([item, indicator], index) => {
             if (this.useIndexAsKey)  {
                 if (index?.raw === this.currentValue.raw) {
                     indicator(true)
@@ -575,7 +575,7 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
                 }
             }
 
-            return [indicator, item, index!]
+            return [item, indicator, index!]
         })
     }
     set(value: T|number) {
@@ -594,12 +594,12 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
 
         let newIndicator: Atom<boolean>|undefined
         if (this.useIndexAsKey) {
-             newIndicator =  this.itemsWithIndicator?.at(value as number)![0]
+             newIndicator =  this.itemsWithIndicator?.at(value as number)![1]
             // itemsWithIndicatorAndIndex 是用 itemsWithIndicator 派生的，所以只要管 itemsWithIndicator 就行了。
         } else {
              newIndicator = this.itemToIndicator ?
                 this.itemToIndicator?.get(value)! :
-                this.itemsWithIndicator?.at(this.source.data.indexOf(value as T))![0]
+                this.itemsWithIndicator?.at(this.source.data.indexOf(value as T))![1]
         }
 
         if (newIndicator) {
