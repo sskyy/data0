@@ -1,6 +1,6 @@
 import {Notifier} from "./notify";
 import {TrackOpTypes, TriggerOpTypes} from './operations'
-import {assert, def, isPlainObject, isStringOrNumber} from "./util";
+import {def, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
 import {setDebugName} from "./debug";
 
@@ -27,8 +27,6 @@ type ConvertFromInitialValue<T>  = T extends true ? boolean :
 export function atom<T>(initValue: T, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<ConvertFromInitialValue<T>>
 export function atom<T>(initValue: null, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<T|null>
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
-    // FIXME 是不是能够允许？下面已经改成允许了。
-    assert(!isAtom(initValue), 'cant wrap atom inside atom')
 
     let value: typeof initValue|undefined  = initValue
 

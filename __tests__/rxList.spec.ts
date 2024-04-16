@@ -2,6 +2,7 @@ import { RxList } from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
 import { computed} from "../src/computed.js";
 import {autorun} from "../src/autorun.js";
+import {atom} from "../src/atom.js";
 
 describe('RxList', () => {
     test('map to another list', () => {
@@ -324,7 +325,7 @@ describe('RxList Unique Match', () => {
 
         let innerRuns = 0
 
-        const uniqueMatch = list.createUniqueMatch(false, list.at(0))
+        const uniqueMatch = list.createUniqueMatch(false, atom(list.at(0)!))
         const selectedList = uniqueMatch.map((selected) => {
             return computed(() => {
                 innerRuns++

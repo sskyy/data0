@@ -513,22 +513,24 @@ export class RxList<T> extends Computed {
 
     }
 
-    createUniqueMatch(useIndexAsKey = false, initialValue?: T|number) {
+    createUniqueMatch(useIndexAsKey = false, initialValue?: Atom<T>|Atom<number|null>) {
         return new RxListUniqueMatch(this, useIndexAsKey, initialValue)
     }
 }
 
 export class RxListUniqueMatch<T> extends ManualCleanup{
     public currentIndicator = atom<Atom<boolean>>(null)
-    public currentValue = atom<T|number|null>(null)
+    public currentValue: Atom<T>|Atom<number|null>
     public itemsWithIndicator?:RxList<[Atom<boolean>, T ]>
     public itemsWithIndicatorAndIndex?:RxList<[Atom<boolean>, T, Atom<number>]>
     public itemToIndicator?:WeakMap<any, Atom<boolean>>
     public watchIndex?: Atom<null>
-    constructor(public source: RxList<T>, public useIndexAsKey = false, initialValue?: T|number) {
+    constructor(public source: RxList<T>, public useIndexAsKey = false, currentValue?: Atom<T>|Atom<number|null>) {
         super()
-        if (initialValue !== undefined) {
-            this.currentValue(initialValue)
+        if (currentValue !== undefined) {
+            this.currentValue = currentValue
+        } else {
+            this.currentValue = this.useIndexAsKey ? atom<number|null>(null) : atom<T>(null)
         }
     }
     createItemsWithIndicator() {
