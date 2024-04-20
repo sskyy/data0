@@ -312,6 +312,46 @@ describe('RxList', () => {
             ]
         )
     })
+
+    test('indexBy with custom key', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        const indexed = list.indexBy(item => item.id + 1)
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [2, {id:1, score: 1}],
+                [3, {id:2, score: 2}],
+                [4, {id:3, score: 3}],
+                [5, {id:4, score: 4}]
+            ]
+        )
+
+        // explicit key change
+        list.set(2, {id: 3, score: 1})
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [2, {id:1, score: 1}],
+                [3, {id:2, score: 2}],
+                [5, {id:4, score: 4}],
+                [4, {id:3, score: 1}],
+            ]
+        )
+
+        list.splice(1, 1, {id: 0, score: 3})
+        expect(Array.from(indexed.data.entries())).toMatchObject(
+            [
+                [2, {id:1, score: 1}],
+                [5, {id:4, score: 4}],
+                [4, {id:3, score: 1}],
+                [1, {id:0, score: 3}],
+            ]
+        )
+    })
 })
 
 describe('RxList Unique Match', () => {

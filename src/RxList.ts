@@ -455,7 +455,7 @@ export class RxList<T> extends Computed {
         )
     }
 
-    indexBy(indexKey: keyof T) {
+    indexBy(inputIndexKey: keyof T|((item: T) => any)) {
         const source = this
         return new RxMap<any, T>(
             null,
@@ -465,8 +465,9 @@ export class RxList<T> extends Computed {
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
                 for (let i = 0; i < source.data.length; i++) {
                     const item = source.data[i]
-                    assert(!map.has(item[indexKey]), 'indexBy key is already exist')
-                    map.set(item[indexKey], item)
+                    const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(item) : item[inputIndexKey]
+                    assert(!map.has(indexKey), 'indexBy key is already exist')
+                    map.set(indexKey, item)
                 }
                 return map
             },
@@ -478,17 +479,22 @@ export class RxList<T> extends Computed {
                     if (method === 'splice') {
                         const deleteItems = methodResult as T[] || []
                         deleteItems.forEach((item) => {
-                            this.data.delete(item[indexKey])
+                            const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(item) : item[inputIndexKey]
+                            this.data.delete(indexKey)
                         })
                         const newItemsInArgs = argv!.slice(2)
                         newItemsInArgs.forEach((item) => {
-                            assert(!this.data.has(item[indexKey]), 'indexBy key is already exist')
-                            this.data.set(item[indexKey], item)
+                            const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(item) : item[inputIndexKey]
+
+                            assert(!this.data.has(indexKey), 'indexBy key is already exist')
+                            this.data.set(indexKey, item)
                         })
                     } else {
                         // explicit key change
-                        this.data.delete((oldValue as T)[indexKey])
-                        this.data.set((newValue as T)[indexKey], newValue as T)
+                        const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(oldValue as T) : (oldValue as T)[inputIndexKey]
+                        this.data.delete(indexKey)
+                        const newKey = typeof inputIndexKey === 'function' ? inputIndexKey(newValue as T) : (newValue as T)[inputIndexKey]
+                        this.data.set(newKey, newValue as T)
                     }
                 })
             }
