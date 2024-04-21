@@ -11,3 +11,4 @@ export { RxList,RxListUniqueMatch } from './RxList'
 export {RxMap} from './RxMap'
 export { AsyncRxSlice } from "./AsyncRxSlice.js";
 export { ManualCleanup } from "./manualCleanup.js";
+export { autorun } from "./autorun.js";
