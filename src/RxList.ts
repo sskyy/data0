@@ -1,22 +1,11 @@
-import {
-    ApplyPatchType,
-    atomComputed,
-    CallbacksType,
-    Computed,
-    computed,
-    destroyComputed,
-    DirtyCallback,
-    GetterType
-} from "./computed.js";
-import {Atom, atom} from "./atom.js";
+import {ApplyPatchType, atomComputed, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
+import {Atom, atom, isAtom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
-import {ManualCleanup} from "./manualCleanup.js";
-import {isAtom} from "axii";
 
 export class RxList<T> extends Computed {
     data!: T[]
