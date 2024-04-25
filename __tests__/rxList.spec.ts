@@ -390,6 +390,9 @@ describe('RxList Unique Match', () => {
 
         list.unshift({id:0, score: 0})
         expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, true, false, false])
+
+        uniqueMatch.set(null)
+        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false, false, false])
     })
 
     test('createUniqueMatch using index key', () => {

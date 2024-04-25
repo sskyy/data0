@@ -584,35 +584,39 @@ export class RxListUniqueMatch<T> extends ManualCleanup{
             return [item, indicator, index!]
         })
     }
-    set(value: T|number) {
+    set(value: T|null|number) {
         this.currentValue(value)
 
-        if (this.useIndexAsKey) {
-            assert(!!this.source.data[value as number], 'value not in source')
-        } else {
-            assert(this.source.data.includes(value as T), 'value not in source')
+        if (value !== null) {
+            if (this.useIndexAsKey) {
+                assert(!!this.source.data[value as number], 'value not in source')
+            } else {
+                assert(this.source.data.includes(value as T), 'value not in source')
+            }
         }
+
 
         const lastIndicator = this.currentIndicator() as Atom<boolean>|null
         if (lastIndicator) {
             lastIndicator(false)
         }
 
-        let newIndicator: Atom<boolean>|undefined
-        if (this.useIndexAsKey) {
-             newIndicator =  this.itemsWithIndicator?.at(value as number)![1]
-            // itemsWithIndicatorAndIndex 是用 itemsWithIndicator 派生的，所以只要管 itemsWithIndicator 就行了。
-        } else {
-             newIndicator = this.itemToIndicator ?
-                this.itemToIndicator?.get(value)! :
-                this.itemsWithIndicator?.at(this.source.data.indexOf(value as T))![1]
-        }
+        if (value !== null) {
+            let newIndicator: Atom<boolean>|undefined
+            if (this.useIndexAsKey) {
+                newIndicator =  this.itemsWithIndicator?.at(value as number)![1]
+                // itemsWithIndicatorAndIndex 是用 itemsWithIndicator 派生的，所以只要管 itemsWithIndicator 就行了。
+            } else {
+                newIndicator = this.itemToIndicator ?
+                    this.itemToIndicator?.get(value)! :
+                    this.itemsWithIndicator?.at(this.source.data.indexOf(value as T))![1]
+            }
 
-        if (newIndicator) {
-            newIndicator(true)
-            this.currentIndicator(newIndicator)
+            if (newIndicator) {
+                newIndicator(true)
+                this.currentIndicator(newIndicator)
+            }
         }
-
     }
     map<U>(mapFn: (...args: any[]) => U) {
         if (mapFn.length > 2 && !this.itemsWithIndicatorAndIndex) {
