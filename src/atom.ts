@@ -33,7 +33,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
     // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
     function updater (newValue?: typeof initValue) {
         if (arguments.length === 0) {
-            Notifier.instance.track(finalUpdater, TrackOpTypes.ATOM, 'value')
+            Notifier.instance.track(finalProxy, TrackOpTypes.ATOM, 'value')
             return value
         }
 
@@ -44,9 +44,9 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
         //     value = newValue
         // }
         if (value === newValue) return
-
+        const oldValue = value
         value = newValue
-        Notifier.instance.trigger(finalUpdater, TriggerOpTypes.ATOM, { key: 'value', newValue})
+        Notifier.instance.trigger(finalProxy, TriggerOpTypes.ATOM, { key: 'value', newValue, oldValue})
     }
 
     const handler:Handler = {
@@ -58,7 +58,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
             // TODO 是不是也要像 reactive 一样层层包装才行？？？，不然当把这个值传给 dom 元素的时候，它就已经不能被识别出来，也就不能 reactive 了。
             if (isPlainObject(value)) {
-                Notifier.instance.track(finalUpdater, TrackOpTypes.ATOM, 'value')
+                Notifier.instance.track(finalProxy, TrackOpTypes.ATOM, 'value')
             }
             // CAUTION 针对非  class 的对象提供深度的获取的能力
             return Reflect.get(isPlainObject(value) ? value : finalUpdater, key)
@@ -85,7 +85,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
     Object.assign( finalUpdater, {
         [Symbol.toPrimitive](hint: string) {
-            Notifier.instance.track(finalUpdater, TrackOpTypes.ATOM, 'value')
+            Notifier.instance.track(finalProxy, TrackOpTypes.ATOM, 'value')
             if ((!hint || hint === 'default') && isStringOrNumber(value)) {
                 return value
             } else if (hint === 'number' && typeof value === 'number' ) {
@@ -104,7 +104,8 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
     }
 
     def(finalUpdater, ReactiveFlags.IS_ATOM, true)
-    return new Proxy(finalUpdater, finalHandler) as Atom<typeof initValue>
+    const finalProxy = new Proxy(finalUpdater, finalHandler) as Atom<typeof initValue>
+    return finalProxy
 }
 
 atom.as = new Proxy({}, {

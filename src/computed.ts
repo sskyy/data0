@@ -180,7 +180,7 @@ export class Computed extends ReactiveEffect {
     manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {
         Notifier.instance.enableTracking()
         // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
-        const dep = Notifier.instance.track(toRaw(target), type, key)
+        const dep = Notifier.instance.track(isAtom(target) ? target: toRaw(target), type, key)
         Notifier.instance.resetTracking()
         return dep
     }

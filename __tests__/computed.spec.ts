@@ -8,6 +8,7 @@ describe('computed basic', () => {
     test('atom & computed', () => {
         const num1 = atom(1)
         const num2 = atom(2)
+        // @ts-ignore
         const num3 = computed(() => num1 + num2)
 
         expect(num3).toShallowEqual(3)

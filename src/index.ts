@@ -7,7 +7,7 @@ export * from './incremental'
 export { isReactivableType }from './util'
 export { LinkedList } from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";
-export { RxList,RxListUniqueMatch } from './RxList'
+export { RxList,RxListUniqueMatch, createSelection } from './RxList'
 export {RxMap} from './RxMap'
 export { AsyncRxSlice } from "./AsyncRxSlice.js";
 export { ManualCleanup } from "./manualCleanup.js";

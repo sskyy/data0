@@ -16,6 +16,7 @@ import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
 import {ManualCleanup} from "./manualCleanup.js";
+import {isAtom} from "axii";
 
 export class RxList<T> extends Computed {
     data!: T[]
@@ -519,121 +520,179 @@ export class RxList<T> extends Computed {
 
     }
 
-    createUniqueMatch(useIndexAsKey = false, initialValue?: Atom<T>|Atom<number|null>) {
-        return new RxListUniqueMatch(this, useIndexAsKey, initialValue)
+    createSelection(currentValues: RxList<T|number>|Atom<T|null|number>, useIndexAsKey = false) {
+        return createSelection(this, currentValues, useIndexAsKey)
     }
 }
 
-export class RxListUniqueMatch<T> extends ManualCleanup{
-    public currentIndicator = atom<Atom<boolean>>(null)
-    public currentValue: Atom<T>|Atom<number|null>
-    public itemsWithIndicator?:RxList<[T, Atom<boolean> ]>
-    public itemsWithIndicatorAndIndex?:RxList<[T, Atom<boolean>, Atom<number>]>
-    public itemToIndicator?:WeakMap<any, Atom<boolean>>
-    public watchIndex?: Atom<null>
-    constructor(public source: RxList<T>, public useIndexAsKey = false, currentValue?: Atom<T>|Atom<number|null>) {
-        super()
-        if (currentValue !== undefined) {
-            this.currentValue = currentValue
-        } else {
-            this.currentValue = this.useIndexAsKey ? atom<number|null>(null) : atom<T>(null)
-        }
-    }
-    createItemsWithIndicator() {
-        this.itemsWithIndicator = this.source.map((item) => {
-            const matched = this.useIndexAsKey ? false : item === this.currentValue.raw
-            const indicator = atom(matched)
-            if (matched) this.currentIndicator(indicator)
 
-            if(!this.useIndexAsKey && typeof item === 'object') {
-                if (!this.itemToIndicator) this.itemToIndicator = new WeakMap()
-                this.itemToIndicator.set(item, indicator)
+export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|number>|Atom<T|null|number>, useIndexAsKey = false): RxList<[T, Atom<boolean>]> {
+    let itemToIndicator:WeakMap<any, Atom<boolean>>|null = new WeakMap<any, Atom<boolean>>()
+
+    return new RxList(
+        null,
+        function computation(this: RxList<[T, Atom<boolean>]>) {
+            this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+            this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+            if (isAtom(currentValues)) {
+                this.manualTrack(currentValues, TrackOpTypes.ATOM, 'value');
+            } else {
+                this.manualTrack(currentValues, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
             }
-            return [item, indicator]
-        })
+            const items: [T, Atom<boolean>][]= source.data.map((item: T, index) => {
+                return [item, atom(false)]
+            })
 
+            items.forEach(([item, indicator]) => {
+                itemToIndicator!.set(item, indicator)
+            })
 
-        const matchObj = this
-        // 一定要放到 itemsWithIndicator 后面，才能保证 computed patch 的时候能拿到已经更新好的 itemsWithIndicator
-        if (this.useIndexAsKey && !this.watchIndex) {
-            this.watchIndex = computed(
-                function manualTrack( this: Computed) {
-                    this.manualTrack(matchObj.itemsWithIndicator!, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                    return null
-                },
-                function applyPatch(){
-                    const currentValue = matchObj.currentValue()
-                    if (currentValue !== null) {
-                        // 重新触发一下。
-                        matchObj.set(currentValue)
-                    }
-                })
-        }
-    }
-    createItemsWithIndicatorAndIndex() {
-        if (!this.itemsWithIndicator) this.createItemsWithIndicator()
-
-        this.itemsWithIndicatorAndIndex = this.itemsWithIndicator!.map(([item, indicator], index) => {
-            if (this.useIndexAsKey)  {
-                if (index?.raw === this.currentValue.raw) {
-                    indicator(true)
-                    this.currentIndicator(indicator)
+            const selectedValues = isAtom(currentValues) ? (currentValues.raw === null ? [] : [currentValues.raw]) : currentValues.data
+            selectedValues.forEach((value) => {
+                if (useIndexAsKey) {
+                    items[value as number]?.[1](true)
+                } else {
+                    const indicator = itemToIndicator!.get(value)
+                    indicator?.(true)
                 }
+            })
+
+            return items
+        },
+        function applyMapArrayPatch(this: RxList<[T, Atom<boolean>]>, data, triggerInfos) {
+            triggerInfos.forEach((triggerInfo) => {
+                // 1. 来自 currentValues 的变化
+                if (triggerInfo.source === currentValues) {
+                    if(!isAtom(currentValues)) {
+                        // 如果是多选，currentValues 只能接受 splice 操作
+                        assert(triggerInfo.method === 'splice', 'currentValues can only support splice')
+                    }
+
+                    const deleteItems = isAtom(currentValues) ? (triggerInfo.oldValue === null ? [] : [triggerInfo.oldValue]) : triggerInfo.methodResult || []
+                    const insertItems = isAtom(currentValues) ? (triggerInfo.newValue === null ? [] : [triggerInfo.newValue]) : triggerInfo.argv!.slice(2)
+                    if(useIndexAsKey) {
+                        (deleteItems as number[]).forEach((index:number) => {
+                            const indicator = this.data[index][1]
+                            indicator(false)
+                        })
+
+                        insertItems.forEach((index:number) => {
+                            const indicator = this.data[index][1]
+                            indicator?.(true)
+                        })
+                    } else {
+                        (deleteItems as T[]).forEach((item:T) => {
+                            const indicator = itemToIndicator?.get(item)
+                            indicator?.(false)
+                        })
+                        insertItems.forEach((item:T) => {
+                            const indicator = itemToIndicator?.get(item)
+                            indicator?.(true)
+                        })
+                    }
+                }
+
+                //2. 来自 source 的变化
+                if (triggerInfo.source === source) {
+                    const { method , argv  , key, oldValue } = triggerInfo
+                    // 只有 useIndexAsKey 的时候才会有 splice 变化
+                    if (method === 'splice') {
+                        const startIndex = argv![0] as number
+                        const deleteCount = argv![1]
+                        const insertCount = argv!.slice(2)!.length
+                        // 更新自己的数据
+                        const deletedItems = this.splice(startIndex, deleteCount, ...(argv!.slice(2) as T[]).map(item => [item, atom(false)] as [T, Atom<boolean>]))
+
+                        if(useIndexAsKey) {
+                            const selectedValues = isAtom(currentValues) ? [currentValues.raw] : currentValues.data
+
+                            const outOfValueIndexes:number[] = []
+                            // 因为 index 产生了变化，所以要更新 indicator
+                            selectedValues.forEach((value, valueIndex) => {
+                                const index = value as number
+                                if (index > this.data.length - 1) {
+                                    outOfValueIndexes.push(valueIndex)
+                                } else {
+                                    // 只有 index 在后面的才是还存在，并且受了影响需要处理的。
+                                    if (index >= startIndex && deleteCount !== insertCount) {
+                                        const indexAfterChange = index + insertCount - deleteCount
+                                        const oldIndexIndicator = itemToIndicator!.get(this.data.at(indexAfterChange)![0]!)!
+                                        oldIndexIndicator(false)
+                                    }
+                                    const newIndicator = this!.data.at(index)![1]
+                                    newIndicator?.(true)
+                                }
+                            })
+
+                            // 处理超出的 index
+                            if (outOfValueIndexes.length > 0) {
+                                if (isAtom(currentValues)) {
+                                    // 不用判断，如果有，肯定就是 currentValues 超过了
+                                    currentValues(null)
+                                } else {
+                                    // 重新触发一下。
+                                    outOfValueIndexes.forEach((valueIndex, index) => {
+                                        // CAUTION 因为删除一个 index 就会变化，所以要减去 index
+                                        currentValues.splice(outOfValueIndexes[0]-index, 0)
+                                    })
+                                }
+                            }
+
+                        } else {
+
+                            // 如果老数据在 currentValues 里面也要删掉
+                            deletedItems.forEach(([deletedItem, indicator]) => {
+                                if (isAtom(currentValues)) {
+                                    if(currentValues.raw === deletedItem) {
+                                        currentValues(null)
+                                    }
+                                } else {
+                                    const indexOfCurrentValue = currentValues.data.indexOf(deletedItem)
+                                    if (indexOfCurrentValue !== -1) {
+                                        currentValues.splice(currentValues.data.indexOf(deletedItem), 1)
+                                    }
+                                }
+                            })
+                        }
+                        return
+                    }
+
+                    // explicit key change
+                    // 更新自身数据
+                    this.data[key as number] = [source.data[key as number], atom(false)]
+
+                    if (useIndexAsKey) {
+                        if (isAtom(currentValues)) {
+                            if (currentValues.raw === key) {
+                                this.data[key as number][1](true)
+                            }
+                        } else {
+                            if (currentValues.data.includes(key as number)) {
+                                this.data[key as number][1](true)
+                            }
+                        }
+                    } else {
+                        if (isAtom(currentValues)) {
+                            if (currentValues.raw === oldValue) {
+                                currentValues(null)
+                            }
+                        } else {
+                            // 如果老数据在 currentValues 里面，要删掉
+                            const oldValueIndex = currentValues.data.indexOf(oldValue as T)
+                            if (oldValueIndex !== -1) {
+                                currentValues.splice(oldValueIndex, 1)
+                            }
+                        }
+                    }
+                }
+            })
+        },
+        undefined,
+        {
+            onDestroy: (effect) => {
+                itemToIndicator = null
             }
-
-            return [item, indicator, index!]
-        })
-    }
-    set(value: T|null|number) {
-        this.currentValue(value)
-
-        if (value !== null) {
-            if (this.useIndexAsKey) {
-                assert(!!this.source.data[value as number], 'value not in source')
-            } else {
-                assert(this.source.data.includes(value as T), 'value not in source')
-            }
-        }
-
-
-        const lastIndicator = this.currentIndicator() as Atom<boolean>|null
-        if (lastIndicator) {
-            lastIndicator(false)
-        }
-
-        if (value !== null) {
-            let newIndicator: Atom<boolean>|undefined
-            if (this.useIndexAsKey) {
-                newIndicator =  this.itemsWithIndicator?.at(value as number)![1]
-                // itemsWithIndicatorAndIndex 是用 itemsWithIndicator 派生的，所以只要管 itemsWithIndicator 就行了。
-            } else {
-                newIndicator = this.itemToIndicator ?
-                    this.itemToIndicator?.get(value)! :
-                    this.itemsWithIndicator?.at(this.source.data.indexOf(value as T))![1]
-            }
-
-            if (newIndicator) {
-                newIndicator(true)
-                this.currentIndicator(newIndicator)
-            }
-        }
-    }
-    map<U>(mapFn: (...args: any[]) => U) {
-        if (mapFn.length > 2 && !this.itemsWithIndicatorAndIndex) {
-            this.createItemsWithIndicatorAndIndex()
-        } else if (mapFn.length <= 2 && !this.itemsWithIndicator) {
-            this.createItemsWithIndicator()
-        }
-
-        const container = mapFn.length === 3 ? this.itemsWithIndicatorAndIndex! : this.itemsWithIndicator!
-
-        return container.map((arg: any[]) => mapFn(...arg))
-    }
-    destroy() {
-        this.currentIndicator(null)
-        this.itemsWithIndicator?.destroy()
-        this.itemsWithIndicatorAndIndex?.destroy()
-        this.itemToIndicator = undefined
-        this.watchIndex&& destroyComputed(this.watchIndex)
-    }
+        },
+    )
 }
+
