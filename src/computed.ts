@@ -157,15 +157,7 @@ export class Computed extends ReactiveEffect {
         if (forceRecompute || !this.applyPatch) {
             // 默认行为，重算并且重新收集依赖
             const newData = super.run()
-            if (isAtom(this.data)) {
-                // 对于返回对象形式的 computed，使用了 withCleanup 标注的对象，会在重算的时候调用 destroy 方法。不需要用户手动写 onRecompute 了。
-                if (cleanupMap.get(this.data.raw)){
-                    cleanupMap.get(this.data.raw)!(this.data.raw)
-                }
-                this.data(newData)
-            } else {
-                replace(this.data, newData)
-            }
+            this.replaceData(newData)
         } else {
             // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
             Notifier.instance.pauseTracking()
@@ -175,6 +167,18 @@ export class Computed extends ReactiveEffect {
         }
 
         this.isDirty = false
+    }
+    // rxList/rxMap 可以覆写。
+    replaceData(newData: any) {
+        if (isAtom(this.data)) {
+            // 对于返回对象形式的 computed，使用了 withCleanup 标注的对象，会在重算的时候调用 destroy 方法。不需要用户手动写 onRecompute 了。
+            if (cleanupMap.get(this.data.raw)){
+                cleanupMap.get(this.data.raw)!(this.data.raw)
+            }
+            this.data(newData)
+        } else {
+            replace(this.data, newData)
+        }
     }
     // 给继承者在 apply catch 中用的 工具函数
     manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {

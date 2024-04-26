@@ -532,3 +532,18 @@ describe('RxList multiple match', () => {
         expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false, false, false])
     })
 })
+
+// chained computed
+describe('RxList chained computed', () => {
+    test('chained computed', () => {
+        const showMore = atom(false)
+        const list = new RxList<number>(null, ()=> {
+            return showMore() ? [1,2,3,4,5] : [1,2,3]
+        })
+        const computedList = list.map(item =>  item * 2)
+        expect(computedList.data).toMatchObject([2,4,6])
+
+        showMore(true)
+        expect(computedList.data).toMatchObject([2,4,6,8,10])
+    })
+})

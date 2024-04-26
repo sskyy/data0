@@ -29,6 +29,16 @@ export class RxMap<K, V> extends Computed{
             this.data = isMap(source) ? source : new Map(Array.isArray(source) ? source : Object.entries(source))
         }
     }
+    replace = (source: EntryType|PlainObjectType) => {
+        this.data.clear()
+        const entries = Array.isArray(source) ? source : Object.entries(source)
+        this.data = new Map(entries)
+        entries.forEach(([key, value]) => {
+            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
+        })
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, {method: 'replace', argv: [source]})
+    }
+    replaceData = this.replace
 
     // set methods
     set(key: K, value: V) {
@@ -52,7 +62,11 @@ export class RxMap<K, V> extends Computed{
     }
 
     clear() {
+        const entries = Array.from(this.data.entries())
         this.data.clear()
+        entries.forEach(([key, value]) => {
+            Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key,  oldValue: value})
+        })
         Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'clear'})
     }
 

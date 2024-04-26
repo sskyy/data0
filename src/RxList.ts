@@ -22,6 +22,9 @@ export class RxList<T> extends Computed {
             this.data = source
         }
     }
+    replaceData(newData: T[]) {
+        this.splice(0, Infinity, ...newData)
+    }
 
     push(...items: T[]) {
         return this.splice(this.data.length, 0, ...items)
