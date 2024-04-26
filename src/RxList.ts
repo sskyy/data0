@@ -23,7 +23,7 @@ export class RxList<T> extends Computed {
         }
     }
     replaceData(newData: T[]) {
-        this.splice(0, Infinity, ...newData)
+        this.splice(0, this.data.length, ...newData)
     }
 
     push(...items: T[]) {
@@ -519,7 +519,7 @@ export class RxList<T> extends Computed {
 
 
 export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|number>|Atom<T|null|number>, useIndexAsKey = false): RxList<[T, Atom<boolean>]> {
-    let itemToIndicator:WeakMap<any, Atom<boolean>>|null = new WeakMap<any, Atom<boolean>>()
+    let itemToIndicator:WeakMap<any, Atom<boolean>>|null = new Map<any, Atom<boolean>>()
 
     return new RxList(
         null,
@@ -573,6 +573,7 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
                             indicator?.(true)
                         })
                     } else {
+                        debugger
                         (deleteItems as T[]).forEach((item:T) => {
                             const indicator = itemToIndicator?.get(item)
                             indicator?.(false)
@@ -592,8 +593,16 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
                         const startIndex = argv![0] as number
                         const deleteCount = argv![1]
                         const insertCount = argv!.slice(2)!.length
+                        const insertItemsWithIndicators = (argv!.slice(2) as T[]).map(item => [item, atom(false)] as [T, Atom<boolean>])
                         // 更新自己的数据
-                        const deletedItems = this.splice(startIndex, deleteCount, ...(argv!.slice(2) as T[]).map(item => [item, atom(false)] as [T, Atom<boolean>]))
+                        const deletedItems = this.splice(startIndex, deleteCount, ...insertItemsWithIndicators)
+                        deletedItems.forEach(([deletedItem, indicator]) => {
+                            itemToIndicator!.delete(deletedItem)
+                        })
+                        insertItemsWithIndicators.forEach(([insertItem, indicator]) => {
+                            itemToIndicator!.set(insertItem, indicator)
+                        })
+
 
                         if(useIndexAsKey) {
                             const selectedValues = isAtom(currentValues) ? [currentValues.raw] : currentValues.data
@@ -651,7 +660,9 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
 
                     // explicit key change
                     // 更新自身数据
+                    itemToIndicator!.delete(oldValue)
                     this.data[key as number] = [source.data[key as number], atom(false)]
+
 
                     if (useIndexAsKey) {
                         if (isAtom(currentValues)) {

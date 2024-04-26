@@ -546,4 +546,26 @@ describe('RxList chained computed', () => {
         showMore(true)
         expect(computedList.data).toMatchObject([2,4,6,8,10])
     })
+
+    test('chained with createSelection', () => {
+        const showMore = atom(false)
+        const selected = new RxList<number>(null, ()=> {
+            return showMore() ? [1,2,3,4,5] : [1,2,3]
+        })
+
+        const list = new RxList([1,2,3,4,5,6,7])
+
+        const selectionList = createSelection(list, selected)
+
+        const computedList = selectionList.map(([_, selected]) => {
+            return selected
+        })
+
+        expect(computedList.data.map(i => i())).toMatchObject([true,true,true, false, false, false, false])
+
+        showMore(true)
+
+        expect(computedList.data.map(i => i())).toMatchObject([true,true,true, true, true, false, false])
+
+    })
 })

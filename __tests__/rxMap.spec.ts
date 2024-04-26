@@ -1,5 +1,6 @@
 import {describe, expect, test} from "vitest";
 import {RxMap} from "../src/RxMap.js";
+import {RxList} from "../src/index.js";
 
 describe('RxMap', () => {
     test('get entries', () => {
@@ -52,6 +53,36 @@ describe('RxMap', () => {
         expect(values.data).toMatchObject([])
     })
 
+    test('chained computed', () => {
+        const rawEdges = [
+            {id: 1, from: '1', to: '2'},
+            {id: 2, from: '1', to: '2'},
+        ]
 
+        const rawEdgesById = new RxMap<string, any>(
+            rawEdges.map(edge => [edge.id, edge]))
+
+        const valuesList = rawEdgesById.values()
+
+        const selectedEdges = new RxList<any>([rawEdges[0]])
+        const valueWithSelected = valuesList.createSelection(selectedEdges)
+
+        const selectedValues = valueWithSelected.map(([_, selected]) => selected)
+
+        expect(selectedValues.data.map(v => v())).toMatchObject([true, false])
+
+        selectedEdges.push(rawEdges[1])
+        expect(selectedValues.data.map(v => v())).toMatchObject([true, true])
+
+        // 新增一个 edge，然后再选中
+        const newEdge = {id: 3, from: '1', to: '2'}
+        rawEdgesById.set('3', newEdge)
+        expect(valuesList.data).toMatchObject([rawEdges[0], rawEdges[1], newEdge])
+        expect(selectedValues.data.map(v => v())).toMatchObject([true, true, false])
+
+        //
+        selectedEdges.push(newEdge)
+        expect(selectedValues.data.map(v => v())).toMatchObject([true, true, true])
+    })
 
 })
