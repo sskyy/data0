@@ -43,11 +43,13 @@ describe('RxList', () => {
 
         // splice 以后仍然保持正确
         list.splice(1,1)
+        expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1])
         expect(list2.data).toMatchObject([0,6])
         expect(mapRuns).toBe(3)
 
         // splice 添加元素
         list.splice(1,0, 3)
+        expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1, 2])
         expect(list2.data).toMatchObject([0,3,6])
         expect(mapRuns).toBe(4)
 

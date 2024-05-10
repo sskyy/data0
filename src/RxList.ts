@@ -47,7 +47,8 @@ export class RxList<T> extends Computed {
 
 
         // CAUTION 不需要触发 length 的变化，因为获取  length 的时候得到就已经是个 computed 了。
-        const changedIndexEnd = deleteItemsCount !== items.length ? this.data.length : start + items.length
+        const newLength = originLength - deleteItemsCount + items.length
+        const changedIndexEnd = deleteItemsCount !== items.length ? newLength : start + items.length
         const oldValues = []
         for (let i = start; i < changedIndexEnd; i++) {
             oldValues[i] = this.data[i]
@@ -62,7 +63,7 @@ export class RxList<T> extends Computed {
 
         if (this.atomIndexes) {
             this.atomIndexes.splice(start, deleteCount, ...items.map((_, index) => atom(index + start)))
-            for (let i = start; i < changedIndexEnd; i++) {
+            for (let i = start; i <changedIndexEnd; i++) {
                 // 注意这里的 ?. ，因为 splice 之后可能长度不够了。
                 this.atomIndexes[i]?.(i)
             }
