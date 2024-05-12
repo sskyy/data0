@@ -85,6 +85,28 @@ describe('RxList', () => {
         expect(mapRuns).toBe(8)
     })
 
+    test('map to another list with cleanups', () => {
+        const list = new RxList<number>([1,2,3])
+        const innerOnCleanupResult: any[] = []
+        const optionCleanupResult: any[] = []
+
+        const list2 = list.map((item, index, {onCleanup}) => {
+            onCleanup(() => {
+                innerOnCleanupResult.push(item)
+            })
+            return item * 2
+        }, {
+            onCleanup: (item) => {
+                optionCleanupResult.push(item)
+            }
+        })
+
+        expect(list2.data).toMatchObject([2,4,6])
+        list.splice(1,1)
+        expect(innerOnCleanupResult).toMatchObject([2])
+        expect(optionCleanupResult).toMatchObject([4])
+    })
+
     test('reduce', () => {
         const list = new RxList<{id:number, score: number}>([
             {id:1, score: 1},

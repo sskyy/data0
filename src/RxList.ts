@@ -7,10 +7,17 @@ import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
 
-type MapContext = {
+type MapOptions<U> = {
     beforePatch?: (triggerInfo: InputTriggerInfo) => any,
     scheduleRecompute?: DirtyCallback,
-    onCleanup?: (effect: ReactiveEffect) => void,
+    ignoreIndex?: boolean,
+    onCleanup?: (item: U) => any
+}
+
+type MapCleanupFn = () => any
+
+type MapContext = {
+    onCleanup: (fn: MapCleanupFn) => void
 }
 
 export class RxList<T> extends Computed {
@@ -145,21 +152,33 @@ export class RxList<T> extends Computed {
     }
 
     // reactive methods and attr
-    map<U>(mapFn: (item: T, index?: Atom<number>) => U, context?: MapContext) : RxList<U>{
+    map<U>(mapFn: (item: T, index: Atom<number>, context:MapContext) => U, options?: MapOptions<U>) : RxList<U>{
         const source = this
-        if(mapFn.length>1) {
+        const useIndex = mapFn.length>1 && !options?.ignoreIndex
+        const useContext = mapFn.length>2
+        if(useIndex) {
             source.addAtomIndexesDep()
         }
+
+        // CAUTION cleanupFns 是用户自己用 context.onCleanup 收集的，因为可能用到 mapFn 中的局部变量
+        //  如果可以直接从 mapFn return value 中来销毁副作用，那么应该使用 options.onCleanup 来注册一个统一的销毁函数，这样能提升性能，不需要建立 cleanupFns 数组。
+        const cleanupFns: MapCleanupFn[]|undefined = useContext ? [] : undefined
 
         return new RxList(
             null,
             function computation(this: RxList<U>) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+
                 return source.data.map((_: T, index) => {
                     const getFrame = ReactiveEffect.collectEffect!()
+                    const mapContext: MapContext|undefined = useContext ? {
+                        onCleanup(fn: MapCleanupFn) {
+                            cleanupFns![index] = fn
+                        }
+                    } : undefined
                     // CAUTION 注意这里的 item 要用 at 拿包装过的 reactive 对象
-                    const newItem = mapFn(source.at(index)!, source.atomIndexes?.[index])
+                    const newItem = mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!)
                     this.effectFramesArray![index] = getFrame() as ReactiveEffect[]
                     return newItem
                 })
@@ -170,7 +189,7 @@ export class RxList<T> extends Computed {
                     const { method , argv  ,key } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
-                    context?.beforePatch?.(triggerInfo)
+                    options?.beforePatch?.(triggerInfo)
 
                     if (method === 'splice') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
@@ -179,37 +198,82 @@ export class RxList<T> extends Computed {
                         const newItems = newItemsInArgs.map((_, index) => {
                             const item = source.at(index+ argv![0])!
                             const getFrame = this.collectEffect()
-                            const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]])
+                            const mapContext: MapContext|undefined = useContext ? {
+                                onCleanup(fn: MapCleanupFn) {
+                                    cleanupFns![index+ argv![0]] = fn
+                                }
+                            } : undefined
+                            const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]]!, mapContext!)
                             effectFrames![index] = getFrame() as ReactiveEffect[]
                             return newItem
                         })
-                        this.splice(argv![0], argv![1], ...newItems)
+                        const deletedItems = this.splice(argv![0], argv![1], ...newItems)
                         const deletedFrames = this.effectFramesArray!.splice(argv![0], argv![1], ...effectFrames)
                         deletedFrames.forEach((frame) => {
                             frame.forEach((effect) => {
                                 this.destroyEffect(effect)
                             })
                         })
+                        if (useContext && cleanupFns?.length) {
+                            // CAUTION 这里要把删除的 effect 的 cleanup 都执行一遍
+                            //  如果能从 return value 中进行销毁，应该使用 options.onCleanup 来注册一个统一的销毁函数，这样能提升性能。
+                            const deletedCleanupFns = cleanupFns.splice(argv![0], argv![1], ...new Array(newItems.length).fill(undefined))
+                            deletedCleanupFns.forEach((fn) => {
+                                fn?.()
+                            })
+                        }
+                        // 统一的销毁函数
+                        if(options?.onCleanup) {
+                            deletedItems.forEach((item, index) => {
+                                options.onCleanup!(item)
+                            })
+                        }
                     } else {
                         // explicit key change
                         // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。
                         // 没有 method 说明是 explicit_key_change 变化
                         const index = key as number
                         const getFrame = this.collectEffect()
-                        this.set(index, mapFn(source.at(index)!, source.atomIndexes?.[index]))
+                        const mapContext: MapContext|undefined = useContext ? {
+                            onCleanup(fn: MapCleanupFn) {
+                                cleanupFns![index] = fn
+                            }
+                        } : undefined
+                        const oldItem = this.at(index)!
+                        const oldCleanupFn = cleanupFns?.[index]
+
+                        this.set(index, mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!))
                         const newFrame = getFrame() as ReactiveEffect[]
                         this.effectFramesArray![index].forEach((effect) => {
                             this.destroyEffect(effect)
                         })
                         this.effectFramesArray![index] = newFrame
+
+                        if (oldCleanupFn) {
+                            oldCleanupFn()
+                        }
+                        if(options?.onCleanup) {
+                            options.onCleanup(oldItem)
+                        }
+
                     }
                 })
             },
-            context?.scheduleRecompute,
+            options?.scheduleRecompute,
             {
-                onDestroy: (effect) => {
-                    if (mapFn.length > 1) {
+                onDestroy(this: RxList<U>, effect)  {
+                    if (useIndex) {
                         source.removeAtomIndexesDep()
+                    }
+                    if (cleanupFns) {
+                        cleanupFns.forEach((fn) => {
+                            fn()
+                        })
+                    }
+                    if(options?.onCleanup) {
+                        this.data.forEach((item) => {
+                            options.onCleanup!(item)
+                        })
                     }
                 }
             },

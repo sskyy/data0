@@ -50,18 +50,22 @@ export const computedToInternal = new WeakMap<any, Computed>()
 
 export type CallbacksType = {
     onRecompute?: (data: any) => void,
+    onCleanup?: (data: any) => void,
     onPatch?: (t: Computed) => void,
     onDestroy?: (t: ReactiveEffect) => void,
     onTrack?: ReactiveEffect["onTrack"],
 }
 
 
-export type ComputedResult<T extends () => any> = ReturnType<T> extends object ? UnwrapReactive<ReturnType<T>> : Atom<ReturnType<T>>
+export type ComputedResult<T extends GetterType> = ReturnType<T> extends object ? UnwrapReactive<ReturnType<T>> : Atom<ReturnType<T>>
 
 export type ComputedData = Atom | UnwrapReactive<any>
 export type ApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => ReturnType<typeof computed>[] | void
 
-export type GetterType = (trackOnce?: Notifier["track"], collect?: typeof ReactiveEffect.collectEffect) => any
+export type GetterContext = {
+    onCleanup: (fn: () => any) => void
+}
+export type GetterType = (context:GetterContext) => any
 export type DirtyCallback = (recompute: (force?: boolean) => void) => void
 export type SkipIndicator = { skip: boolean }
 
@@ -100,8 +104,8 @@ export class Computed extends ReactiveEffect {
             this.immediate = true
         }
 
-        if (callbacks?.onDestroy) this.onDestroy = callbacks.onDestroy
-        if (callbacks?.onTrack) this.onTrack = callbacks.onTrack
+        if (callbacks?.onDestroy) this.onDestroy = callbacks.onDestroy.bind(this)
+        if (callbacks?.onTrack) this.onTrack = callbacks.onTrack.bind(this)
 
         const initialValue = super.run()!
 
@@ -119,20 +123,24 @@ export class Computed extends ReactiveEffect {
             computedToInternal.set(this.data, this)
         }
     }
-
+    public lastCleanupFn?: () => void
     effectFn() {
+        const getterContext = this.getter!.length > 0 ? {
+            onCleanup: (fn: () => any) => this.lastCleanupFn = fn
+        } : undefined
+
         if (this.applyPatch) {
             // 增量计算，只有第一次计算建立初始 dep 会走到这。这里用的是手动 track。所以先把自动 track 停掉
             Notifier.instance.pauseTracking()
             // 用户在即在 computation 里面的 this 上可以拿到 manualTrack 来手动 track
-            const result = this.getter!.call(this)
+            const result = this.getter!.call(this, getterContext!)
 
             Notifier.instance.resetTracking()
 
             return result
         } else {
             // 全部全量计算的情况
-            return this.getter!.call(this)
+            return this.getter!.call(this, getterContext!)
         }
     }
 
@@ -152,7 +160,14 @@ export class Computed extends ReactiveEffect {
         if (!this.isDirty && !forceRecompute) return
 
         // 可以用于清理一些用户自己的副作用。
+        // 这里用了两个名字，onCleanup 是为了和 rxList 中的 api 一致。
+        // onRecompute 可以用作 log 等其他副作用
         this.callbacks?.onRecompute?.(this.data)
+        this.callbacks?.onCleanup?.(this.data)
+
+        if (this.lastCleanupFn) {
+            this.lastCleanupFn()
+        }
 
         if (forceRecompute || !this.applyPatch) {
             // 默认行为，重算并且重新收集依赖
@@ -171,10 +186,6 @@ export class Computed extends ReactiveEffect {
     // rxList/rxMap 可以覆写。
     replaceData(newData: any) {
         if (isAtom(this.data)) {
-            // 对于返回对象形式的 computed，使用了 withCleanup 标注的对象，会在重算的时候调用 destroy 方法。不需要用户手动写 onRecompute 了。
-            if (cleanupMap.get(this.data.raw)){
-                cleanupMap.get(this.data.raw)!(this.data.raw)
-            }
             this.data(newData)
         } else {
             replace(this.data, newData)
@@ -206,22 +217,6 @@ export function atomComputed(getter: GetterType, applyPatch?: ApplyPatchType, di
 
 computed.as = createDebugWithName(computed)
 computed.debug = createDebug(computed)
-
-const cleanupMap = new WeakMap<any, CleanupFn>()
-
-type CleanupFn = (data: any) => any
-// 用于标记一个 atomComputed 中的对象重算时是否要执行对象的 destroy 方法。
-export const withCleanup = (computedItem: any, destroyMethod: string | CleanupFn = 'destroy') => {
-    assert(typeof computedItem === 'object', 'withCleanup should be used on object')
-    // 注意这里没有错误提示，因为设置为 null 很常见。
-    if (computedItem !== null) {
-        cleanupMap.set(computedItem, typeof destroyMethod === 'string' ?
-            (lastData: any) => lastData[destroyMethod]() :
-            (lastData: any) => destroyMethod(lastData)
-        )
-    }
-    return computedItem
-}
 
 // 强制重算
 export function recompute(computedItem: ComputedData, force = false) {

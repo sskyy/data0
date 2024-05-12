@@ -1,4 +1,4 @@
-import {computed, destroyComputed, withCleanup} from "../src/computed";
+import {computed, destroyComputed} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {describe, expect, test} from "vitest";
@@ -122,9 +122,13 @@ describe('computed return object with internal side effect', () => {
         }
 
         const run = atom(1)
-        computed(() => {
+        computed(({ onCleanup }) => {
             run()
-            return withCleanup(new InternalWithSideEffect())
+            const valueWithSideEffect = new InternalWithSideEffect()
+            onCleanup(() => {
+                valueWithSideEffect.destroy()
+            })
+            return valueWithSideEffect
         })
 
         expect(destroyCalled).toBe(0)
