@@ -7,6 +7,12 @@ import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
 
+type MapContext = {
+    beforePatch?: (triggerInfo: InputTriggerInfo) => any,
+    scheduleRecompute?: DirtyCallback,
+    onCleanup?: (effect: ReactiveEffect) => void,
+}
+
 export class RxList<T> extends Computed {
     data!: T[]
     indexKeyDeps = new Map<number, Dep>()
@@ -139,7 +145,7 @@ export class RxList<T> extends Computed {
     }
 
     // reactive methods and attr
-    map<U>(mapFn: (item: T, index?: Atom<number>) => U, beforePatch?: (triggerInfo: InputTriggerInfo) => any, scheduleRecompute?: DirtyCallback ) : RxList<U>{
+    map<U>(mapFn: (item: T, index?: Atom<number>) => U, context?: MapContext) : RxList<U>{
         const source = this
         if(mapFn.length>1) {
             source.addAtomIndexesDep()
@@ -164,7 +170,7 @@ export class RxList<T> extends Computed {
                     const { method , argv  ,key } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
-                    if (beforePatch) beforePatch(triggerInfo)
+                    context?.beforePatch?.(triggerInfo)
 
                     if (method === 'splice') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
@@ -199,7 +205,7 @@ export class RxList<T> extends Computed {
                     }
                 })
             },
-            scheduleRecompute,
+            context?.scheduleRecompute,
             {
                 onDestroy: (effect) => {
                     if (mapFn.length > 1) {
