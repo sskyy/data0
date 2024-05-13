@@ -1,14 +1,15 @@
-export { reactive, isReactive, rawStructureClone, toRaw, type UnwrapReactive} from './reactive'
-export { atom, isAtom, type Atom } from './atom'
-export { computed, type ComputedData, destroyComputed, recompute, atomComputed, Computed } from './computed'
+export {reactive, isReactive, rawStructureClone, toRaw, type UnwrapReactive} from './reactive'
+export {atom, isAtom, type Atom} from './atom'
+export {computed, type ComputedData, destroyComputed, recompute, atomComputed, Computed} from './computed'
 export * from './notify'
-export { TrackOpTypes, TriggerOpTypes } from "./operations";
+export {TrackOpTypes, TriggerOpTypes} from "./operations";
 export * from './incremental'
-export { isReactivableType }from './util'
-export { LinkedList } from './LinkedList'
+export {isReactivableType} from './util'
+export {LinkedList} from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";
-export { RxList, createSelection } from './RxList'
+export {RxList, createSelection} from './RxList'
 export {RxMap} from './RxMap'
-export { AsyncRxSlice } from "./AsyncRxSlice.js";
-export { ManualCleanup } from "./manualCleanup.js";
-export { autorun } from "./autorun.js";
+export * from './RxTime'
+export {AsyncRxSlice} from "./AsyncRxSlice.js";
+export {ManualCleanup} from "./manualCleanup.js";
+export {autorun} from "./autorun.js";
