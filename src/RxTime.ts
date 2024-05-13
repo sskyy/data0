@@ -101,11 +101,15 @@ export class RxTime {
              // 下次变化的时候重新计算
              const nextChangeTimestamp = - constant / coefficient
              if (nextChangeTimestamp > currentTimestamp)  {
+                 // CAUTION 这里的 +2 非常重要，因为系数常数可能有浮点，或者 Date.now() 算出来的时候可能病名有达到真正的变化时间。
+                 //  所以这里使用 +2 来保证在是真正已经产生变化了。
+                 const timeoutTime = nextChangeTimestamp - currentTimestamp + 2
                  this.timeoutId = setTimeout(() => {
                      // CAUTION 这里是可以复用计算结果的，因为如果计算中有 atom 变化了，那么 autorun 整个都会重算，不会走到这里。
                      //  走到这里说明没有 atom 变化。
                      result(compare(Date.now()*coefficient + constant))
-                 }, nextChangeTimestamp - currentTimestamp)
+                 }, timeoutTime)
+
              }
         })
 
