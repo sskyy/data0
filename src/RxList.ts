@@ -644,7 +644,6 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
                             indicator?.(true)
                         })
                     } else {
-                        debugger
                         (deleteItems as T[]).forEach((item:T) => {
                             const indicator = itemToIndicator?.get(item)
                             indicator?.(false)
