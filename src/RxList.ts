@@ -196,12 +196,13 @@ export class RxList<T> extends Computed {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                         const newItemsInArgs = argv!.slice(2)
                         const effectFrames: ReactiveEffect[][] = []
+                        const newCleanups: MapCleanupFn[] = []
                         const newItems = newItemsInArgs.map((_, index) => {
                             const item = source.at(index+ argv![0])!
                             const getFrame = this.collectEffect()
                             const mapContext: MapContext|undefined = useContext ? {
                                 onCleanup(fn: MapCleanupFn) {
-                                    cleanupFns![index+ argv![0]] = fn
+                                    newCleanups![index] = fn
                                 }
                             } : undefined
                             const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]]!, mapContext!)
@@ -215,10 +216,11 @@ export class RxList<T> extends Computed {
                                 this.destroyEffect(effect)
                             })
                         })
+                        // 更新和执行 cleanupFns
                         if (useContext && cleanupFns?.length) {
                             // CAUTION 这里要把删除的 effect 的 cleanup 都执行一遍
                             //  如果能从 return value 中进行销毁，应该使用 options.onCleanup 来注册一个统一的销毁函数，这样能提升性能。
-                            const deletedCleanupFns = cleanupFns.splice(argv![0], argv![1], ...new Array(newItems.length).fill(undefined))
+                            const deletedCleanupFns = cleanupFns.splice(argv![0], argv![1], ...newCleanups)
                             deletedCleanupFns.forEach((fn) => {
                                 fn?.()
                             })

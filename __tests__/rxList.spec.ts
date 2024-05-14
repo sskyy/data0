@@ -105,6 +105,18 @@ describe('RxList', () => {
         list.splice(1,1)
         expect(innerOnCleanupResult).toMatchObject([2])
         expect(optionCleanupResult).toMatchObject([4])
+
+        // 剩下 1,3。 unshift 之后变成 0,1,2,1,3
+        list.unshift(0, 1,2)
+        expect(list.data).toMatchObject([0,1,2,1,3])
+        expect(list2.data).toMatchObject([0,2,4,2,6])
+
+        // 再次 splice，变成 0,1,3
+        list.splice(1,2)
+        expect(list.data).toMatchObject([0,1,3])
+        expect(list2.data).toMatchObject([0,2,6])
+        expect(innerOnCleanupResult).toMatchObject([2,1,2])
+        expect(optionCleanupResult).toMatchObject([4,2,4])
     })
 
     test('reduce', () => {
