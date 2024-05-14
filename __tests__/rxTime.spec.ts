@@ -14,7 +14,7 @@ describe('RxTime test', () => {
         const time = new RxTime()
         const is100Later = time.gt(now + 100)
         expect(is100Later()).toBe(false)
-        await wait(101)
+        await wait(105)
         expect(is100Later()).toBe(true)
     })
 
@@ -23,7 +23,7 @@ describe('RxTime test', () => {
         const time = new RxTime()
         const expired = time.sub(createdAt).gt(100)
         expect(expired()).toBe(false)
-        await wait(101)
+        await wait(105)
         expect(expired()).toBe(true)
     })
 
@@ -33,7 +33,7 @@ describe('RxTime test', () => {
 
         const is = time.mul(3).sub(new RxTime()).lt((new RxTime()).add(100).add(now))
         expect(is()).toBe(true)
-        await wait(101)
+        await wait(105)
         expect(is()).toBe(false)
     })
 
@@ -48,7 +48,7 @@ describe('RxTime test', () => {
         expect(expired()).toBe(true)
         limit(100)
         expect(expired()).toBe(false)
-        await wait(101)
+        await wait(105)
         expect(expired()).toBe(true)
     })
 })

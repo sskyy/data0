@@ -101,6 +101,7 @@ export class RxList<T> extends Computed {
             Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: index, newValue: value, oldValue})
         }
         Notifier.instance.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue})
+        return oldValue
     }
 
     // CAUTION 这里手动 track index dep 的变化，是为了在 splice 的时候能手动去根据订阅的 index dep 触发，而不是直接触发所有的 index key。
