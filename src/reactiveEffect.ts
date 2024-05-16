@@ -1,11 +1,14 @@
 import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
 import {DebuggerEvent, maxMarkerBits, Notifier} from "./notify.js";
 import {ManualCleanup} from "./manualCleanup.js";
+import {GetterContext, GetterType} from "./computed.js";
+import {isGenerator} from "./util.js";
 
 
 export class ReactiveEffect extends ManualCleanup {
     static activeScopes: ReactiveEffect[] = []
-
+    public active = true
+    public isRunningAsync = false
     static destroy(effect: ReactiveEffect, fromParent?: boolean) {
         if (!effect.active) return
 
@@ -34,19 +37,17 @@ export class ReactiveEffect extends ManualCleanup {
     parent?: ReactiveEffect
     children: ReactiveEffect[] = []
     index = 0
-
-    constructor(public active: boolean) {
+    isAsync?:boolean
+    constructor(public getter?: GetterType) {
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         super();
-        if (!active) return
+        this.isAsync = this.getter && isGenerator(this.getter)
 
         if (ReactiveEffect.activeScopes.length) {
             this.parent = ReactiveEffect.activeScopes.at(-1)
             this.parent!.children.push(this)
             this.index = this.parent!.children.length - 1
         }
-
-
     }
 
     onDestroy?: (i: ReactiveEffect) => void
@@ -55,26 +56,13 @@ export class ReactiveEffect extends ManualCleanup {
     // dev only
     onTrigger?: (event: DebuggerEvent) => void
 
-    effectFn() {
+    callGetter():any {
+
     }
-
-    run(...args: any[]): any {
-        // 一般用于调试
-        if (!this.active) {
-            return this.effectFn()
-        }
-        if (ReactiveEffect.activeScopes.includes(this)) {
-            throw new Error('recursive effect call')
-        }
-
-        try {
-
+    prepareTracking(isFirst = false) {
+        if (!this.isAsync) {
             Notifier.trackOpBit = 1 << ++Notifier.instance.effectTrackDepth
             ReactiveEffect.activeScopes.push(this)
-            // 因为这里的 run 可能是某个 computed 里面的 replace 里的 splice 之类的引起的。
-            //  而在 splice 等 array instrumentations 里面，为了防止这些方法的读操作也被 track 了，所以是 stopTracking 了的。
-            //  再传到这里就也会导致不 tracking 了。所以这里要重新 enableTracking 一下。
-            Notifier.instance.enableTracking()
 
             if (Notifier.instance.effectTrackDepth <= maxMarkerBits) {
                 initDepMarkers(this)
@@ -85,18 +73,72 @@ export class ReactiveEffect extends ManualCleanup {
             this.children.forEach(child => ReactiveEffect.destroy(child, true))
             this.children = []
 
-
-            return this.effectFn()
-        } finally {
+        } else {
+            // 如果是 async 的，只需要push scope 就行了。
+            ReactiveEffect.activeScopes.push(this)
+            if (isFirst) {
+                this.cleanup()
+                this.children.forEach(child => ReactiveEffect.destroy(child, true))
+                this.children = []
+            }
+        }
+    }
+    createGetterContext():GetterContext|undefined {
+        return undefined
+    }
+    completeTracking() {
+        if (!this.isAsync) {
             if (Notifier.instance.effectTrackDepth <= maxMarkerBits) {
                 finalizeDepMarkers(this)
             }
 
-            Notifier.instance.resetTracking()
             ReactiveEffect.activeScopes.pop()
-
             Notifier.trackOpBit = 1 << --Notifier.instance.effectTrackDepth
 
+        } else {
+            // 如果是 async 的，只需要pop scope 就行了。因为全都是使用的正常 track，不是标记的。
+            ReactiveEffect.activeScopes.pop()
+        }
+    }
+    run(...args: any[]): any {
+        // FIXME 执行到一般的 generator 如何处理？？应该形成队列还是直接取消？如果是 fullComputed，应该取消。
+        //  如果是当成副作用，那么应该形成队列。
+        if (this.isRunningAsync) {}
+
+        // 一般用于调试
+        if (!this.active) {
+            return this.callGetter()
+        }
+        if (ReactiveEffect.activeScopes.includes(this)) {
+            throw new Error('recursive effect call')
+        }
+
+        if(!this.isAsync) {
+            try {
+                this.prepareTracking()
+                Notifier.instance.enableTracking()
+                return this.callGetter()
+            } finally {
+                Notifier.instance.resetTracking()
+                this.completeTracking()
+            }
+        } else {
+            // async 执行中的时候产生了新的触发了重算怎么办？？？
+            this.isRunningAsync = true
+            const generator = this.callGetter() as Generator<any, string, boolean>
+            const resultPromise = this.runGenerator(generator, (isFirst) => {
+                this.prepareTracking(isFirst)
+                Notifier.instance.enableTracking()
+            }, (isLast) => {
+                Notifier.instance.resetTracking()
+                this.completeTracking()
+            })
+
+            resultPromise.then(() => {
+                this.isRunningAsync = false
+            })
+
+            return resultPromise
         }
     }
 
@@ -111,5 +153,19 @@ export class ReactiveEffect extends ManualCleanup {
     }
     destroy() {
         ReactiveEffect.destroy(this)
+    }
+    async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => void, afterRun: (isLast?:boolean) => void)   {
+        // run generator，每次之前要调用 beforeRun，每次之后要调用 afterRun
+        let isFirst = true
+        let lastYieldValue: any
+        while(true) {
+            beforeRun(isFirst)
+            const {value, done} = generator.next(lastYieldValue)
+            afterRun(done)
+            lastYieldValue = value instanceof Promise ? await value : value
+            isFirst = false
+            if (done) break
+        }
+        return lastYieldValue
     }
 }

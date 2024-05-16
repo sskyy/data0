@@ -27,12 +27,25 @@ export class RxMap<K, V> extends Computed{
         // 自己是 source
         if (source) {
             this.data = isMap(source) ? source : new Map(Array.isArray(source) ? source : Object.entries(source))
+        } else {
+            this.data = new Map()
+        }
+
+        if (this.getter) {
+            this.runEffect()
         }
     }
-    replace = (source: EntryType|PlainObjectType) => {
-        this.data.clear()
-        const entries = Array.isArray(source) ? source : Object.entries(source)
-        this.data = new Map(entries)
+    replace = (source: EntryType|PlainObjectType|Map<K,V>) => {
+        let entries: EntryType
+        if (source instanceof Map) {
+            this.data = source
+            entries = Array.from(source.entries())
+        } else {
+            this.data.clear()
+            entries = Array.isArray(source) ? source : Object.entries(source)
+            this.data = new Map(entries)
+        }
+
         entries.forEach(([key, value]) => {
             Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
         })

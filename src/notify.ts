@@ -163,7 +163,7 @@ export class Notifier {
     const  activeEffect = ReactiveEffect.activeScopes.at(-1)
     if (!activeEffect) return
     let shouldTrack = false
-    if (this.effectTrackDepth <= maxMarkerBits) {
+    if (!activeEffect.isAsync && this.effectTrackDepth <= maxMarkerBits) {
       if (!newTracked(dep)) {
         dep.n |= Notifier.trackOpBit // set newly tracked
         shouldTrack = !wasTracked(dep)
@@ -201,7 +201,6 @@ export class Notifier {
       // never been tracked
       return
     }
-
     if (__DEV__) {
       const getter = getComputedGetter(source)
       this.triggerStack.push({

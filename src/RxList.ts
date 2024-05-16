@@ -28,11 +28,12 @@ export class RxList<T> extends Computed {
 
     constructor(source: T[]|null, public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
         // 自己可能是 computed，也可能是最初的 reactive
-        super(getter, applyPatch, scheduleRecompute, callbacks, undefined, undefined, true)
+        super(getter, applyPatch, scheduleRecompute, callbacks, undefined, undefined)
 
         // 自己是 source
-        if (source) {
-            this.data = source
+        this.data = source || []
+        if (this.getter) {
+            super.runEffect()
         }
     }
     replaceData(newData: T[]) {

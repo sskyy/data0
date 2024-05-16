@@ -3,10 +3,10 @@ import {ReactiveEffect} from "./reactiveEffect.js";
 
 class Autorun extends ReactiveEffect{
     constructor(public fn: () => any) {
-        super(true)
+        super(fn)
         this.run()
     }
-    effectFn() {
+    callGetter() {
         this.fn()
     }
 }

@@ -205,3 +205,15 @@ export function assert(condition: boolean, message: string ) {
         throw new Error(message)
     }
 }
+
+export function isAsync(fn: Function) {
+    return fn.constructor.name === 'AsyncFunction'
+}
+
+export function isGenerator(fn: Function) {
+    return fn.constructor.name === 'GeneratorFunction'
+}
+
+export function uuid() {
+    return Math.random().toString(36).substring(2)
+}
