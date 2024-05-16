@@ -24,7 +24,7 @@ describe('RxList', () => {
     test('use generator getter', async () => {
         const offset = atom(0)
         const length = atom(10)
-        const list = new RxList<number>(null, function*({ asyncStatus }): Generator<any, number[], number[]>{
+        const list = new RxList<number>(function*({ asyncStatus }): Generator<any, number[], number[]>{
             asyncStatus('before fetch')
             yield wait(10)
             asyncStatus('fetching')

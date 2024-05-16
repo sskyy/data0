@@ -420,7 +420,7 @@ describe('RxList', () => {
 describe('RxList chained computed', () => {
     test('chained computed', () => {
         const showMore = atom(false)
-        const list = new RxList<number>(null, ()=> {
+        const list = new RxList<number>(()=> {
             return showMore() ? [1,2,3,4,5] : [1,2,3]
         })
         const computedList = list.map(item =>  item * 2)
@@ -432,7 +432,7 @@ describe('RxList chained computed', () => {
 
     test('chained with createSelection', () => {
         const showMore = atom(false)
-        const selected = new RxList<number>(null, ()=> {
+        const selected = new RxList<number>( ()=> {
             return showMore() ? [1,2,3,4,5] : [1,2,3]
         })
 

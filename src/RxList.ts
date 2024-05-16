@@ -26,9 +26,13 @@ export class RxList<T> extends Computed {
     atomIndexes? :Atom<number>[]
     atomIndexesDepCount = 0
 
-    constructor(source: T[]|null, public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
+    constructor(sourceOrGetter: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
+        const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter : undefined
+        const source = typeof sourceOrGetter !== 'function' ? sourceOrGetter : undefined
+
         // 自己可能是 computed，也可能是最初的 reactive
         super(getter, applyPatch, scheduleRecompute, callbacks, undefined, undefined)
+        this.getter = getter
 
         // 自己是 source
         this.data = source || []
@@ -167,7 +171,6 @@ export class RxList<T> extends Computed {
         const cleanupFns: MapCleanupFn[]|undefined = useContext ? [] : undefined
 
         return new RxList(
-            null,
             function computation(this: RxList<U>) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
@@ -287,7 +290,6 @@ export class RxList<T> extends Computed {
     reduce<U>(reduceFn: (last: RxList<U>, item: T, index: number) => any) {
         const source = this
         return new RxList(
-            null,
             function computation(this: RxList<U>, track) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
@@ -425,7 +427,6 @@ export class RxList<T> extends Computed {
     filter(filterFn: (item:T) => boolean) {
         const source = this
         return new RxList(
-            null,
             function computation(this: RxList<T>) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
@@ -469,7 +470,6 @@ export class RxList<T> extends Computed {
     groupBy<K>(getKey: (item: T) => K) {
         const source = this
         return new RxMap<K, RxList<T>>(
-            null,
             function computation(this: RxMap<any, RxList<T>>) {
                 const groups = new Map()
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
@@ -526,7 +526,6 @@ export class RxList<T> extends Computed {
     indexBy(inputIndexKey: keyof T|((item: T) => any)) {
         const source = this
         return new RxMap<any, T>(
-            null,
             function computation(this: RxMap<any, T>) {
                 const map = new Map()
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
@@ -597,7 +596,6 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
     let itemToIndicator:WeakMap<any, Atom<boolean>>|null = new Map<any, Atom<boolean>>()
 
     return new RxList(
-        null,
         function computation(this: RxList<[T, Atom<boolean>]>) {
             this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
             this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);

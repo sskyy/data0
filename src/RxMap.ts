@@ -20,10 +20,12 @@ type PlainObjectType = {
 
 export class RxMap<K, V> extends Computed{
     data!: Map<K, V>
-    constructor(source: EntryType|PlainObjectType|null, public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator, public forceAtom?: boolean) {
+    constructor(sourceOrGetter: EntryType|PlainObjectType|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator, public forceAtom?: boolean) {
+        const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter as GetterType : undefined
+        const source = typeof sourceOrGetter === 'function' ? undefined : sourceOrGetter
         // 自己可能是 computed，也可能是最初的 reactive
         super(getter, applyPatch, scheduleRecompute, callbacks, skipIndicator, forceAtom)
-
+        this.getter = getter
         // 自己是 source
         if (source) {
             this.data = isMap(source) ? source : new Map(Array.isArray(source) ? source : Object.entries(source))
@@ -121,7 +123,6 @@ export class RxMap<K, V> extends Computed{
         const keys: K[] = []
 
         return new RxList<[K, V]>(
-            null,
             function computation(this: RxList<[K, V]>) {
                 this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY);
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
@@ -165,7 +166,6 @@ export class RxMap<K, V> extends Computed{
     values() {
         const source = this
         return new RxList<V>(
-            null,
             function computation(this: RxList<V>) {
                 this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY);
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
@@ -200,7 +200,6 @@ export class RxMap<K, V> extends Computed{
     keys() {
         const source = this
         return new RxList<K>(
-            null,
             function computation(this: RxList<K>) {
                 this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY);
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
