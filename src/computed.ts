@@ -53,7 +53,7 @@ export type CallbacksType = {
     onCleanup?: (data: any) => void,
     onPatch?: (t: Computed) => void,
     onDestroy?: (t: ReactiveEffect) => void,
-    onTrack?: ReactiveEffect["onTrack"],
+    onTrack?: Parameters<ReactiveEffect["on"]>[1],
 }
 
 
@@ -102,8 +102,6 @@ export class Computed extends ReactiveEffect {
     recomputeId?: string
     asyncStatus?: Atom<null | boolean | string>
     triggerInfos: TriggerInfo[] = []
-    // 在 parent.innerComputeds 中的 index, 用来加速 destroy 的过程
-    onDestroy?: (i: ReactiveEffect) => void
     scheduleRecompute?: DirtyCallback
     // 用来 patch 模式下，收集新增和删除是产生的 effectFrames
     effectFramesArray: ReactiveEffect[][] = []
@@ -132,8 +130,10 @@ export class Computed extends ReactiveEffect {
             this.immediate = true
         }
 
-        if (callbacks?.onDestroy) this.onDestroy = callbacks.onDestroy.bind(this)
-        if (callbacks?.onTrack) this.onTrack = callbacks.onTrack.bind(this)
+        if (callbacks?.onDestroy) this.on('destroy', callbacks.onDestroy)
+        if (callbacks?.onTrack) this.on('track', callbacks.onTrack)
+        if (callbacks?.onRecompute) this.on('recompute', callbacks.onRecompute)
+        if (callbacks?.onCleanup) this.on('cleanup', callbacks.onCleanup)
     }
 
     runEffect() {
@@ -213,8 +213,8 @@ export class Computed extends ReactiveEffect {
         // 可以用于清理一些用户自己的副作用。
         // 这里用了两个名字，onCleanup 是为了和 rxList 中的 api 一致。
         // onRecompute 可以用作 log 等其他副作用
-        this.callbacks?.onRecompute?.(this.data)
-        this.callbacks?.onCleanup?.(this.data)
+        this.dispatch('recompute', this.data)
+        this.dispatch('cleanup', this.data)
         // 使用 context 注册的 cleanup
         if (this.lastCleanupFn) {
             this.lastCleanupFn()

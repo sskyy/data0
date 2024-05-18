@@ -1,5 +1,5 @@
 import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
-import {DebuggerEvent, maxMarkerBits, Notifier} from "./notify.js";
+import {maxMarkerBits, Notifier} from "./notify.js";
 import {ManualCleanup} from "./manualCleanup.js";
 import {GetterContext, GetterType} from "./computed.js";
 import {isGenerator} from "./util.js";
@@ -9,6 +9,7 @@ export class ReactiveEffect extends ManualCleanup {
     static activeScopes: ReactiveEffect[] = []
     public active = true
     public isRunningAsync = false
+    public eventToCallbacks: Map<string, Set<Function>> = new Map()
     static destroy(effect: ReactiveEffect, fromParent?: boolean) {
         if (!effect.active) return
 
@@ -30,7 +31,7 @@ export class ReactiveEffect extends ManualCleanup {
             ReactiveEffect.destroy(child, true)
         })
         effect.children = []
-        effect.onDestroy?.(effect)
+        effect.dispatch('destroy')
     }
 
     deps: Dep[] = []
@@ -50,11 +51,26 @@ export class ReactiveEffect extends ManualCleanup {
         }
     }
 
-    onDestroy?: (i: ReactiveEffect) => void
-    // dev only
-    onTrack?: (event: DebuggerEvent) => void
-    // dev only
-    onTrigger?: (event: DebuggerEvent) => void
+    on(event: string, callback: Function) {
+        let callbacks = this.eventToCallbacks.get(event)
+        if (!callbacks) {
+            callbacks = new Set()
+            this.eventToCallbacks.set(event, callbacks)
+        }
+        callbacks.add(callback)
+    }
+    off(event: string, callback: Function) {
+        let callbacks = this.eventToCallbacks.get(event)
+        if (callbacks) {
+            callbacks.delete(callback)
+        }
+    }
+    dispatch = (event: string, ...args: any[]) => {
+        const callbacks = this.eventToCallbacks.get(event)
+        if (callbacks) {
+            callbacks.forEach(callback => callback.call(this, ...args))
+        }
+    }
 
     callGetter():any {
 

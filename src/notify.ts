@@ -177,12 +177,10 @@ export class Notifier {
       dep.add(activeEffect!)
       activeEffect!.deps.push(dep)
       if (this.frameStack.length) this.frameStack.at(-1)!.deps.push(dep)
-      if (__DEV__ && activeEffect!.onTrack) {
-        activeEffect!.onTrack({
-          effect: activeEffect!,
-          ...debuggerEventExtraInfo!
-        })
-      }
+      activeEffect!.dispatch('track', {
+        effect: activeEffect!,
+        ...debuggerEventExtraInfo!
+      })
     }
   }
   trigger(
@@ -315,9 +313,7 @@ export class Notifier {
   ) {
     // const activeEffect = ReactiveEffect.activeScopes.at(-1)
     // if (activeEffect === effect) throw new Error('recursive effect call')
-    if (__DEV__ && effect.onTrigger) {
-      effect.onTrigger(extend({ effect }, debuggerEventExtraInfo))
-    }
+    effect.dispatch('trigger', extend({ effect }, debuggerEventExtraInfo))
 
     if (this.inEffectSession) {
       this.scheduleEffect(effect, info, debuggerEventExtraInfo)
