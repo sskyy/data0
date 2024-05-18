@@ -1,7 +1,8 @@
 import {RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
 import {atom} from "../src/atom.js";
-import {atomComputed, autorun, ReactiveEffect} from "../src/index.js";
+import {atomComputed, autorun, Computed, ReactiveEffect, TrackOpTypes, TriggerOpTypes} from "../src/index.js";
+import {n} from "vitest/dist/reporters-trlZlObr.js";
 
 describe('RxList', () => {
     let fetchPromise: any
@@ -86,6 +87,36 @@ describe('RxList', () => {
 
         expect(data()).toBe(3)
         expect(nums).toMatchObject([null,3])
+    })
+
+    test('async patch', async () => {
+        const length = atom(10)
+        const list = new RxList<number>(
+            function*(this:Computed,{ asyncStatus }): Generator<any, number[], number[]>{
+                this.manualTrack(length, TrackOpTypes.ATOM, 'value')
+                yield wait(10)
+                const data = yield fetchData(0, length())
+                return data
+            },
+            function*(this: RxList<number>,{ asyncStatus }, triggerInfos): Generator<any, any, number[]>{
+                for(let triggerInfo of triggerInfos) {
+
+                    const {oldValue, newValue} = triggerInfo as {oldValue:number, newValue:number}
+                    const newData = yield fetchData(oldValue, newValue-oldValue)
+                    this.data.push(...newData)
+                }
+            }
+        )
+        await wait(11)
+        await fetchPromise
+        await wait(11)
+        expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        length(20)
+        length(30)
+        await wait(200)
+        expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
+
 
     })
 

@@ -217,22 +217,31 @@ export class Computed extends ReactiveEffect {
         Notifier.instance.resetTracking()
         this.triggerInfos.length = 0
     }
+    public waitingTriggerInfos: TriggerInfo[] = []
     runGeneratorPatch() {
-        const triggerInfos = [...this.triggerInfos]
+        this.waitingTriggerInfos.push(...this.triggerInfos)
         this.triggerInfos.length =0
-        const generator = (this.applyPatch! as GeneratorApplyPatchType).call(this, this.data, triggerInfos)
-        this.asyncStatus!(true)
-        // FIXME 要形成队列，不然可能第一个还没执行完，第二个就触发了。
-        this.runGenerator(generator,
-            (isFirst) => {
-                Notifier.instance.pauseTracking()
-            },
-            (isLast) => {
-                Notifier.instance.resetTracking()
-            }
-        ).then(() =>{
-            this.asyncStatus!(false)
-        })
+        if(!this.waitingTriggerInfos.length) return
+
+        if (!this.asyncStatus!()) {
+            const generator = (this.applyPatch! as GeneratorApplyPatchType).call(this, this.data, [...this.waitingTriggerInfos])
+            this.waitingTriggerInfos.length = 0
+
+            this.asyncStatus!(true)
+            // FIXME 要形成队列，不然可能第一个还没执行完，第二个就触发了。
+            this.runGenerator(generator,
+                (isFirst) => {
+                    Notifier.instance.pauseTracking()
+                },
+                (isLast) => {
+                    Notifier.instance.resetTracking()
+                }
+            ).then(() =>{
+                this.asyncStatus!(false)
+                // 继续递归检查还有没有 waitingTriggerInfos
+                this.runGeneratorPatch()
+            })
+        }
     }
     public lastCleanupFn?: () => void
 
