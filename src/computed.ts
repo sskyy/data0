@@ -1,50 +1,11 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, UnwrapReactive} from './reactive'
-import {assert, isGenerator, isPlainObject, isReactivableType, uuid} from "./util";
+import {assert, isGenerator, isReactivableType, replace, uuid} from "./util";
 import {Atom, atom, isAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
 
-
-// CAUTION 为了一般场景中的新能，不深度 replace!
-//  用户可以通过 computed 的再封装实现对某个 computed 结果的深度监听。
-export function replace(source: any, nextSourceValue: any) {
-    if (Array.isArray(source)) {
-        source.splice(0, Infinity, ...nextSourceValue)
-    } else if (isPlainObject(source)) {
-        const nextKeys = Object.keys(nextSourceValue)
-        const keysToDelete = Object.keys(source).filter(k => !nextKeys.includes(k))
-        keysToDelete.forEach((k) => delete (source as { [k: string]: any })[k])
-        Object.assign(source, nextSourceValue)
-    } else if (source instanceof Map) {
-
-        for (const key of source.keys()) {
-            if (nextSourceValue.has(key)) {
-                source.set(key, nextSourceValue.get(key))
-            } else {
-                source.delete(key)
-            }
-        }
-
-        for (const key of nextSourceValue.keys()) {
-            if (!source.has(key)) {
-                source.set(key, nextSourceValue.get(key))
-            }
-        }
-
-    } else if (source instanceof Set) {
-        source.forEach((item: any) => {
-            if (!nextSourceValue.has(item)) source.delete(item)
-        })
-
-        nextSourceValue.forEach((item: any) => {
-            if (!source.has(item)) source.add(item)
-        })
-    } else {
-        assert(false, 'unknown source type to replace data')
-    }
-}
 
 export const computedToInternal = new WeakMap<any, Computed>()
 
@@ -99,7 +60,7 @@ export class Computed extends ReactiveEffect {
     immediate = false
     recomputing = false
     isAsync = false
-    recomputeId?: string
+    runtEffectId?: string
     asyncStatus?: Atom<null | boolean | string>
     triggerInfos: TriggerInfo[] = []
     scheduleRecompute?: DirtyCallback
@@ -138,26 +99,41 @@ export class Computed extends ReactiveEffect {
 
     runEffect() {
         let getterResult
+
         if (this.isAsync) {
+            const runEffectId = uuid()
+            this.runtEffectId = runEffectId
+
+            // 说明上一次的还在执行中！，立即设为 false，再重新开始
+            if(this.asyncStatus!()) {
+                this.asyncStatus!(false)
+            }
             this.asyncStatus!(true)
-            getterResult = this.callGeneratorGetter()
+            getterResult = this.callGeneratorGetter(runEffectId)
             getterResult.then(data => {
+                if (this.runtEffectId !== runEffectId) return false
+
                 this.replaceData(data)
                 this.asyncStatus!(false)
+                this.isDirty = false
             })
         } else {
             getterResult = this.callSimpleGetter()
             this.replaceData(getterResult)
+            this.isDirty = false
         }
 
         return getterResult
     }
 
-    callGeneratorGetter() {
+    callGeneratorGetter = (id:string) => {
+        const runEffectId = id
         const getterContext = this.createGetterContext()
         return this.runGenerator(
             this.getter!.call(this, getterContext!),
             (isFirst) => {
+                if (runEffectId !== this.runtEffectId) return false
+
                 this.prepareTracking(isFirst)
                 this.manualTracking ? Notifier.instance.pauseTracking() : Notifier.instance.enableTracking()
             },
@@ -207,9 +183,6 @@ export class Computed extends ReactiveEffect {
     recompute = async (forceRecompute = false) => {
         if (!this.isDirty && !forceRecompute) return
 
-        const recomputeId = uuid()
-        this.recomputeId = recomputeId
-
         // 可以用于清理一些用户自己的副作用。
         // 这里用了两个名字，onCleanup 是为了和 rxList 中的 api 一致。
         // onRecompute 可以用作 log 等其他副作用
@@ -230,7 +203,6 @@ export class Computed extends ReactiveEffect {
             // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
             this.runPatch()
         }
-        this.isDirty = false
     }
     runPatch() {
         if (isGenerator(this.applyPatch!)) {

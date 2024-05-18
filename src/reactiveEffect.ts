@@ -42,6 +42,7 @@ export class ReactiveEffect extends ManualCleanup {
     constructor(public getter?: GetterType) {
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         super();
+        this.active = !!getter
         this.isAsync = this.getter && isGenerator(this.getter)
 
         if (ReactiveEffect.activeScopes.length) {
@@ -117,10 +118,6 @@ export class ReactiveEffect extends ManualCleanup {
         }
     }
     run(...args: any[]): any {
-        // FIXME 执行到一般的 generator 如何处理？？应该形成队列还是直接取消？如果是 fullComputed，应该取消。
-        //  如果是当成副作用，那么应该形成队列。
-        if (this.isRunningAsync) {}
-
         // 一般用于调试
         if (!this.active) {
             return this.callGetter()
@@ -128,6 +125,10 @@ export class ReactiveEffect extends ManualCleanup {
         if (ReactiveEffect.activeScopes.includes(this)) {
             throw new Error('recursive effect call')
         }
+
+        // FIXME 执行到一般的 generator 如何处理？？应该形成队列还是直接取消？如果是 fullComputed，应该取消。
+        //  如果是当成副作用，那么应该形成队列。
+        if (this.isRunningAsync) {}
 
         if(!this.isAsync) {
             try {
@@ -170,13 +171,17 @@ export class ReactiveEffect extends ManualCleanup {
     destroy() {
         ReactiveEffect.destroy(this)
     }
-    async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => void, afterRun: (isLast?:boolean) => void)   {
+    async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => any, afterRun: (isLast?:boolean) => any)   {
         // run generator，每次之前要调用 beforeRun，每次之后要调用 afterRun
         let isFirst = true
         let lastYieldValue: any
         while(true) {
-            beforeRun(isFirst)
+            // CAUTION beforeRun 中如果要返回 false，一定要在所有操作之前，不然后面的 afterRun 执行不到，可能会导致一些内部状态无法重置。
+            const implicitContinue = beforeRun(isFirst)
+            if(implicitContinue === false) break
+
             const {value, done} = generator.next(lastYieldValue)
+
             afterRun(done)
             lastYieldValue = value instanceof Promise ? await value : value
             isFirst = false

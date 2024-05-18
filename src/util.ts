@@ -216,4 +216,41 @@ export function isGenerator(fn: Function) {
 
 export function uuid() {
     return Math.random().toString(36).substring(2)
+} // CAUTION 为了一般场景中的新能，不深度 replace!
+//  用户可以通过 computed 的再封装实现对某个 computed 结果的深度监听。
+export function replace(source: any, nextSourceValue: any) {
+    if (Array.isArray(source)) {
+        source.splice(0, Infinity, ...nextSourceValue)
+    } else if (isPlainObject(source)) {
+        const nextKeys = Object.keys(nextSourceValue)
+        const keysToDelete = Object.keys(source).filter(k => !nextKeys.includes(k))
+        keysToDelete.forEach((k) => delete (source as { [k: string]: any })[k])
+        Object.assign(source, nextSourceValue)
+    } else if (source instanceof Map) {
+
+        for (const key of source.keys()) {
+            if (nextSourceValue.has(key)) {
+                source.set(key, nextSourceValue.get(key))
+            } else {
+                source.delete(key)
+            }
+        }
+
+        for (const key of nextSourceValue.keys()) {
+            if (!source.has(key)) {
+                source.set(key, nextSourceValue.get(key))
+            }
+        }
+
+    } else if (source instanceof Set) {
+        source.forEach((item: any) => {
+            if (!nextSourceValue.has(item)) source.delete(item)
+        })
+
+        nextSourceValue.forEach((item: any) => {
+            if (!source.has(item)) source.add(item)
+        })
+    } else {
+        assert(false, 'unknown source type to replace data')
+    }
 }

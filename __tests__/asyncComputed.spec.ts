@@ -1,7 +1,7 @@
 import {RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
 import {atom} from "../src/atom.js";
-import {autorun} from "../src/index.js";
+import {atomComputed, autorun, ReactiveEffect} from "../src/index.js";
 
 describe('RxList', () => {
     let fetchPromise: any
@@ -61,6 +61,32 @@ describe('RxList', () => {
         await wait(10)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14])
 
-    }, 1000000)
+    })
+
+    test('async recompute should stop when new effect trigger', async () => {
+        const runTrigger = atom(0)
+        const data = atomComputed(function*() {
+            // TODO 构造一个异步的计算
+            const newNum = runTrigger()
+            yield wait(20)
+            return newNum
+        })
+        expect(ReactiveEffect.activeScopes.length).toBe(0)
+
+        const nums: number[] = []
+        autorun(() => {
+            nums.push(data())
+        })
+        runTrigger(1)
+        runTrigger(2)
+        runTrigger(3)
+        expect(ReactiveEffect.activeScopes.length).toBe(0)
+        await wait(30)
+        expect(ReactiveEffect.activeScopes.length).toBe(0)
+
+        expect(data()).toBe(3)
+        expect(nums).toMatchObject([null,3])
+
+    })
 
 })

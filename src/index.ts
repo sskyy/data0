@@ -4,7 +4,7 @@ export {computed, type ComputedData, destroyComputed, recompute, atomComputed, C
 export * from './notify'
 export {TrackOpTypes, TriggerOpTypes} from "./operations";
 export * from './incremental'
-export {isReactivableType} from './util'
+export {isReactivableType, replace} from './util'
 export {LinkedList} from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";
 export {RxList, createSelection} from './RxList'
