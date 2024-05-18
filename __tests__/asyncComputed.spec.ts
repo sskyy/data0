@@ -1,8 +1,7 @@
 import {RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
 import {atom} from "../src/atom.js";
-import {atomComputed, autorun, Computed, ReactiveEffect, TrackOpTypes, TriggerOpTypes} from "../src/index.js";
-import {n} from "vitest/dist/reporters-trlZlObr.js";
+import {atomComputed, autorun, Computed, ReactiveEffect, TrackOpTypes} from "../src/index.js";
 
 describe('RxList', () => {
     let fetchPromise: any
