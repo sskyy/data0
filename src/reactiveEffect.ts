@@ -1,7 +1,6 @@
 import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
 import {maxMarkerBits, Notifier} from "./notify.js";
 import {ManualCleanup} from "./manualCleanup.js";
-import {GetterContext, GetterType} from "./computed.js";
 import {isGenerator} from "./util.js";
 
 
@@ -40,7 +39,7 @@ export class ReactiveEffect extends ManualCleanup {
     children: ReactiveEffect[] = []
     index = 0
     isAsync?:boolean
-    constructor(public getter?: GetterType) {
+    constructor(public getter?: (...args: any[]) => any) {
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         super();
         this.active = !!getter
@@ -101,7 +100,7 @@ export class ReactiveEffect extends ManualCleanup {
             }
         }
     }
-    createGetterContext():GetterContext|undefined {
+    createGetterContext():any {
         return undefined
     }
     completeTracking() {

@@ -20,6 +20,7 @@ type PlainObjectType = {
 
 export class RxMap<K, V> extends Computed{
     data!: Map<K, V>
+    trackClassInstance = true
     constructor(sourceOrGetter: EntryType|PlainObjectType|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType, public skipIndicator? : SkipIndicator, public forceAtom?: boolean) {
         const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter as GetterType : undefined
         const source = typeof sourceOrGetter === 'function' ? undefined : sourceOrGetter

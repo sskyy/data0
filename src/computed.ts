@@ -44,7 +44,7 @@ export type SkipIndicator = { skip: boolean }
 
 
 export function destroyComputed(computedItem: ComputedData) {
-    const internal = computedToInternal.get(computedItem)!
+    const internal = computedToInternal.get(toRaw(computedItem))!
     ReactiveEffect.destroy(internal)
 }
 
@@ -52,12 +52,18 @@ export function getComputedInternal(computedItem: ComputedData) {
     return computedToInternal.get(computedItem)
 }
 
+const queuedRecomputes = new WeakSet<Computed>()
+
 // 如果是 async 的，用 queueMicrotask 来调度。
 // 如果不是 async 的，用 markDirty 而不是直接 recompute
 function defaultScheduleRecompute(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
     if (this.isAsync) {
-        queueMicrotask(() => {
-            recompute()
+        if (queuedRecomputes.has(this)) return
+        queuedRecomputes.add(this)
+        // debugger
+        queueMicrotask(async () => {
+            await recompute()
+            queuedRecomputes.delete(this)
         })
     } else {
         if (defaultScheduleRecomputedAsLazy) {
@@ -81,6 +87,7 @@ function defaultScheduleRecompute(this: Computed, recompute: (force?: boolean) =
  */
 export class Computed extends ReactiveEffect {
     data: ComputedData
+    trackClassInstance = false
     immediate = false
     // recomputing = false
     isAsync = false
@@ -210,14 +217,13 @@ export class Computed extends ReactiveEffect {
 
     // 这是传递给外部 scheduleRecompute 的，用来代理 notify 上的 recursiveMarkDirty
     recursiveMarkDirty = () => {
-        debugger
-        Notifier.instance.forEachDepEffect(this, (effect) => {
+        Notifier.instance.forEachDepEffect(this.trackClassInstance ? this: this.data, (effect) => {
             if (effect instanceof Computed) {
                 effect.dirtyFromDeps.add(this)
                 this.markedDirtyEffects.add(effect.dirtyFromDeps)
-                // 没有 info，相当于只是标记为 dirty
-                effect.run([])
             }
+            // 没有 info，相当于只是标记为 dirty
+            effect.run([])
         })
     }
     // dep trigger 时调用
@@ -245,8 +251,7 @@ export class Computed extends ReactiveEffect {
 
     // 由 this.run 调用
     recompute = async (forceRecompute = false) => {
-        // FIXME bug
-        // if (this.isRecomputing) return false
+        if (this.isRecomputing) return false
         if ((!this.isDirty && !forceRecompute)) return
 
         // 先将所有的被脏的被依赖项触发重算

@@ -66,7 +66,7 @@ describe('RxList', () => {
         offset(10)
         await wait(100)
         await fetchPromise
-        await wait(10)
+        await wait(50)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
         expect(innerRuns).toBe(2)
 
@@ -107,7 +107,7 @@ describe('RxList', () => {
         runTrigger(2)
         runTrigger(3)
         expect(ReactiveEffect.activeScopes.length).toBe(0)
-        await wait(30)
+        await wait(100)
         expect(ReactiveEffect.activeScopes.length).toBe(0)
 
         expect(data()).toBe(3)

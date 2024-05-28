@@ -1,13 +1,30 @@
 import {ReactiveEffect} from "./reactiveEffect.js";
 
 
+type AutorunContext = {
+    onCleanup(fn: () => any): void
+}
+
 class Autorun extends ReactiveEffect{
-    constructor(public fn: () => any) {
+    public lastCleanupFn?: () => void
+
+    constructor(public fn: (context: AutorunContext) => any) {
         super(fn)
         this.run()
     }
+    createGetterContext(): AutorunContext {
+        return {
+            onCleanup: (fn: () => any) => this.lastCleanupFn = fn,
+        }
+    }
+
     callGetter() {
-        this.fn()
+        if (this.lastCleanupFn) this.lastCleanupFn()
+        this.fn(this.createGetterContext())
+    }
+    destroy() {
+        if (this.lastCleanupFn) this.lastCleanupFn()
+        super.destroy()
     }
 }
 

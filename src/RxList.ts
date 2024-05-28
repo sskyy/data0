@@ -22,6 +22,7 @@ type MapContext = {
 
 export class RxList<T> extends Computed {
     data!: T[]
+    trackClassInstance = true
     indexKeyDeps = new Map<number, Dep>()
     atomIndexes? :Atom<number>[]
     atomIndexesDepCount = 0

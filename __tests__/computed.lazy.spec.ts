@@ -124,7 +124,6 @@ describe('computed life cycle', () => {
         b(1)
         expect(innerRuns).toBe(2)
 
-        debugger
         a(1)
         expect(innerRuns).toBe(3)
 

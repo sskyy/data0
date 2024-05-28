@@ -452,7 +452,6 @@ describe('RxList chained computed', () => {
         expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, false, false, false, false])
 
         showMore(true)
-        debugger
         computedList.toArray()
         expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, true, true, false, false])
 
