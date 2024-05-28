@@ -1,27 +1,43 @@
-import {computed, destroyComputed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
+import {atomComputed, computed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
+import {autorun} from "../src/index.js";
 
 
 describe('computed basic', () => {
     beforeEach(() => {
-        setDefaultScheduleRecomputedAsLazy(false)
+        setDefaultScheduleRecomputedAsLazy(true)
     })
 
     test('atom & computed', () => {
         const num1 = atom(1)
         const num2 = atom(2)
-        // @ts-ignore
-        const num3 = computed(() => num1 + num2)
+        let innerRuns = 0
+        const num3 = computed(() => {
+            innerRuns ++
+            // @ts-ignore
+            return num1 + num2
+        })
 
         expect(num3).toShallowEqual(3)
+        expect(innerRuns).toBe(1)
+
 
         num1(3)
         expect(num3).toShallowEqual(5)
+        expect(innerRuns).toBe(2)
+
 
         num2(4)
         expect(num3).toShallowEqual(7)
+        expect(innerRuns).toBe(3)
+
+        num1(5)
+        num2(5)
+        expect(num3).toShallowEqual(10)
+        // 读时才计算，所以这里应该多了一次
+        expect(innerRuns).toBe(4)
 
     })
 
@@ -86,32 +102,37 @@ describe('computed basic', () => {
     })
 })
 
+
 describe('computed life cycle', () => {
     beforeEach(() => {
-        setDefaultScheduleRecomputedAsLazy(false)
+        setDefaultScheduleRecomputedAsLazy(true)
     })
     test('should destroy inner computed', () => {
         let innerRuns = 0
         const a = atom(0)
         const b = atom(0)
-        const outerComputed = computed(() => {
+        const destroyAutorun = autorun(() => {
             a()
-            computed.as.inner(() => {
+            autorun(() => {
                 b()
                 innerRuns ++
             })
         })
 
         expect(innerRuns).toBe(1)
+
         b(1)
         expect(innerRuns).toBe(2)
+
+        debugger
         a(1)
         expect(innerRuns).toBe(3)
+
         b(2)
         // TODO 这里期待 computed 重新执行的时候，上一次内部的 computed 应该自动回收掉。
         expect(innerRuns).toBe(4)
 
-        destroyComputed(outerComputed)
+        destroyAutorun()
         b(2)
         // destroy 外面之后，里面的 computed 也要全部回收
         expect(innerRuns).toBe(4)
@@ -121,7 +142,7 @@ describe('computed life cycle', () => {
 
 describe('computed return object with internal side effect', () => {
     beforeEach(() => {
-        setDefaultScheduleRecomputedAsLazy(false)
+        setDefaultScheduleRecomputedAsLazy(true)
     })
     test('should call cleanup method', () => {
         let destroyCalled = 0
@@ -132,7 +153,7 @@ describe('computed return object with internal side effect', () => {
         }
 
         const run = atom(1)
-        computed(({ onCleanup }) => {
+        const computedValue = atomComputed(({ onCleanup }) => {
             run()
             const valueWithSideEffect = new InternalWithSideEffect()
             onCleanup(() => {
@@ -143,6 +164,8 @@ describe('computed return object with internal side effect', () => {
 
         expect(destroyCalled).toBe(0)
         run(2)
+        // 重新读一下触发 recompute
+        computedValue()
         expect(destroyCalled).toBe(1)
 
     })

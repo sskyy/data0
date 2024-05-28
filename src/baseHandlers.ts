@@ -142,11 +142,15 @@ function createGetter(isReadonly = false, shallow = false) {
 
     const isReactiveKey = typeof rawKey === 'string' && rawKey[0] === '$'
     const key = isReactiveKey ? (rawKey as string).slice(1, Infinity) : rawKey
-    const res = Reflect.get(target, key, receiver)
 
     if (!(isNonTrackableStringOrSymbolKey(key)) && !(targetIsArray && isArrayMethod(rawKey as string))) {
       Notifier.instance.track(target, TrackOpTypes.GET, key)
     }
+
+    // CAUTION 一定要放到 track 后面，因为在 lazy computed 状态下，可能会重新触发 recompute。
+    //  算完了之后的 res 才是正确的
+    const res = Reflect.get(target, key, receiver)
+
 
     if (isReactiveKey) {
       return createLeafAtom(target, key)

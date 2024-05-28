@@ -1,7 +1,18 @@
 import {RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
 import {atom} from "../src/atom.js";
-import {atomComputed, autorun, Computed, ReactiveEffect, TrackOpTypes} from "../src/index.js";
+import {
+    atomComputed,
+    autorun,
+    Computed,
+    ReactiveEffect,
+    setDefaultScheduleRecomputedAsLazy,
+    TrackOpTypes
+} from "../src/index.js";
+
+
+setDefaultScheduleRecomputedAsLazy(true)
+
 
 describe('RxList', () => {
     let fetchPromise: any
@@ -24,12 +35,14 @@ describe('RxList', () => {
     test('use generator getter', async () => {
         const offset = atom(0)
         const length = atom(10)
+        let innerRuns = 0
         const list = new RxList<number>(function*({ asyncStatus }): Generator<any, number[], number[]>{
             asyncStatus('before fetch')
             yield wait(10)
             asyncStatus('fetching')
             const data = yield fetchData(offset(), length())
             asyncStatus('fetch done')
+            innerRuns++
             return data
         })
         const status: any[] = []
@@ -41,25 +54,38 @@ describe('RxList', () => {
 
         expect(list.asyncStatus!()).toBeTruthy()
 
-        await wait(10)
+        await wait(100)
         await fetchPromise
         await wait(10)
         expect(list.asyncStatus!()).toBe(false)
+        expect(innerRuns).toBe(1)
 
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         expect(status).toMatchObject(['before fetch', 'fetching', 'fetch done', false])
 
         offset(10)
-        await wait(10)
+        await wait(100)
         await fetchPromise
         await wait(10)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+        expect(innerRuns).toBe(2)
+
 
         length(5)
-        await wait(10)
+        await wait(100)
         await fetchPromise
         await wait(10)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14])
+        expect(innerRuns).toBe(3)
+
+        offset(11)
+        length(6)
+        await wait(100)
+        await fetchPromise
+        await wait(10)
+        expect(list.data).toMatchObject([11, 12, 13, 14, 15, 16])
+        // 计算是在 next micro task 中的，所以应该是被合并了
+        expect(innerRuns).toBe(4)
 
     })
 
@@ -90,20 +116,20 @@ describe('RxList', () => {
 
     test('async patch', async () => {
         const length = atom(10)
+        let patchRuns = 0
         const list = new RxList<number>(
-            function*(this:Computed,{ asyncStatus }): Generator<any, number[], number[]>{
+            function*(this:Computed,{  }): Generator<any, number[], number[]>{
                 this.manualTrack(length, TrackOpTypes.ATOM, 'value')
                 yield wait(10)
-                const data = yield fetchData(0, length())
-                return data
+                return yield fetchData(0, length())
             },
-            function*(this: RxList<number>,{ asyncStatus }, triggerInfos): Generator<any, any, number[]>{
+            function*(this: RxList<number>,{  }, triggerInfos): Generator<any, any, number[]>{
                 for(let triggerInfo of triggerInfos) {
-
                     const {oldValue, newValue} = triggerInfo as {oldValue:number, newValue:number}
                     const newData = yield fetchData(oldValue, newValue-oldValue)
                     this.data.push(...newData)
                 }
+                patchRuns++
             }
         )
         await wait(11)
@@ -115,8 +141,8 @@ describe('RxList', () => {
         length(30)
         await wait(200)
         expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
-
-
+        // 应该只拍一次，因为 asyncComputed 默认泡在 next micro task 中
+        expect(patchRuns).toBe(1)
     })
 
 })

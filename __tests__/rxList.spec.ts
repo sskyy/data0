@@ -1,8 +1,11 @@
 import {createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {computed} from "../src/index.js";
+import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
 import {autorun} from "../src/autorun.js";
 import {atom} from "../src/atom.js";
+
+setDefaultScheduleRecomputedAsLazy(true)
+
 
 describe('RxList', () => {
     test('map to another list', () => {
@@ -12,22 +15,22 @@ describe('RxList', () => {
             mapRuns++
             return item * 2
         })
-        expect(list2.data).toMatchObject([2,4,6])
+        expect(list2.toArray()).toMatchObject([2,4,6])
         expect(mapRuns).toBe(3)
 
         // splice 以后仍然保持正确
         list.splice(1,1)
-        expect(list2.data).toMatchObject([2,6])
+        expect(list2.toArray()).toMatchObject([2,6])
         expect(mapRuns).toBe(3)
 
         // splice 添加元素
         list.splice(1,0, 3)
-        expect(list2.data).toMatchObject([2,6,6])
+        expect(list2.toArray()).toMatchObject([2,6,6])
         expect(mapRuns).toBe(4)
 
         // 通过 set 修改元素
         list.set(1, 4)
-        expect(list2.data).toMatchObject([2,8,6])
+        expect(list2.toArray()).toMatchObject([2,8,6])
         expect(mapRuns).toBe(5)
     })
 
@@ -38,24 +41,24 @@ describe('RxList', () => {
             mapRuns++
             return item * index!()
         })
-        expect(list2.data).toMatchObject([0,2,6])
+        expect(list2.toArray()).toMatchObject([0,2,6])
         expect(mapRuns).toBe(3)
 
         // splice 以后仍然保持正确
         list.splice(1,1)
         expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1])
-        expect(list2.data).toMatchObject([0,6])
+        expect(list2.toArray()).toMatchObject([0,6])
         expect(mapRuns).toBe(3)
 
         // splice 添加元素
         list.splice(1,0, 3)
         expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1, 2])
-        expect(list2.data).toMatchObject([0,3,6])
+        expect(list2.toArray()).toMatchObject([0,3,6])
         expect(mapRuns).toBe(4)
 
         // 通过 set 修改元素
         list.set(1, 4)
-        expect(list2.data).toMatchObject([0,4,6])
+        expect(list2.toArray()).toMatchObject([0,4,6])
         expect(mapRuns).toBe(5)
     })
 
@@ -71,17 +74,17 @@ describe('RxList', () => {
             })
         })
 
-        expect(list2.data.map(i => i())).toMatchObject([1,2,3])
+        expect(list2.toArray().map(i => i())).toMatchObject([1,2,3])
         expect(mapRuns).toBe(3)
         outerAtom(2)
-        expect(list2.data.map(i => i())).toMatchObject([2,4,6])
+        expect(list2.toArray().map(i => i())).toMatchObject([2,4,6])
         expect(mapRuns).toBe(6)
 
         // removed computed in list should be destroyed
         list.pop()
         expect(mapRuns).toBe(6)
         outerAtom(3)
-        expect(list2.data.map(i => i())).toMatchObject([3,6])
+        expect(list2.toArray().map(i => i())).toMatchObject([3,6])
         expect(mapRuns).toBe(8)
     })
 
@@ -101,20 +104,22 @@ describe('RxList', () => {
             }
         })
 
-        expect(list2.data).toMatchObject([2,4,6])
+        expect(list2.toArray()).toMatchObject([2,4,6])
         list.splice(1,1)
+        expect(list2.toArray()).toMatchObject([2,6])
+        // 通过读取来触发一下重算
         expect(innerOnCleanupResult).toMatchObject([2])
         expect(optionCleanupResult).toMatchObject([4])
 
         // 剩下 1,3。 unshift 之后变成 0,1,2,1,3
         list.unshift(0, 1,2)
-        expect(list.data).toMatchObject([0,1,2,1,3])
-        expect(list2.data).toMatchObject([0,2,4,2,6])
+        expect(list.toArray()).toMatchObject([0,1,2,1,3])
+        expect(list2.toArray()).toMatchObject([0,2,4,2,6])
 
         // 再次 splice，变成 0,1,3
         list.splice(1,2)
-        expect(list.data).toMatchObject([0,1,3])
-        expect(list2.data).toMatchObject([0,2,6])
+        expect(list.toArray()).toMatchObject([0,1,3])
+        expect(list2.toArray()).toMatchObject([0,2,6])
         expect(innerOnCleanupResult).toMatchObject([2,1,2])
         expect(optionCleanupResult).toMatchObject([4,2,4])
     })
@@ -128,14 +133,14 @@ describe('RxList', () => {
         ])
 
         const reducedList = list.reduce<{id:number, score: number}>((newList, item) => {
-            const findIndex = newList.data.findIndex(i => i.id === item.id)
+            const findIndex = newList.toArray().findIndex(i => i.id === item.id)
             if (findIndex !== -1) {
                 newList.splice(findIndex, 1)
             }
             newList.push(item)
         })
 
-        expect(reducedList.data).toMatchObject([
+        expect(reducedList.toArray()).toMatchObject([
             {id:1, score: 1},
             {id:2, score: 2},
             {id:3, score: 3},
@@ -143,7 +148,7 @@ describe('RxList', () => {
         ])
 
         list.push({id:5, score: 5})
-        expect(reducedList.data).toMatchObject([
+        expect(reducedList.toArray()).toMatchObject([
             {id:1, score: 1},
             {id:2, score: 2},
             {id:3, score: 3},
@@ -152,7 +157,7 @@ describe('RxList', () => {
         ])
 
         list.push({id:1, score: 6})
-        expect(reducedList.data).toMatchObject([
+        expect(reducedList.toArray()).toMatchObject([
             {id:2, score: 2},
             {id:3, score: 3},
             {id:4, score: 4},
@@ -225,32 +230,32 @@ describe('RxList', () => {
         ])
 
         const filtered = list.filter(item => item.score > 2)
-        expect(filtered.data).toMatchObject([
+        expect(filtered.toArray()).toMatchObject([
             {id:3, score: 3},
             {id:4, score: 4}
         ])
 
         // explicit key change
         list.set(2, {id: 3, score: 1})
-        expect(filtered.data).toMatchObject([
+        expect(filtered.toArray()).toMatchObject([
             {id:4, score: 4}
         ])
 
         list.splice(4, 0, {id: 0, score: 3})
-        expect(filtered.data).toMatchObject([
+        expect(filtered.toArray()).toMatchObject([
             {id:4, score: 4},
             {id:0, score: 3},
         ])
         // splice 在前面，有影响
         list.splice(3, 0, {id: 5, score: 3})
-        expect(filtered.data).toMatchObject([
+        expect(filtered.toArray()).toMatchObject([
             {id:4, score: 4},
             {id:0, score: 3},
             {id:5, score: 3},
         ])
 
         list.splice(2, Infinity)
-        expect(filtered.data).toMatchObject([])
+        expect(filtered.toArray()).toMatchObject([])
     })
 
     // should track iterator key
@@ -283,27 +288,27 @@ describe('RxList', () => {
 
         const grouped = list.groupBy(item => item.score > 2 ? 'high' : 'low')
         expect(Array.from(grouped.data.keys())).toMatchObject(['low', 'high'])
-        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
-        expect(grouped.data.get('high')!.data).toMatchObject([{id:3, score: 3}, {id:4, score: 4}])
+        expect(grouped.data.get('low')!.toArray()).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
+        expect(grouped.data.get('high')!.toArray()).toMatchObject([{id:3, score: 3}, {id:4, score: 4}])
 
         // explicit key change
         list.set(2, {id: 3, score: 1})
-        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
-        expect(grouped.data.get('high')!.data).toMatchObject([{id:4, score: 4}])
+        expect(grouped.get('low')!.toArray()).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
+        expect(grouped.get('high')!.toArray()).toMatchObject([{id:4, score: 4}])
 
 
         list.splice(4, 0, {id: 0, score: 3})
-        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
-        expect(grouped.data.get('high')!.data).toMatchObject([{id:4, score: 4}, {id: 0, score: 3}])
+        expect(grouped.get('low')!.toArray()).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
+        expect(grouped.get('high')!.toArray()).toMatchObject([{id:4, score: 4}, {id: 0, score: 3}])
 
         // splice 在前面，有影响
         list.splice(3, 0, {id: 5, score: 3})
-        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
-        expect(grouped.data.get('high')!.data).toMatchObject([{id:4, score: 4}, {id: 0, score: 3}, {id: 5, score: 3}])
+        expect(grouped.get('low')!.toArray()).toMatchObject([{id:1, score: 1}, {id:2, score: 2}, {id: 3, score: 1}])
+        expect(grouped.get('high')!.toArray()).toMatchObject([{id:4, score: 4}, {id: 0, score: 3}, {id: 5, score: 3}])
 
         list.splice(2, Infinity)
-        expect(grouped.data.get('low')!.data).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
-        expect(grouped.data.get('high')!.data).toMatchObject([])
+        expect(grouped.get('low')!.toArray()).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
+        expect(grouped.get('high')!.toArray()).toMatchObject([])
     })
 
 
@@ -317,7 +322,7 @@ describe('RxList', () => {
         ])
 
         const indexed = list.indexBy('id')
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [1, {id:1, score: 1}],
                 [2, {id:2, score: 2}],
@@ -328,7 +333,7 @@ describe('RxList', () => {
 
         // explicit key change
         list.set(2, {id: 3, score: 1})
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [1, {id:1, score: 1}],
                 [2, {id:2, score: 2}],
@@ -340,7 +345,7 @@ describe('RxList', () => {
 
 
         list.splice(4, 0, {id: 0, score: 3})
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [1, {id:1, score: 1}],
                 [2, {id:2, score: 2}],
@@ -354,7 +359,7 @@ describe('RxList', () => {
 
         // splice 在前面，有影响
         list.splice(3, 0, {id: 5, score: 3})
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [1, {id:1, score: 1}],
                 [2, {id:2, score: 2}],
@@ -367,7 +372,7 @@ describe('RxList', () => {
 
 
         list.splice(2, Infinity)
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [1, {id:1, score: 1}],
                 [2, {id:2, score: 2}],
@@ -384,7 +389,7 @@ describe('RxList', () => {
         ])
 
         const indexed = list.indexBy(item => item.id + 1)
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [2, {id:1, score: 1}],
                 [3, {id:2, score: 2}],
@@ -395,7 +400,7 @@ describe('RxList', () => {
 
         // explicit key change
         list.set(2, {id: 3, score: 1})
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [2, {id:1, score: 1}],
                 [3, {id:2, score: 2}],
@@ -405,7 +410,7 @@ describe('RxList', () => {
         )
 
         list.splice(1, 1, {id: 0, score: 3})
-        expect(Array.from(indexed.data.entries())).toMatchObject(
+        expect(indexed.entries().toArray()).toMatchObject(
             [
                 [2, {id:1, score: 1}],
                 [5, {id:4, score: 4}],
@@ -424,10 +429,10 @@ describe('RxList chained computed', () => {
             return showMore() ? [1,2,3,4,5] : [1,2,3]
         })
         const computedList = list.map(item =>  item * 2)
-        expect(computedList.data).toMatchObject([2,4,6])
+        expect(computedList.toArray()).toMatchObject([2,4,6])
 
         showMore(true)
-        expect(computedList.data).toMatchObject([2,4,6,8,10])
+        expect(computedList.toArray()).toMatchObject([2,4,6,8,10])
     })
 
     test('chained with createSelection', () => {
@@ -444,11 +449,12 @@ describe('RxList chained computed', () => {
             return selected
         })
 
-        expect(computedList.data.map(i => i())).toMatchObject([true,true,true, false, false, false, false])
+        expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, false, false, false, false])
 
         showMore(true)
-
-        expect(computedList.data.map(i => i())).toMatchObject([true,true,true, true, true, false, false])
+        debugger
+        computedList.toArray()
+        expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, true, true, false, false])
 
     })
 })

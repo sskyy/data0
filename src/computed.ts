@@ -7,6 +7,11 @@ import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
 
 
+export let defaultScheduleRecomputedAsLazy = true
+export const setDefaultScheduleRecomputedAsLazy = (lazy = true) => {
+    defaultScheduleRecomputedAsLazy = lazy
+}
+
 export const computedToInternal = new WeakMap<any, Computed>()
 
 export type CallbacksType = {
@@ -34,13 +39,33 @@ export type GetterContext = {
 
 export type GetterType = (context: GetterContext) => any
 export type GeneratorGetterType = (context: GetterContext) => Generator<any, string, boolean>
-export type DirtyCallback = (recompute: (force?: boolean) => void) => void
+export type DirtyCallback = (recompute: (force?: boolean) => void, markDirty: () => any) => void
 export type SkipIndicator = { skip: boolean }
 
 
 export function destroyComputed(computedItem: ComputedData) {
     const internal = computedToInternal.get(computedItem)!
     ReactiveEffect.destroy(internal)
+}
+
+export function getComputedInternal(computedItem: ComputedData) {
+    return computedToInternal.get(computedItem)
+}
+
+// 如果是 async 的，用 queueMicrotask 来调度。
+// 如果不是 async 的，用 markDirty 而不是直接 recompute
+function defaultScheduleRecompute(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
+    if (this.isAsync) {
+        queueMicrotask(() => {
+            recompute()
+        })
+    } else {
+        if (defaultScheduleRecomputedAsLazy) {
+            markDirty()
+        } else {
+            recompute()
+        }
+    }
 }
 
 
@@ -55,11 +80,11 @@ export function destroyComputed(computedItem: ComputedData) {
  *   2.3 强制重算 recompute(true) -> callManualTrackGetter
  */
 export class Computed extends ReactiveEffect {
-    isDirty = false
     data: ComputedData
     immediate = false
-    recomputing = false
+    // recomputing = false
     isAsync = false
+    isPatchAsync? = false
     runtEffectId?: string
     asyncStatus?: Atom<null | boolean | string>
     triggerInfos: TriggerInfo[] = []
@@ -68,12 +93,15 @@ export class Computed extends ReactiveEffect {
     effectFramesArray: ReactiveEffect[][] = []
     keyToEffectFrames: WeakMap<any, ReactiveEffect[]> = new WeakMap()
     manualTracking = false
+    public isRecomputing = false
+    public dirtyFromDeps= new Set<Computed>()
+    public markedDirtyEffects: Set<Set<Computed>> = new Set()
     // TODO 需要一个更好的约定
     public get debugName() {
         return getDebugName(this.data)
     }
 
-    constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public forceAtom?: boolean) {
+    constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public forceAtom?: boolean) {
         super(getter)
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         if (!getter) return
@@ -84,11 +112,16 @@ export class Computed extends ReactiveEffect {
         }
 
         this.manualTracking = !!applyPatch
+        if (this.applyPatch) {
+            this.isPatchAsync = isGenerator(this.applyPatch)
+        }
 
         if (typeof scheduleRecompute === 'function') {
             this.scheduleRecompute = scheduleRecompute
-        } else {
+        } else if(scheduleRecompute ===true){
             this.immediate = true
+        } else {
+            this.scheduleRecompute = defaultScheduleRecompute.bind(this)
         }
 
         if (callbacks?.onDestroy) this.on('destroy', callbacks.onDestroy)
@@ -115,12 +148,10 @@ export class Computed extends ReactiveEffect {
 
                 this.replaceData(data)
                 this.asyncStatus!(false)
-                this.isDirty = false
             })
         } else {
             getterResult = this.callSimpleGetter()
             this.replaceData(getterResult)
-            this.isDirty = false
         }
 
         return getterResult
@@ -165,7 +196,30 @@ export class Computed extends ReactiveEffect {
         const getterContext = this.createGetterContext()
         return this.getter!.call(this, getterContext!)
     }
+    // cleanupDirtyMark(effect: ReactiveEffect) {
+        //   // 1. 清理自己的 dirty
+        //   effect.isDirty = false
+        //
+        //   // 2. 把自己从被依赖项中的 dirtyFromDeps 中移除
+        //   effect.markedDirtyEffects.forEach(effectDirtyFrom => {
+        //     effectDirtyFrom.delete(effect)
+        //   })
+        //
+        //   effect.markedDirtyEffects.clear()
+        // }
 
+    // 这是传递给外部 scheduleRecompute 的，用来代理 notify 上的 recursiveMarkDirty
+    recursiveMarkDirty = () => {
+        debugger
+        Notifier.instance.forEachDepEffect(this, (effect) => {
+            if (effect instanceof Computed) {
+                effect.dirtyFromDeps.add(this)
+                this.markedDirtyEffects.add(effect.dirtyFromDeps)
+                // 没有 info，相当于只是标记为 dirty
+                effect.run([])
+            }
+        })
+    }
     // dep trigger 时调用
     run(infos: TriggerInfo[]) {
         if (this.skipIndicator?.skip) return
@@ -174,14 +228,39 @@ export class Computed extends ReactiveEffect {
         if (this.immediate) {
             this.recompute()
         } else {
-            // FIXME 用户需要更强的控制能力，例如 async patch 模式下，可能根据队列长度决定是否要完全重算。
-            this.scheduleRecompute!(this.recompute)
+            this.scheduleRecompute!(this.recompute, this.recursiveMarkDirty)
         }
+    }
+    // track 时调用由 notify 调用。
+    onTrack() {
+        // 可能是来自自己 recompute 中的 track，所以要排除掉。
+        if(this.isRecomputing) return
+
+        if(this.isDirty) {
+            // async computed 不会出现读时才计算的情况，所以不需要 await。
+            this.recompute()
+        }
+        this.dispatch('track', this.data)
     }
 
     // 由 this.run 调用
     recompute = async (forceRecompute = false) => {
-        if (!this.isDirty && !forceRecompute) return
+        // FIXME bug
+        // if (this.isRecomputing) return false
+        if ((!this.isDirty && !forceRecompute)) return
+
+        // 先将所有的被脏的被依赖项触发重算
+        for(const effect of this.dirtyFromDeps) {
+            // 这里这样写是为了防止同步类型的 effect.recompute 的计算跑到 next micro task 中，导致用户预期不正确。
+            if (effect.isAsync) {
+                await effect.recompute()
+            } else {
+                effect.recompute()
+            }
+        }
+
+        assert(this.dirtyFromDeps.size === 0, 'dirtyFromDeps should be empty after recompute')
+        this.isRecomputing = true
 
         // 可以用于清理一些用户自己的副作用。
         // 这里用了两个名字，onCleanup 是为了和 rxList 中的 api 一致。
@@ -197,18 +276,34 @@ export class Computed extends ReactiveEffect {
         if (forceRecompute || !this.applyPatch) {
             // 默认行为，重算并且重新收集依赖
             // CAUTION 用户一定要自己保证在第一次 await 之前读取了所有依赖。
-            this.runEffect()
+            if (this.isAsync) {
+                // 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
+                //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，所以这里要区分一下。
+                await this.runEffect()
+            } else {
+                this.runEffect()
+            }
         } else {
             // patch 模式
             // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
-            this.runPatch()
+            if (this.isPatchAsync) {
+                await this.runPatch()
+            } else {
+                this.runPatch()
+            }
         }
+        // 把自己从自己 trigger 了 dirty 的 effect 中移除
+        this.isDirty = false
+        for(const effects of this.markedDirtyEffects) {
+            effects.delete(this)
+        }
+        this.isRecomputing = false
     }
     runPatch() {
         if (isGenerator(this.applyPatch!)) {
-            this.runGeneratorPatch()
+            return this.runGeneratorPatch()
         } else {
-            this.runSimplePatch()
+            return this.runSimplePatch()
         }
     }
     runSimplePatch() {
@@ -229,7 +324,7 @@ export class Computed extends ReactiveEffect {
 
             this.asyncStatus!(true)
             // FIXME 要形成队列，不然可能第一个还没执行完，第二个就触发了。
-            this.runGenerator(generator,
+            return this.runGenerator(generator,
                 (isFirst) => {
                     Notifier.instance.pauseTracking()
                 },
@@ -282,14 +377,16 @@ export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyC
         )
     }
     internal.replaceData = function(newData: any) {
+        Notifier.instance.pauseTracking()
         if (isAtom(this.data)) {
             this.data(newData)
         } else {
             replace(this.data, newData)
         }
+        Notifier.instance.resetTracking()
     }
 
-    computedToInternal.set(internal.data, internal)
+    computedToInternal.set(toRaw(internal.data), internal)
     return internal.data
 }
 
@@ -302,17 +399,17 @@ computed.debug = createDebug(computed)
 
 // 强制重算
 export function recompute(computedItem: ComputedData, force = false) {
-    const internal = computedToInternal.get(computedItem)!
+    const internal = computedToInternal.get(toRaw(computedItem))!
     internal.recompute(force)
 }
 
 // 目前 debug 用的
 export function isComputed(target: any) {
-    return !!computedToInternal.get(target)
+    return !!computedToInternal.get(toRaw(target))
 }
 
 // debug 时用的
 export function getComputedGetter(target: any) {
-    return computedToInternal.get(target)?.getter
+    return computedToInternal.get(toRaw(target))?.getter
 }
 

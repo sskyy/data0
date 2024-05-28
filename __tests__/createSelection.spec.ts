@@ -1,7 +1,9 @@
 import {createIndexKeySelection, createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {computed} from "../src/computed.js";
+import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/computed.js";
 import {atom} from "../src/atom.js";
+
+setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('RxList multiple match', () => {
@@ -23,28 +25,28 @@ describe('RxList multiple match', () => {
                 return selected()
             })
         })
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
 
         expect(innerRuns).toBe(4)
 
         // 新增
         selected.push(list.at(1)!)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, true, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, false, false])
         expect(innerRuns).toBe(5)
 
         // 连续新增
         selected.push(list.at(2)!)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, true, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, true, false])
         expect(innerRuns).toBe(6)
 
         // 删除
         selected.splice(1, 1)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true, false])
         expect(innerRuns).toBe(7)
 
         // source 删除
         list.splice(0, 1)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
         expect(selected.data).toMatchObject([list.at(1)!])
         expect(innerRuns).toBe(7)
     })
@@ -67,33 +69,33 @@ describe('RxList multiple match', () => {
                 return selected()
             })
         })
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
 
         expect(innerRuns).toBe(4)
 
         selected(list.at(1)!)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, true, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false, false])
         expect(innerRuns).toBe(6)
 
         // 连续修改
         selected(list.at(2)!)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, true, false])
         expect(innerRuns).toBe(8)
 
         // 删除
         selected(null)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false, false])
         expect(innerRuns).toBe(9)
 
         // source 删除
         const first= list.at(0)
         selected(first)
-        expect(innerRuns).toBe(10)
+        expect(innerRuns).toBe(9)
         // 删掉第一个
         list.splice(0, 1)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false])
         expect(selected.raw).toBeNull()
-        expect(innerRuns).toBe(10)
+        expect(innerRuns).toBe(9)
 
     })
 
@@ -115,19 +117,19 @@ describe('RxList multiple match', () => {
                 return selected()
             })
         })
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
 
         // source 删除
         const first= list.at(0)!
         selected(first)
         // 删掉第一个
         list.splice(0, 1)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false])
         // 还存在
         expect(selected.raw).not.toBeNull()
         // explicit key set
         list.set(1, first)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
     })
 })
 
@@ -150,31 +152,31 @@ describe('createSelection use index as key', () => {
                 return selected()
             })
         })
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
         expect(innerRuns).toBe(4)
 
         // 新增
         selected.push(1)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, true, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, false, false])
         expect(innerRuns).toBe(5)
 
         // 连续新增
         selected.push(2)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, true, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, true, false])
         expect(innerRuns).toBe(6)
 
         // 删除
         selected.splice(1, 1)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true, false])
         expect(innerRuns).toBe(7)
 
         // source 删除
         list.splice(0, 1)
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, true])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true])
         expect(innerRuns).toBe(10)
         // 重新插入
         list.unshift({id:0, score: 0})
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true, false])
         expect(innerRuns).toBe(14)
     })
 
@@ -197,25 +199,25 @@ describe('createSelection use index as key', () => {
                 return selected()
             })
         })
-        expect(selectedList.data.map(value => value())).toMatchObject([true, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
         expect(innerRuns).toBe(4)
 
         selectedValue(1)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, true, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false, false])
 
         expect(innerRuns).toBe(6)
 
         selectedValue(2)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, true, false])
         expect(innerRuns).toBe(8)
 
         list.push({id:5, score: 5})
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, true, false, false])
 
         list.unshift({id:0, score: 0})
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, true, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, true, false, false, false])
 
         selectedValue(null)
-        expect(selectedList.data.map(value => value())).toMatchObject([false, false, false, false, false, false])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false, false, false, false])
     })
 })

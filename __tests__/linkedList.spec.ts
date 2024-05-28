@@ -1,7 +1,8 @@
-import {computed} from "../src/computed";
+import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
 import {LinkedList} from '../src/LinkedList'
 import { describe, test, expect } from "vitest";
 
+setDefaultScheduleRecomputedAsLazy(true)
 
 describe('computed based on linkedList', () => {
     test('atom & computed', () => {

@@ -1,9 +1,8 @@
 import {createDep, Dep, newTracked, wasTracked} from "./dep";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {Computed, getComputedGetter, isComputed} from "./computed";
-import {isAtom} from "./atom";
+import {Computed, getComputedInternal} from "./computed";
 import {toRaw} from "./reactive";
-import {assert, extend, getStackTrace, isArray, isIntegerKey, isIntegerKeyQuick, toNumber} from "./util";
+import {assert, extend, isArray, isIntegerKey, isIntegerKeyQuick, toNumber} from "./util";
 import {ReactiveEffect} from "./reactiveEffect.js";
 
 
@@ -66,10 +65,11 @@ export const ITERATE_KEY_KEY_ONLY = Symbol('Map key iterate' )
 export const maxMarkerBits = 30
 
 
-
 export class Notifier {
   static trackOpBit  = 1
   static _instance: Notifier
+  // FIXME 改成 true
+  static markDirtyWhenEffectTriggered = false
   static get instance() {
     return Notifier._instance || (Notifier._instance = new Notifier())
   }
@@ -79,7 +79,6 @@ export class Notifier {
   shouldTrack = true
   effectTrackDepth = 0
   frameStack: TrackFrame[] = []
-  triggerStack: TriggerStack = []
   shouldTrigger: boolean = true
   trackStack: boolean[] = []
   effectsInSession: Set<ReactiveEffect> = new Set()
@@ -124,7 +123,14 @@ export class Notifier {
     this.isDigesting = false
   }
   track = (target: object, type: TrackOpTypes, key: unknown) => {
+    // 为了触发 dirty computed 的 recompute
+    const computedInternal = target instanceof Computed ? target: getComputedInternal(target)
+
     const activeEffect = ReactiveEffect.activeScopes.at(-1)
+    if (computedInternal &&  computedInternal!== activeEffect) {
+      computedInternal.onTrack()
+    }
+
     if (!activeEffect || !this.shouldTrack) return
     // CAUTION 不能 track 自己。computed 在第二次执行的时候会有一个 replace 行为，会
     if (__DEV__) {
@@ -199,18 +205,19 @@ export class Notifier {
       // never been tracked
       return
     }
-    if (__DEV__) {
-      const getter = getComputedGetter(source)
-      this.triggerStack.push({
-        debugTarget: getter? getter : isAtom(source) ? source: toRaw(source),
-        type: isAtom(source) ? 'atom' : isComputed(source) ? 'computed' : 'reactive',
-        opType: type,
-        key: info.key,
-        newValue: info.newValue,
-        oldValue: info.oldValue,
-        targetLoc: getStackTrace()
-      })
-    }
+
+    // if (__DEV__) {
+    //   const getter = getComputedGetter(source)
+    //   this.triggerStack.push({
+    //     debugTarget: getter? getter : isAtom(source) ? source: toRaw(source),
+    //     type: isAtom(source) ? 'atom' : isComputed(source) ? 'computed' : 'reactive',
+    //     opType: type,
+    //     key: info.key,
+    //     newValue: info.newValue,
+    //     oldValue: info.oldValue,
+    //     targetLoc: getStackTrace()
+    //   })
+    // }
 
 
     let deps: (Dep | undefined)[] = []
@@ -291,10 +298,22 @@ export class Notifier {
       }
     }
 
-    if (__DEV__) {
-      this.triggerStack.pop()
+    // if (__DEV__) {
+    //   this.triggerStack.pop()
+    // }
+  }
+  forEachDepEffect(target: ReactiveEffect, fn: (dep: ReactiveEffect) => void) {
+    const depsMap = this.targetMap.get(target)
+    if (!depsMap) return
+    const deps = [...depsMap.values()]
+    for (const dep of deps) {
+      for(const effect of dep) {
+          fn(effect)
+      }
     }
   }
+  // 重算完成以后，由 effect 调用
+  //
   triggerEffects(
       dep: Dep | ReactiveEffect[],
       info: TriggerInfo,

@@ -1,9 +1,9 @@
 // 需要按原来的序，监听增删改
-import {computed, ComputedData, Computed, destroyComputed} from "./computed";
+import {computed, Computed, ComputedData, destroyComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom, isAtom} from "./atom";
 import {isReactive} from "./reactive";
-import { Notifier} from "./notify";
+import {Notifier} from "./notify";
 import {assert} from "./util";
 import {ReactiveEffect} from "./reactiveEffect";
 
@@ -336,66 +336,4 @@ export function incUnique(source: any[]) : ReturnType<typeof computed>{
             return isAtom(item) ? item() : item
         }))
     })
-}
-
-
-export function incPick(source: any[], propName: string) : ReturnType<typeof computed>{
-    return incMap(source, (item) => item[propName])
-}
-
-// TODO
-type AssertFn = (item: any, index: number) => boolean
-export function incEvery(source: Set<any>, assert: AssertFn) : ReturnType<typeof computed>
-export function incEvery(source: any[], assert: AssertFn) : ReturnType<typeof computed>
-export function incEvery(source: any, assert: AssertFn) : ReturnType<typeof computed>{
-    const arr = Array.isArray(source) ? source : Array.from(source)
-    return computed(() => arr.every(assert))
-
-}
-
-export function incSome(source: any[], assert:AssertFn) : ReturnType<typeof computed>{
-    return computed(() => source.some(assert))
-}
-
-// 单选的增量计算
-export function incUniqueMatch(initialValue?: any) {
-    let lastValue = initialValue
-    const value = atom(initialValue)
-    const indexMap = new WeakMap<any, any>()
-
-    function match(valueToMatch: any) {
-        const matched = atom(valueToMatch === value())
-        indexMap.set(valueToMatch, matched)
-        return matched
-    }
-
-    const watcher = computed(() => {
-        const lastMatchedItem = indexMap.get(lastValue)
-        const thisValue = value()
-        lastValue = thisValue
-        const thisMatchedItem = indexMap.get(thisValue)
-        if (lastMatchedItem && lastMatchedItem !== thisMatchedItem) {
-            lastMatchedItem(false)
-        }
-
-        if (thisMatchedItem) thisMatchedItem(true)
-    })
-
-    return [value, match, watcher]
-}
-
-// TODO 多选
-export function incMatch() {
-
-}
-
-export function incFilter(source: any[], filterFn: (item:any) => boolean) {
-    return computed(() => {
-        return source.filter(filterFn)
-    })
-}
-
-// TODO
-export function incConcat(arr1: any[], ...arr: any[][]) {
-    return arr1.concat(...arr)
 }

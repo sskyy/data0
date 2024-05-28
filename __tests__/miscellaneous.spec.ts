@@ -1,6 +1,7 @@
-import { atom, reactive, incUnique, incPick, computed} from "../src";
-import { describe, test, expect } from "vitest";
+import {atom, computed, incUnique, reactive, setDefaultScheduleRecomputedAsLazy} from "../src";
+import {describe, expect, test} from "vitest";
 
+setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('computed on computed', () => {
@@ -58,26 +59,6 @@ describe('computed on computed', () => {
         expect(Array.from(uniqueSet)).toShallowMatchObject([1,2,4])
         atom1(1)
         expect(Array.from(uniqueSet)).toShallowMatchObject([1,2])
-    })
-
-    test('incUnique and incPick combo', () => {
-        const value  = reactive({})
-        // @ts-ignore
-        const properties = reactive([{name: 'a'}].concat(value))
-        const pickedNames = incPick(properties, '$name')
-        const uniqueNames = incUnique(pickedNames)
-        const isNameUnique = computed(() => {
-            return uniqueNames.size === properties.length
-        })
-
-        expect(isNameUnique()).toBe(true)
-        // // @ts-ignore
-        // value.name = atom()
-        // // @ts-ignore
-        // value.name('a')
-        // @ts-ignore
-        value.name = 'a'
-        expect(isNameUnique()).toBe(false)
     })
 
 })

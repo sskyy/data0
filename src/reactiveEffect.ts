@@ -9,6 +9,7 @@ export class ReactiveEffect extends ManualCleanup {
     static activeScopes: ReactiveEffect[] = []
     public active = true
     public isRunningAsync = false
+    public isDirty = false
     public eventToCallbacks: Map<string, Set<Function>> = new Map()
     static destroy(effect: ReactiveEffect, fromParent?: boolean) {
         if (!effect.active) return
@@ -158,6 +159,15 @@ export class ReactiveEffect extends ManualCleanup {
             return resultPromise
         }
     }
+    // notify recursive markDirty 时调用
+    onDirty() {
+
+    }
+    // notify track 时调用
+    onTrack() {
+
+    }
+
 
     cleanup() {
         const {deps} = this

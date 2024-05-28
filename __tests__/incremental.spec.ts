@@ -1,5 +1,5 @@
-import { incMap } from "../src/incremental";
-import { describe, test, expect } from "vitest";
+import {incMap} from "../src/incremental";
+import {describe, expect, test} from "vitest";
 import {reactive} from "../src/reactive";
 
 
@@ -9,6 +9,7 @@ describe('incremental map', () => {
         let mapFnRuns = 0
         const mappedArr = incMap(source, (item) => {
             mapFnRuns++
+            // @ts-ignore
             return item + 3
         })
         expect(mappedArr).toShallowMatchObject([4,5,6])
