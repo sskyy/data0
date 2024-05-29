@@ -96,7 +96,6 @@ describe('RxList multiple match', () => {
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false])
         expect(selected.raw).toBeNull()
         expect(innerRuns).toBe(9)
-
     })
 
     test('create unique selection using object as key with value not reset', () => {
@@ -129,6 +128,34 @@ describe('RxList multiple match', () => {
         expect(selected.raw).not.toBeNull()
         // explicit key set
         list.set(1, first)
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
+    })
+
+    test('create unique selection using primitive value as key with value not reset', () => {
+        const list = new RxList<string>(['a', 'b', 'c', 'd'])
+
+        let innerRuns = 0
+
+        const selected = atom('b')
+        const uniqueMatch = list.createSelection(selected)
+        const selectedList = uniqueMatch.map(([_, selected]) => {
+            return computed(() => {
+                innerRuns++
+                return selected()
+            })
+        })
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false, false])
+
+        selected('a')
+        expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
+
+        // 删掉第一个
+        list.splice(0, 1)
+        expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false])
+        // 还存在
+        expect(selected.raw).not.toBeNull()
+        // explicit key set
+        list.set(1, 'a')
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
     })
 })

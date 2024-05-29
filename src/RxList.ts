@@ -631,11 +631,11 @@ export class RxList<T> extends Computed {
 
     }
 
-    createSelection(currentValues: RxList<T|number>|Atom<T|null|number>) {
-        return createSelection(this, currentValues)
+    createSelection(currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue?: boolean) {
+        return createSelection(this, currentValues, autoResetValue)
     }
-    createIndexKeySelection(currentValues: RxList<T|number>|Atom<T|null|number>) {
-        return createIndexKeySelection(this, currentValues)
+    createIndexKeySelection(currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue?:boolean) {
+        return createIndexKeySelection(this, currentValues, autoResetValue)
     }
 }
 
@@ -750,116 +750,7 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
 
 
 export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
-    // const itemsWithIndicators = source.map<[T, Atom<boolean>]>((item) => [item, atom(false)] as [T, Atom<boolean>])
-    //
-    // const syncIndicators = new Computed(
-    //     function computation(this: RxList<[T, Atom<boolean>]>) {
-    //         this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-    //         const selectedValues = isAtom(currentValues) ? (currentValues.raw === null ? [] : [currentValues.raw]) : currentValues.data
-    //         selectedValues.forEach((value) => {
-    //             itemsWithIndicators.at(value as number)?.[1](true)
-    //         })
-    //     },
-    //     function applyMapArrayPatch(this: RxList<[T, Atom<boolean>]>, _data, triggerInfos) {
-    //         triggerInfos.forEach((triggerInfo) => {
-    //             //2. 来自 source 的变化
-    //             const { method , argv  , key } = triggerInfo
-    //             // 只有 useIndexAsKey 的时候才会有 splice 变化
-    //             if (method === 'splice') {
-    //                 const startIndex = argv![0] as number
-    //                 const deleteCount = argv![1]
-    //                 const insertCount = argv!.slice(2)!.length
-    //
-    //                 const selectedValues = isAtom(currentValues) ? [currentValues.raw] : currentValues.data
-    //
-    //                 const outOfValueIndexes:number[] = []
-    //                 // 因为 index 产生了变化，所以要更新 indicator
-    //                 selectedValues.forEach((value, valueIndex) => {
-    //                     const index = value as number
-    //                     if (index > itemsWithIndicators.data.length - 1) {
-    //                         outOfValueIndexes.push(valueIndex)
-    //                     } else {
-    //                         // 只有 index 在后面的才是还存在，并且受了影响需要处理的。
-    //                         if (index >= startIndex && deleteCount !== insertCount) {
-    //                             const indexAfterChange = index + insertCount - deleteCount
-    //                             const oldIndexIndicator = itemsWithIndicators.data.at(indexAfterChange)![1]
-    //                             oldIndexIndicator(false)
-    //                         }
-    //                         const newIndicator = itemsWithIndicators.data.at(index)![1]
-    //                         newIndicator?.(true)
-    //                     }
-    //                 })
-    //
-    //                 // 处理超出的 index
-    //                 if (resetValue && outOfValueIndexes.length > 0) {
-    //                     if (isAtom(currentValues)) {
-    //                         // 不用判断，如果有，肯定就是 currentValues 超过了
-    //                         currentValues(null)
-    //                     } else {
-    //                         // 重新触发一下。
-    //                         outOfValueIndexes.forEach((valueIndex, index) => {
-    //                             // CAUTION 因为删除一个 index 就会变化，所以要减去 index
-    //                             currentValues.splice(outOfValueIndexes[0]-index, 0)
-    //                         })
-    //                     }
-    //                 }
-    //
-    //             } else {
-    //                 // explicit key change
-    //                 if (isAtom(currentValues)) {
-    //                     if (currentValues.raw === key) {
-    //                         itemsWithIndicators.data[key as number][1](true)
-    //                     }
-    //                 } else {
-    //                     if (currentValues.data.includes(key as number)) {
-    //                         itemsWithIndicators.data[key as number][1](true)
-    //                     }
-    //                 }
-    //             }
-    //         })
-    //     },
-    // )
-    //
-    // syncIndicators.runEffect()
-    //
-    // const syncCurrentValuesToIndicators = new Computed(
-    //     function syncToIndicator(this: Computed) {
-    //         if (isAtom(currentValues)) {
-    //             this.manualTrack(currentValues, TrackOpTypes.ATOM, 'value');
-    //         } else {
-    //             this.manualTrack(currentValues, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-    //         }
-    //     },
-    //     function applyPatchToIndicators(this:Computed, _data, triggerInfos) {
-    //         triggerInfos.forEach((triggerInfo) => {
-    //             if (triggerInfo.source === currentValues) {
-    //                 if(currentValues instanceof RxList) {
-    //                     // 如果是多选，currentValues 只能接受 splice 操作
-    //                     assert(triggerInfo.method === 'splice', 'currentValues can only support splice')
-    //                 }
-    //
-    //                 const deleteItems = isAtom(currentValues) ? (triggerInfo.oldValue === null ? [] : [triggerInfo.oldValue]) : triggerInfo.methodResult || []
-    //                 const insertItems = isAtom(currentValues) ? (triggerInfo.newValue === null ? [] : [triggerInfo.newValue]) : triggerInfo.argv!.slice(2);
-    //                 (deleteItems as number[]).forEach((index:number) => {
-    //                     itemsWithIndicators.data[index]?.[1]?.(false)
-    //                 })
-    //
-    //                 insertItems.forEach((index:number) => {
-    //                     itemsWithIndicators.data[index][1]?.(true)
-    //                 })
-    //             }
-    //         })
-    //     }
-    // )
-    //
-    // syncCurrentValuesToIndicators.runEffect()
-    //
-    // itemsWithIndicators.on('destroy', () => {
-    //     syncIndicators.destroy()
-    //     syncCurrentValuesToIndicators.destroy()
-    // })
-    //
-    // return itemsWithIndicators
+
     function trackCurrentValues(list: Computed) {
         if (isAtom(currentValues)) {
             list.manualTrack(currentValues, TrackOpTypes.ATOM, 'value');

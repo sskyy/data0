@@ -267,7 +267,6 @@ export class Computed extends ReactiveEffect {
             }
         }
 
-        if(this.dirtyFromDeps.size !== 0) debugger
         assert(this.dirtyFromDeps.size === 0, 'dirtyFromDeps should be empty after recompute')
 
         // 可以用于清理一些用户自己的副作用。
@@ -366,8 +365,8 @@ export class Computed extends ReactiveEffect {
 }
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
-export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean): ComputedResult<T>
-export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean, asyncInitialValue?: any): ComputedData {
+export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean): ComputedResult<T>
+export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean, asyncInitialValue?: any): ComputedData {
     const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, forceAtom)
     if (internal.isAsync) {
         assert(!(asyncInitialValue === undefined && forceAtom === undefined), 'async getter must use setInitialValue to set initial value.')
@@ -398,7 +397,7 @@ export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyC
     return internal.data
 }
 
-export function atomComputed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+export function atomComputed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     return computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, true)
 }
 
