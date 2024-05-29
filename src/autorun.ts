@@ -1,4 +1,4 @@
-import {DirtyCallback, Computed} from "./computed.js";
+import {DirtyCallback, Computed, GetterContext} from "./computed.js";
 
 // type AutorunContext = {
 //     onCleanup(fn: () => any): void
@@ -27,7 +27,7 @@ import {DirtyCallback, Computed} from "./computed.js";
 //     }
 // }
 
-export function autorun(fn: () => any, scheduleRerun?: DirtyCallback) {
+export function autorun(fn: (context: GetterContext) => any, scheduleRerun?: DirtyCallback) {
     const instance = new Computed(fn, undefined, scheduleRerun || true)
     instance.runEffect()
     // const instance = new Autorun(fn)
