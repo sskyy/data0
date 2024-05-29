@@ -322,6 +322,9 @@ export class Notifier {
     for (const effect of effects) {
       // CAUTION 特别注意这里，因为我们现在支持了 lazy recompute，所以可能在读的时候才重算。
       //  重算过程中可能会再次出发 trigger，因为像 atomComputed 这种是在重算的时候更新 atom 值的。
+      if (ReactiveEffect.activeScopes.includes(effect)) {
+        debugger
+      }
       if (ReactiveEffect.activeScopes.at(-1) !== effect ) {
         this.triggerEffect(effect, info, debuggerEventExtraInfo)
       }

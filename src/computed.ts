@@ -107,7 +107,8 @@ export class Computed extends ReactiveEffect {
     public get debugName() {
         return getDebugName(this.data)
     }
-
+    public static id = 0
+    public id: number = Computed.id++
     constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public forceAtom?: boolean) {
         super(getter)
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
@@ -251,8 +252,10 @@ export class Computed extends ReactiveEffect {
 
     // 由 this.run 调用
     recompute = async (forceRecompute = false) => {
-        if (this.isRecomputing) return false
         if ((!this.isDirty && !forceRecompute)) return
+
+        if (this.isRecomputing) return false
+        this.isRecomputing = true
 
         // 先将所有的被脏的被依赖项触发重算
         for(const effect of this.dirtyFromDeps) {
@@ -264,8 +267,8 @@ export class Computed extends ReactiveEffect {
             }
         }
 
+        if(this.dirtyFromDeps.size !== 0) debugger
         assert(this.dirtyFromDeps.size === 0, 'dirtyFromDeps should be empty after recompute')
-        this.isRecomputing = true
 
         // 可以用于清理一些用户自己的副作用。
         // 这里用了两个名字，onCleanup 是为了和 rxList 中的 api 一致。
