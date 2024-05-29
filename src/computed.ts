@@ -252,7 +252,7 @@ export class Computed extends ReactiveEffect {
 
     // 由 this.run 调用
     recompute = async (forceRecompute = false) => {
-        if ((!this.isDirty && !forceRecompute)) return
+        if ((!this.isDirty && !forceRecompute) || !this.active) return
 
         if (this.isRecomputing) return false
         this.isRecomputing = true
