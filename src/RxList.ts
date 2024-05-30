@@ -194,7 +194,7 @@ export class RxList<T> extends Computed {
                 triggerInfos.forEach((triggerInfo) => {
 
                     const { method , argv  ,key } = triggerInfo
-                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
+                    assert((method === 'splice' || key !== undefined), 'trigger info has no method and key')
 
                     options?.beforePatch?.(triggerInfo)
 

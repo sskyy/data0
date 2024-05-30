@@ -60,7 +60,6 @@ function defaultScheduleRecompute(this: Computed, recompute: (force?: boolean) =
     if (this.isAsync) {
         if (queuedRecomputes.has(this)) return
         queuedRecomputes.add(this)
-        // debugger
         queueMicrotask(async () => {
             await recompute()
             queuedRecomputes.delete(this)
@@ -204,33 +203,35 @@ export class Computed extends ReactiveEffect {
         const getterContext = this.createGetterContext()
         return this.getter!.call(this, getterContext!)
     }
-    // cleanupDirtyMark(effect: ReactiveEffect) {
-        //   // 1. 清理自己的 dirty
-        //   effect.isDirty = false
-        //
-        //   // 2. 把自己从被依赖项中的 dirtyFromDeps 中移除
-        //   effect.markedDirtyEffects.forEach(effectDirtyFrom => {
-        //     effectDirtyFrom.delete(effect)
-        //   })
-        //
-        //   effect.markedDirtyEffects.clear()
-        // }
+
 
     // 这是传递给外部 scheduleRecompute 的，用来代理 notify 上的 recursiveMarkDirty
     recursiveMarkDirty = () => {
-        Notifier.instance.forEachDepEffect(this.trackClassInstance ? this: this.data, (effect) => {
+        // CAUTION Notifier.instance.getDepEffects 给的是去重的 Effect, 不然这里会触发多次无意义的 run
+        const depEffects = Notifier.instance.getDepEffects(this.trackClassInstance ? this: this.data)
+        if (!depEffects) return
+
+        for(const effect of depEffects) {
             if (effect instanceof Computed) {
                 effect.dirtyFromDeps.add(this)
                 this.markedDirtyEffects.add(effect.dirtyFromDeps)
             }
-            // 没有 info，相当于只是标记为 dirty
-            effect.run([])
-        })
+
+            effect.run()
+        }
     }
-    // dep trigger 时调用
-    run(infos: TriggerInfo[]) {
+    // dep trigger/ recursiveMarkDirty 时调用。没有 infos 说明是 markDirty
+    run(infos?: TriggerInfo[]) {
         if (this.skipIndicator?.skip) return
-        this.triggerInfos.push(...infos)
+        if (infos) this.triggerInfos.push(...infos)
+
+        // 哪些情况可能出现 recomputing 过程中又触发了 run :
+        // 1. 在 lazy recompute 模式下，可能出现依赖是一个 atomComputed，
+        //  触发它的重算时会使得 atom trigger 重新触发 run，这个时候我们已经在 recomputing 了，
+        //  只需要获取 info 就行了，不需要再次触发 recompute/schedule 了。
+        // 2. 在 async 模式下，任何依赖都可以再触发 recompute。
+        if (this.isRecomputing) return
+
         this.isDirty = true
         if (this.immediate) {
             this.recompute()
@@ -304,6 +305,7 @@ export class Computed extends ReactiveEffect {
         for(const effects of this.markedDirtyEffects) {
             effects.delete(this)
         }
+        this.markedDirtyEffects.clear()
         this.isRecomputing = false
     }
     runPatch() {

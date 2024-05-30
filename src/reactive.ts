@@ -174,6 +174,5 @@ export function rawStructureClone(obj: any, modifier?: (res: any) => any ): type
     result = obj
   }
 
-  // if (Array.isArray(result)) debugger
   return modifier? modifier(result) : result
 }

@@ -300,15 +300,18 @@ export class Notifier {
     //   this.triggerStack.pop()
     // }
   }
-  forEachDepEffect(target: ReactiveEffect, fn: (dep: ReactiveEffect) => void) {
+  getDepEffects(target: object) {
     const depsMap = this.targetMap.get(target)
     if (!depsMap) return
-    const deps = [...depsMap.values()]
-    for (const dep of deps) {
-      for(const effect of dep) {
-          fn(effect)
+
+    // CAUTION 一定要利用 set 去重，不然外部拿到的结果可能引发问题。
+    const result = new Set<ReactiveEffect>()
+    for(const [_, deps] of depsMap) {
+      for(const effect of deps) {
+        result.add(effect)
       }
     }
+    return result
   }
   // 重算完成以后，由 effect 调用
   //

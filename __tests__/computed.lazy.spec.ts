@@ -1,8 +1,8 @@
-import {atomComputed, computed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
+import {atomComputed, computed, setDefaultScheduleRecomputedAsLazy, Computed} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
-import {autorun} from "../src/index.js";
+import {autorun, RxList, TrackOpTypes, TriggerOpTypes} from "../src/index.js";
 
 
 describe('computed basic', () => {
@@ -166,6 +166,41 @@ describe('computed return object with internal side effect', () => {
         // 重新读一下触发 recompute
         computedValue()
         expect(destroyCalled).toBe(1)
+
+    })
+})
+
+
+describe('patchable computed with lazy recompute', () => {
+
+
+    beforeEach(() => {
+        setDefaultScheduleRecomputedAsLazy(true)
+    })
+
+    test('manual track multiple key should trigger dirty only once', () => {
+
+        const list = new RxList([1, 2, 3])
+        const list2 = list.map(item => item + 1)
+        let patchRuns = 0
+
+        const computed1 = atomComputed(
+            function computation(this: Computed)  {
+                this.manualTrack(list2, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(list2, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                return null
+            },
+            function applyPatch(this: Computed) {
+                patchRuns++
+            },
+        )
+
+        expect(patchRuns).toBe(0)
+        list.push(4)
+        list.set(0, 0)
+        expect(patchRuns).toBe(0)
+        computed1()
+        expect(patchRuns).toBe(1)
 
     })
 })
