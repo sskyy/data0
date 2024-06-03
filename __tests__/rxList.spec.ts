@@ -258,6 +258,28 @@ describe('RxList', () => {
         expect(filtered.toArray()).toMatchObject([])
     })
 
+    test('filter with external reactive dep', () => {
+        const standard = atom(2)
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        const filtered = list.filter(item => item.score > standard())
+        expect(filtered.toArray()).toMatchObject([
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        standard(3)
+        expect(filtered.toArray()).toMatchObject([
+            {id:4, score: 4}
+        ])
+
+    })
+
     // should track iterator key
     test('forEach', () => {
         const list = new RxList<number>([1,2,3])

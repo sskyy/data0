@@ -432,9 +432,21 @@ export class RxList<T> extends Computed {
             function computation(this: RxList<T>) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-                return source.data.filter(filterFn)
+
+                // autoTrack filter 的过程，如果依赖了其他的 reactive 对象，后面在 applyPatch 的时候就要 return  false 走全量计算。
+                this.autoTrack()
+                const result = source.data.filter(filterFn)
+                this.resetAutoTrack()
+                return result
             },
             function applyPatch(this: RxList<T>, _data, triggerInfos) {
+                const shouldRecompute = triggerInfos.some((triggerInfo) => {
+                  return triggerInfo.source !== source || !(triggerInfo.type === TriggerOpTypes.METHOD || triggerInfo.type === TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+                })
+
+                // explicit return false 表示要重算
+                if (shouldRecompute) return false
+
                 triggerInfos.forEach((triggerInfo) => {
                     const { method , argv  ,key, oldValue, methodResult} = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')

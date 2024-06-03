@@ -285,8 +285,8 @@ export class Computed extends ReactiveEffect {
             // 默认行为，重算并且重新收集依赖
             // CAUTION 用户一定要自己保证在第一次 await 之前读取了所有依赖。
             if (this.isAsync) {
-                // 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
-                //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，所以这里要区分一下。
+                // CAUTION 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
+                //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，使用户产生困惑（空户可能认为自己写的非 async 就应该同步就计算），所以这里要区分一下。
                 await this.runEffect()
             } else {
                 this.runEffect()
@@ -294,10 +294,21 @@ export class Computed extends ReactiveEffect {
         } else {
             // patch 模式
             // CAUTION patch 要自己负责 destroy inner computed。理论上也不应该 track 新的数据，而是一直 track Method 和 explicit key change
+            let patchResult:any
             if (this.isPatchAsync) {
-                await this.runPatch()
+                patchResult = await this.runPatch()
             } else {
-                this.runPatch()
+                patchResult = this.runPatch()
+            }
+            // explicit return false 说明出现了无法 patch 的情况，表示一定要重算
+            if (patchResult===false) {
+                if (this.isAsync) {
+                    // CAUTION 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
+                    //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，使用户产生困惑（空户可能认为自己写的非 async 就应该同步就计算），所以这里要区分一下。
+                    await this.runEffect()
+                } else {
+                    this.runEffect()
+                }
             }
         }
         // 把自己从自己 trigger 了 dirty 的 effect 中移除
@@ -317,9 +328,10 @@ export class Computed extends ReactiveEffect {
     }
     runSimplePatch() {
         Notifier.instance.pauseTracking();
-        (this.applyPatch as SimpleApplyPatchType).call(this, this.data, this.triggerInfos)
+        const patchResult = (this.applyPatch as SimpleApplyPatchType).call(this, this.data, this.triggerInfos)
         Notifier.instance.resetTracking()
         this.triggerInfos.length = 0
+        return patchResult
     }
     public waitingTriggerInfos: TriggerInfo[] = []
     runGeneratorPatch() {
@@ -340,10 +352,11 @@ export class Computed extends ReactiveEffect {
                 (isLast) => {
                     Notifier.instance.resetTracking()
                 }
-            ).then(() =>{
+            ).then((result) =>{
                 this.asyncStatus!(false)
                 // 继续递归检查还有没有 waitingTriggerInfos
                 this.runGeneratorPatch()
+                return result
             })
         }
     }
@@ -361,6 +374,12 @@ export class Computed extends ReactiveEffect {
         const dep = Notifier.instance.track(isAtom(target) ? target : toRaw(target), type, key)
         Notifier.instance.resetTracking()
         return dep
+    }
+    autoTrack = () => {
+        Notifier.instance.enableTracking()
+    }
+    resetAutoTrack = () => {
+        Notifier.instance.resetTracking()
     }
     collectEffect = ReactiveEffect.collectEffect
     destroyEffect = ReactiveEffect.destroy
