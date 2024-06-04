@@ -206,6 +206,12 @@ export function assert(condition: boolean, message: string ) {
     }
 }
 
+export function warn(message: string ) {
+    if (__DEV__) {
+        console.warn(message)
+    }
+}
+
 export function isAsync(fn: Function) {
     return fn.constructor.name === 'AsyncFunction'
 }

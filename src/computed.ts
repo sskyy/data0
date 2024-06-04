@@ -1,7 +1,7 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, UnwrapReactive} from './reactive'
-import {assert, isGenerator, isReactivableType, replace, uuid} from "./util";
+import {assert, isAsync, isGenerator, isReactivableType, replace, uuid, warn} from "./util";
 import {Atom, atom, isAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
@@ -27,6 +27,7 @@ export type ComputedResult<T extends GetterType> = ReturnType<T> extends object 
 
 export type ComputedData = Atom | UnwrapReactive<any>
 export type SimpleApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => any
+export type AsyncApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => Promise<any>
 export type GeneratorApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => Generator<any, string, boolean>
 export type ApplyPatchType = SimpleApplyPatchType | GeneratorApplyPatchType
 
@@ -108,19 +109,28 @@ export class Computed extends ReactiveEffect {
     }
     public static id = 0
     public id: number = Computed.id++
+    public isAsyncGetter: boolean = false
+    public isGeneratorGetter: boolean = false
+    public isAsyncPatch: boolean = false
+    public isGeneratorPatch: boolean = false
     constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public forceAtom?: boolean) {
         super(getter)
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         if (!getter) return
 
-        if (isGenerator(getter)) {
+        this.isAsyncGetter = isAsync(getter)
+        this.isGeneratorGetter = isGenerator(getter)
+
+        if (this.isAsyncGetter || this.isGeneratorGetter) {
             this.isAsync = true
             this.asyncStatus = atom(null)
         }
 
         this.manualTracking = !!applyPatch
         if (this.applyPatch) {
-            this.isPatchAsync = isGenerator(this.applyPatch)
+            this.isAsyncPatch = isAsync(this.applyPatch)
+            this.isGeneratorPatch = isGenerator(this.applyPatch)
+            this.isPatchAsync = this.isAsyncPatch|| this.isGeneratorPatch
         }
 
         if (typeof scheduleRecompute === 'function') {
@@ -149,8 +159,8 @@ export class Computed extends ReactiveEffect {
                 this.asyncStatus!(false)
             }
             this.asyncStatus!(true)
-            getterResult = this.callGeneratorGetter(runEffectId)
-            getterResult.then(data => {
+            getterResult = this.isGeneratorGetter ? this.callGeneratorGetter(runEffectId) : this.callAsyncGetter()
+            getterResult.then((data:any) => {
                 if (this.runtEffectId !== runEffectId) return false
 
                 this.replaceData(data)
@@ -163,7 +173,16 @@ export class Computed extends ReactiveEffect {
 
         return getterResult
     }
-
+    callAsyncGetter(): any {
+        const getterContext = this.createGetterContext()
+        warn('async getter can only track reactive data before first await. If you want to track more data, please use generator getter.')
+        this.prepareTracking(true)
+        this.manualTracking ? Notifier.instance.pauseTracking() : Notifier.instance.enableTracking()
+        const result = this.getter!.call(this, getterContext!)
+        Notifier.instance.resetTracking()
+        this.completeTracking()
+        return result
+    }
     callGeneratorGetter = (id:string) => {
         const runEffectId = id
         const getterContext = this.createGetterContext()
@@ -181,7 +200,6 @@ export class Computed extends ReactiveEffect {
             }
         )
     }
-
     callSimpleGetter() {
         const getterContext = this.createGetterContext()
         this.prepareTracking()
@@ -302,6 +320,7 @@ export class Computed extends ReactiveEffect {
             }
             // explicit return false 说明出现了无法 patch 的情况，表示一定要重算
             if (patchResult===false) {
+                this.triggerInfos.length = 0
                 if (this.isAsync) {
                     // CAUTION 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
                     //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，使用户产生困惑（空户可能认为自己写的非 async 就应该同步就计算），所以这里要区分一下。
@@ -320,7 +339,9 @@ export class Computed extends ReactiveEffect {
         this.isRecomputing = false
     }
     runPatch() {
-        if (isGenerator(this.applyPatch!)) {
+        if (this.isAsyncPatch) {
+            return this.runAsyncPatch()
+        } else if (this.isGeneratorPatch) {
             return this.runGeneratorPatch()
         } else {
             return this.runSimplePatch()
@@ -333,32 +354,43 @@ export class Computed extends ReactiveEffect {
         this.triggerInfos.length = 0
         return patchResult
     }
-    public waitingTriggerInfos: TriggerInfo[] = []
-    runGeneratorPatch() {
-        this.waitingTriggerInfos.push(...this.triggerInfos)
-        this.triggerInfos.length =0
-        if(!this.waitingTriggerInfos.length) return
+    async runAsyncPatch() {
+        let patchResult
+        while(this.triggerInfos.length) {
+            const waitingTriggerInfos = [...this.triggerInfos]
+            this.triggerInfos.length = 0
+            Notifier.instance.pauseTracking()
+            const patchPromise = (this.applyPatch as AsyncApplyPatchType).call(this, this.data, waitingTriggerInfos)
+            Notifier.instance.resetTracking()
+            patchResult = await patchPromise
+            if (patchResult === false) {
+                break
+            }
+        }
+        return patchResult
+    }
+    async runGeneratorPatch() {
+        let patchResult
 
-        if (!this.asyncStatus!()) {
-            const generator = (this.applyPatch! as GeneratorApplyPatchType).call(this, this.data, [...this.waitingTriggerInfos])
-            this.waitingTriggerInfos.length = 0
+        while(this.triggerInfos.length) {
+            const waitingTriggerInfos = [...this.triggerInfos]
+            this.triggerInfos.length =0
+
+            const generator = (this.applyPatch! as GeneratorApplyPatchType).call(this, this.data, waitingTriggerInfos)
 
             this.asyncStatus!(true)
-            // FIXME 要形成队列，不然可能第一个还没执行完，第二个就触发了。
-            return this.runGenerator(generator,
+            patchResult = await this.runGenerator(generator,
                 (isFirst) => {
                     Notifier.instance.pauseTracking()
                 },
                 (isLast) => {
                     Notifier.instance.resetTracking()
                 }
-            ).then((result) =>{
-                this.asyncStatus!(false)
-                // 继续递归检查还有没有 waitingTriggerInfos
-                this.runGeneratorPatch()
-                return result
-            })
+            )
+            this.asyncStatus!(false)
         }
+
+        return patchResult
     }
     public lastCleanupFn?: () => void
 

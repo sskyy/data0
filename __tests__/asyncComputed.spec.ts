@@ -14,7 +14,7 @@ import {
 setDefaultScheduleRecomputedAsLazy(true)
 
 
-describe('RxList', () => {
+describe('async computed', () => {
     let fetchPromise: any
     const fetchData = (offset:number, legnth:number): Promise<number[]> => {
         const data = Array(100).fill(0).map((_, index) => index)
@@ -63,6 +63,59 @@ describe('RxList', () => {
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         expect(status).toMatchObject(['before fetch', 'fetching', 'fetch done', false])
 
+        offset(10)
+        await wait(100)
+        await fetchPromise
+        await wait(50)
+        expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+        expect(innerRuns).toBe(2)
+
+
+        length(5)
+        await wait(100)
+        await fetchPromise
+        await wait(10)
+        expect(list.data).toMatchObject([10, 11, 12, 13, 14])
+        expect(innerRuns).toBe(3)
+
+        offset(11)
+        length(6)
+        await wait(100)
+        await fetchPromise
+        await wait(10)
+        expect(list.data).toMatchObject([11, 12, 13, 14, 15, 16])
+        // 计算是在 next micro task 中的，所以应该是被合并了
+        expect(innerRuns).toBe(4)
+
+    })
+
+    test('use async getter', async () => {
+        const offset = atom(0)
+        const length = atom(10)
+        let innerRuns = 0
+        const list = new RxList<number>(async function({ asyncStatus }): Promise<number[]>{
+            const offset1 = offset()
+            const length1 = length()
+            await wait(10)
+            innerRuns++
+            return fetchData(offset1, length1)
+        })
+        const status: any[] = []
+        autorun(() => {
+            status.push(list.asyncStatus!())
+        })
+
+        expect(list.data).toMatchObject([])
+
+        expect(list.asyncStatus!()).toBeTruthy()
+
+        await wait(100)
+        await fetchPromise
+        await wait(10)
+        expect(list.asyncStatus!()).toBe(false)
+        expect(innerRuns).toBe(1)
+
+        expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         offset(10)
         await wait(100)
         await fetchPromise
