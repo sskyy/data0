@@ -304,11 +304,15 @@ export class RxList<T> extends Computed {
                 return this.data
             },
             function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
-                // FIXME 支持不了的还是要走全量更新怎么写？？？
-                // FIXME 收集 effectFrames 没有销毁
-                triggerInfos.forEach((triggerInfo) => {
+                const shouldRecompute = triggerInfos.some((triggerInfo) => {
                     const { method , argv   } = triggerInfo
-                    assert(method === 'splice' && argv![0] === source.data.length - argv!.slice(2).length && argv![1] === 0, 'reduce can only support append')
+                    return !(method === 'splice' && argv![0] === source.data.length - argv!.slice(2).length && argv![1] === 0)
+                })
+
+                if(shouldRecompute) return false
+
+                triggerInfos.forEach((triggerInfo) => {
+                    const { argv   } = triggerInfo
                     const originLength = this.data.length
                     // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                     const newItemsInArgs = argv!.slice(2)
@@ -641,6 +645,11 @@ export class RxList<T> extends Computed {
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
     onUntrack(_effect: ReactiveEffect) {
 
+    }
+    destroy() {
+        super.destroy()
+        this.indexKeyDeps.clear()
+        this.atomIndexes = undefined
     }
 
     createSelection(currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue?: boolean) {
