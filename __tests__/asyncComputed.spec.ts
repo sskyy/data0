@@ -55,17 +55,16 @@ describe('async computed', () => {
         expect(list.asyncStatus!()).toBeTruthy()
 
         await wait(100)
-        await fetchPromise
+        await list.effectPromise
         await wait(10)
         expect(list.asyncStatus!()).toBe(false)
         expect(innerRuns).toBe(1)
 
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         expect(status).toMatchObject(['before fetch', 'fetching', 'fetch done', false])
-
         offset(10)
         await wait(100)
-        await fetchPromise
+        await list.effectPromise
         await wait(50)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
         expect(innerRuns).toBe(2)
@@ -73,7 +72,7 @@ describe('async computed', () => {
 
         length(5)
         await wait(100)
-        await fetchPromise
+        await list.effectPromise
         await wait(10)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14])
         expect(innerRuns).toBe(3)
@@ -106,7 +105,6 @@ describe('async computed', () => {
         })
 
         expect(list.data).toMatchObject([])
-
         expect(list.asyncStatus!()).toBeTruthy()
 
         await wait(100)
@@ -118,7 +116,7 @@ describe('async computed', () => {
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         offset(10)
         await wait(100)
-        await fetchPromise
+        await list.effectPromise
         await wait(50)
         expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
         expect(innerRuns).toBe(2)
@@ -145,10 +143,13 @@ describe('async computed', () => {
     test('async recompute should stop when new effect trigger', async () => {
         const runTrigger = atom(0)
         let innerRuns = 0
+        let inRecompute = false
         const data = atomComputed(function*() {
+            inRecompute = true
             const newNum = runTrigger()
             innerRuns++
-            yield wait(20)
+            yield wait(100)
+            inRecompute = false
             return newNum
         })
         expect(ReactiveEffect.activeScopes.length).toBe(0)
@@ -157,12 +158,23 @@ describe('async computed', () => {
         autorun(() => {
             nums.push(data())
         })
+        await wait(1)
+        expect(innerRuns).toBe(1)
+
         runTrigger(1)
         await wait(1)
+        expect(innerRuns).toBe(2)
+
+        expect(inRecompute).toBe(true)
         runTrigger(2)
         await wait(1)
+        expect(innerRuns).toBe(3)
+
+        expect(inRecompute).toBe(true)
         runTrigger(3)
+        await wait(10)
         expect(innerRuns).toBe(4)
+
         expect(ReactiveEffect.activeScopes.length).toBe(0)
         await wait(100)
         expect(ReactiveEffect.activeScopes.length).toBe(0)
@@ -200,6 +212,91 @@ describe('async computed', () => {
         expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
         // 应该只拍一次，因为 asyncComputed 默认泡在 next micro task 中
         expect(patchRuns).toBe(1)
+    })
+
+    test('async patch interrupted with more reactive trigger', async () => {
+        const length = atom(10)
+        let patchRuns = 0
+        let inPatch = false
+        const list = new RxList<number>(
+            function*(this:Computed,{  }): Generator<any, number[], number[]>{
+                this.manualTrack(length, TrackOpTypes.ATOM, 'value')
+                yield wait(10)
+                return yield fetchData(0, length())
+            },
+            function*(this: RxList<number>,{  }, triggerInfos): Generator<any, any, number[]>{
+                inPatch = true
+                patchRuns++
+                for(let triggerInfo of triggerInfos) {
+                    const {oldValue, newValue} = triggerInfo as {oldValue:number, newValue:number}
+                    yield wait(10)
+                    const newData = yield fetchData(oldValue, newValue-oldValue)
+                    this.data.push(...newData)
+                }
+                inPatch = false
+
+            }
+        )
+        await wait(11)
+        await fetchPromise
+        await wait(11)
+        expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        length(20)
+        await wait(1)
+        expect(patchRuns).toBe(1)
+
+        expect(inPatch).toBe(true)
+        length(30)
+        await list.effectPromise
+        expect(patchRuns).toBe(2)
+
+        await wait(200)
+        expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
+    })
+
+    test('async patch interrupted with more dirty deps trigger', async () => {
+        const length = atom(10)
+        const length2 = atomComputed(() => length())
+        let patchRuns = 0
+        let inPatch = false
+        const list = new RxList<number>(
+            function*(this:Computed,{  }): Generator<any, number[], number[]>{
+                this.manualTrack(length2, TrackOpTypes.ATOM, 'value')
+                yield wait(10)
+                return yield fetchData(0, length2())
+            },
+            function*(this: RxList<number>,{  }, triggerInfos): Generator<any, any, number[]>{
+                inPatch = true
+                patchRuns++
+                for(let triggerInfo of triggerInfos) {
+                    const {oldValue, newValue} = triggerInfo as {oldValue:number, newValue:number}
+                    yield wait(10)
+                    const newData = yield fetchData(oldValue, newValue-oldValue)
+                    this.data.push(...newData)
+                }
+                inPatch = false
+            }
+        )
+        await wait(11)
+        await fetchPromise
+        await wait(11)
+        expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        length(20)
+        await wait(1)
+        expect(patchRuns).toBe(1)
+
+        expect(inPatch).toBe(true)
+        length(30)
+        await wait(10)
+        await list.effectPromise
+        await wait(100)
+
+        expect(patchRuns).toBe(2)
+
+        await wait(200)
+        expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
     })
 
 })

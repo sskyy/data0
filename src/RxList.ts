@@ -248,7 +248,7 @@ export class RxList<T> extends Computed {
                                 cleanupFns![index] = fn
                             }
                         } : undefined
-                        const oldItem = this.at(index)!
+                        const oldItem = this.data.at(index)!
                         const oldCleanupFn = cleanupFns?.[index]
 
                         this.set(index, mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!))

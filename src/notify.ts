@@ -17,11 +17,7 @@ export type TriggerResult = {
   remove?: KeyItemPair[]
 }
 type KeyToDepMap = Map<any, Dep>
-type TrackFrame = {
-  start: Function,
-  deps: Dep[],
-  end: Function
-}
+
 export type TriggerStack = {type?: string, debugTarget: any, opType?: TriggerOpTypes, key?:unknown, oldValue?: unknown, newValue?: unknown, targetLoc: [string, string][]}[]
 export type InputTriggerInfo = {
   method?: string,
@@ -76,7 +72,6 @@ export class Notifier {
   arrayExplicitKeyDepCount = new WeakMap<any, number>()
   shouldTrack = true
   effectTrackDepth = 0
-  frameStack: TrackFrame[] = []
   shouldTrigger: boolean = true
   trackStack: boolean[] = []
   effectsInSession: Set<ReactiveEffect> = new Set()
@@ -135,6 +130,8 @@ export class Notifier {
       assert(!(activeEffect instanceof Computed && target ===toRaw(activeEffect.data)), 'should not read self in computed')
     }
 
+    // FIXME 对 async 的 reactive，要暂存，complete 的时候才确认。因为它是可以被打断重算的。
+
     let depsMap = this.targetMap.get(target)
     if (!depsMap) {
       this.targetMap.set(target, (depsMap = new Map()))
@@ -167,20 +164,37 @@ export class Notifier {
     const  activeEffect = ReactiveEffect.activeScopes.at(-1)
     if (!activeEffect) return
     let shouldTrack = false
-    if (!activeEffect.isAsync && this.effectTrackDepth <= maxMarkerBits) {
-      if (!newTracked(dep)) {
-        dep.n |= Notifier.trackOpBit // set newly tracked
-        shouldTrack = !wasTracked(dep)
+    if (!activeEffect.isAsync) {
+      if (this.effectTrackDepth <= maxMarkerBits) {
+        if (!newTracked(dep)) {
+          dep.n |= Notifier.trackOpBit // set newly tracked
+          shouldTrack = !wasTracked(dep)
+        }
+      } else {
+        // Full cleanup mode.
+        shouldTrack = !dep.has(activeEffect!)
       }
     } else {
-      // Full cleanup mode.
-      shouldTrack = !dep.has(activeEffect!)
+      // async 模式，因为最终是用延迟的 track 来覆盖，所以总是应该 track
+      shouldTrack = true
     }
 
     if (shouldTrack) {
+      // CAUTION 即使是 async 的模式，也应该变 run 边 track 新的。
+      //  这样不管是因为老的 dep 变化，还是新  track 到一半的 dep 变化，都会触发 recompute。
+      //  这才是合理的，因为不管哪种都说明 dirty。
       dep.add(activeEffect!)
       activeEffect!.deps.push(dep)
-      if (this.frameStack.length) this.frameStack.at(-1)!.deps.push(dep)
+      // 如果是 async 的任务，那么在最后 complete 的时候应该应该用新的 dep 完全替换旧的 dep
+      if (activeEffect.isAsync) {
+        activeEffect.asyncTracks.push(() => {
+          if(!dep.has(activeEffect!)) {
+            dep.add(activeEffect!)
+            activeEffect!.deps.push(dep)
+          }
+        })
+      }
+
       activeEffect!.dispatch('track', {
         effect: activeEffect!,
         ...debuggerEventExtraInfo!

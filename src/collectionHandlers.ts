@@ -231,7 +231,7 @@ function createForEach(isReadonly: boolean, isShallow: boolean) {
     const target = observed[ReactiveFlags.RAW]
     const rawTarget = toRaw(target)
     !isReadonly && Notifier.instance.track(rawTarget, TrackOpTypes.ITERATE, ITERATE_KEY)
-    return target.forEach((value: unknown, key: unknown) => {
+    return rawTarget.forEach((value: unknown, key: unknown) => {
       // important: make sure the callback is
       // 1. invoked with the reactive map as `this` and 3rd arg
       // 2. the value received should be a corresponding reactive/readonly.

@@ -1,15 +1,15 @@
 import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
 import {maxMarkerBits, Notifier} from "./notify.js";
 import {ManualCleanup} from "./manualCleanup.js";
-import {isGenerator} from "./util.js";
+import {isAsync, isGenerator} from "./util.js";
 
 
 export class ReactiveEffect extends ManualCleanup {
     static activeScopes: ReactiveEffect[] = []
     public active = true
     public isRunningAsync = false
-    public isDirty = false
     public eventToCallbacks: Map<string, Set<Function>> = new Map()
+    public asyncTracks : Array<() => void> = []
     static destroy(effect: ReactiveEffect, fromParent?: boolean) {
         if (!effect.active) return
 
@@ -43,7 +43,7 @@ export class ReactiveEffect extends ManualCleanup {
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         super();
         this.active = !!getter
-        this.isAsync = this.getter && isGenerator(this.getter)
+        this.isAsync = this.getter && (isAsync(this.getter!) || isGenerator(this.getter!))
 
         if (ReactiveEffect.activeScopes.length) {
             this.parent = ReactiveEffect.activeScopes.at(-1)
@@ -72,10 +72,13 @@ export class ReactiveEffect extends ManualCleanup {
             callbacks.forEach(callback => callback.call(this, ...args))
         }
     }
-
+    createGetterContext():any {
+        return undefined
+    }
     callGetter():any {
 
     }
+
     prepareTracking(isFirst = false) {
         if (!this.isAsync) {
             Notifier.trackOpBit = 1 << ++Notifier.instance.effectTrackDepth
@@ -88,22 +91,21 @@ export class ReactiveEffect extends ManualCleanup {
             }
 
             this.children.forEach(child => ReactiveEffect.destroy(child, true))
-            this.children = []
+            this.children.length = 0
 
         } else {
+            // FIXME 应该有个暂存变量，要 complete 的时候才真实替换
             // 如果是 async 的，只需要push scope 就行了。
             ReactiveEffect.activeScopes.push(this)
             if (isFirst) {
-                this.cleanup()
+                this.asyncTracks.length = 0
                 this.children.forEach(child => ReactiveEffect.destroy(child, true))
-                this.children = []
+                this.children.length = 0
             }
         }
     }
-    createGetterContext():any {
-        return undefined
-    }
-    completeTracking() {
+
+    completeTracking(isLast = false) {
         if (!this.isAsync) {
             if (Notifier.instance.effectTrackDepth <= maxMarkerBits) {
                 finalizeDepMarkers(this)
@@ -113,7 +115,13 @@ export class ReactiveEffect extends ManualCleanup {
             Notifier.trackOpBit = 1 << --Notifier.instance.effectTrackDepth
 
         } else {
-            // 如果是 async 的，只需要pop scope 就行了。因为全都是使用的正常 track，不是标记的。
+            if (isLast) {
+                this.cleanup()
+                this.asyncTracks.forEach(track => track())
+                this.asyncTracks.length = 0
+            }
+
+            // FIXME 应该有个暂存变量，要 complete 的时候才真实替换
             ReactiveEffect.activeScopes.pop()
         }
     }
@@ -183,17 +191,17 @@ export class ReactiveEffect extends ManualCleanup {
     async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => any, afterRun: (isLast?:boolean) => any)   {
         // run generator，每次之前要调用 beforeRun，每次之后要调用 afterRun
         let isFirst = true
-        let lastYieldValue: any
+        let lastYieldValue: any = undefined
         while(true) {
             // CAUTION beforeRun 中如果要返回 false，一定要在所有操作之前，不然后面的 afterRun 执行不到，可能会导致一些内部状态无法重置。
             const implicitContinue = beforeRun(isFirst)
+            isFirst = false
             if(implicitContinue === false) break
 
             const {value, done} = generator.next(lastYieldValue)
 
             afterRun(done)
             lastYieldValue = value instanceof Promise ? await value : value
-            isFirst = false
             if (done) break
         }
         return lastYieldValue

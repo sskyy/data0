@@ -133,7 +133,7 @@ describe('RxList', () => {
         ])
 
         const reducedList = list.reduce<{id:number, score: number}>((newList, item) => {
-            const findIndex = newList.toArray().findIndex(i => i.id === item.id)
+            const findIndex = newList.data.findIndex(i => i.id === item.id)
             if (findIndex !== -1) {
                 newList.splice(findIndex, 1)
             }
