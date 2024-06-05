@@ -335,8 +335,9 @@ export class Notifier {
       info: TriggerInfo,
       debuggerEventExtraInfo?: DebuggerEventExtraInfo
   ) {
-    // const activeEffect = ReactiveEffect.activeScopes.at(-1)
-    // if (activeEffect === effect) throw new Error('recursive effect call')
+    const activeEffect = ReactiveEffect.activeScopes.at(-1)
+    if (activeEffect === effect) throw new Error('recursive effect call')
+
     effect.dispatch('trigger', extend({ effect }, debuggerEventExtraInfo))
 
     if (this.inEffectSession) {

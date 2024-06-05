@@ -144,9 +144,10 @@ describe('async computed', () => {
 
     test('async recompute should stop when new effect trigger', async () => {
         const runTrigger = atom(0)
+        let innerRuns = 0
         const data = atomComputed(function*() {
-            // TODO 构造一个异步的计算
             const newNum = runTrigger()
+            innerRuns++
             yield wait(20)
             return newNum
         })
@@ -157,8 +158,11 @@ describe('async computed', () => {
             nums.push(data())
         })
         runTrigger(1)
+        await wait(1)
         runTrigger(2)
+        await wait(1)
         runTrigger(3)
+        expect(innerRuns).toBe(4)
         expect(ReactiveEffect.activeScopes.length).toBe(0)
         await wait(100)
         expect(ReactiveEffect.activeScopes.length).toBe(0)

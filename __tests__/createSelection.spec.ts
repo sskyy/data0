@@ -7,7 +7,7 @@ setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('RxList multiple match', () => {
-    test('createMultiMatch using object item as key', () => {
+    test('createMultiMatch using object item as key', async () => {
         const list = new RxList<{id:number, score: number}>([
             {id:1, score: 1},
             {id:2, score: 2},
@@ -44,14 +44,14 @@ describe('RxList multiple match', () => {
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true, false])
         expect(innerRuns).toBe(7)
 
-        // source 删除
+        // source 删除第一个，因为设置了 autoReset，所以 selectedList 里面应该也要删掉
         list.splice(0, 1)
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
         expect(selected.data).toMatchObject([list.at(1)!])
         expect(innerRuns).toBe(7)
     })
 
-    test('create unique selection using object as key', () => {
+    test('create unique selection using object as key', async () => {
         const list = new RxList<{id:number, score: number}>([
             {id:1, score: 1},
             {id:2, score: 2},

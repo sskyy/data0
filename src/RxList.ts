@@ -703,17 +703,11 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
             list.splice(argv![0], argv![1], ...newItemsInArgs.map((item) => [item, createNewIndicator(item)] as [T, Atom<boolean>]))
                 deleteItems.forEach((item) => {
                     itemToIndicator.delete(item)
-                    if(autoResetValue) {
-                        deleteCurrentValueIfItemRemoved(item)
-                    }
                 })
         } else {
             //explicit key change
-            const { oldValue, newValue, key } = triggerInfo
+            const {  newValue, key } = triggerInfo
             list.set(key as number, [newValue as T, createNewIndicator(newValue as T)] as [T, Atom<boolean>])
-            if(autoResetValue) {
-                deleteCurrentValueIfItemRemoved(oldValue as T)
-            }
         }
     }
 
@@ -742,6 +736,28 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
         }
     }
 
+    const stopAutoResetValue = autoResetValue ?
+        new Computed(
+            function(this: Computed){
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+            },
+            function(_, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method } = triggerInfo
+                    assert(method === 'splice', 'currentValues can only support splice')
+                    const deleteItems = triggerInfo.methodResult
+                    deleteItems.forEach((item:T) => {
+                        deleteCurrentValueIfItemRemoved(item)
+                    })
+                })
+            },
+            true
+        ) :
+        undefined
+
+    stopAutoResetValue?.runEffect()
+
     return new RxList(
         function computation(this:Computed ) {
             // 监听 source 的变化，需要动态增加 indicators
@@ -764,6 +780,12 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
                     updateIndicatorsFromCurrentValueChange(triggerInfo)
                 }
             })
+        },
+        undefined,
+        {
+            onDestroy() {
+                stopAutoResetValue?.destroy()
+            }
         }
     )
 
