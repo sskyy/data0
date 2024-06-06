@@ -630,6 +630,37 @@ export class RxList<T> extends Computed {
             }
         )
     }
+    toSet(): RxSet<T> {
+        const base = this
+        return new RxSet<T>(
+            function computation(this: RxSet<T>) {
+                this.manualTrack(base, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(base, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                return new Set(base.data)
+            },
+            function applyPatch(this: RxSet<T>, _data, triggerInfos) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
+
+                    if (method === 'splice') {
+                        const deleteItems = methodResult as T[] || []
+                        deleteItems.forEach((item) => {
+                            this.delete(item)
+                        })
+                        const newItemsInArgs = argv!.slice(2)
+                        newItemsInArgs.forEach((item) => {
+                            this.add(item)
+                        })
+                    } else {
+                        // explicit key change
+                        this.delete(oldValue as T)
+                        this.add(newValue as T)
+                    }
+                })
+            }
+        )
+    }
 
     get length(): Atom<number> {
         const source = this

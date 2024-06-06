@@ -442,6 +442,18 @@ describe('RxList', () => {
             ]
         )
     })
+
+    test('toSet', () => {
+        const list = new RxList<number>([1,2,3])
+        const set = list.toSet()
+        expect(set.toArray()).toMatchObject([1,2,3])
+
+        list.push(4)
+        expect(set.toArray()).toMatchObject([1,2,3,4])
+
+        list.splice(1, 1)
+        expect(set.toArray()).toMatchObject([1,3,4])
+    })
 })
 
 // chained computed
