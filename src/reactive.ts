@@ -117,6 +117,10 @@ export function toRaw<T>(observed: T): T {
   return raw ? toRaw(raw) : observed
 }
 
+export function toRawObject<T>(observed: T): T {
+  return isAtom(observed) ? observed : toRaw<T>(observed)
+}
+
 export function markRaw<T extends object>(
   value: T
 ): T & { [RawSymbol]?: true } {

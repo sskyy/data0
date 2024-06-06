@@ -1,4 +1,4 @@
-import {ApplyPatchType, atomComputed, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
+import {ApplyPatchType, computed, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
 import {Atom, atom, isAtom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier, TriggerInfo} from "./notify.js";
@@ -38,7 +38,8 @@ export class RxList<T> extends Computed {
         // 自己是 source
         this.data = source || []
         if (this.getter) {
-            super.runEffect()
+            // super.runEffect()
+            this.run()
         }
     }
     replaceData(newData: T[]) {
@@ -329,7 +330,7 @@ export class RxList<T> extends Computed {
     find(matchFn:(item: T) => boolean): Atom<T> {
         const source = this
         let foundIndex = -1
-        return atomComputed(
+        return computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
@@ -380,7 +381,7 @@ export class RxList<T> extends Computed {
     findIndex(matchFn:(item: T) => boolean): Atom<number> {
         const source = this
         let foundIndex = -1
-        return atomComputed(
+        return computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
@@ -631,7 +632,7 @@ export class RxList<T> extends Computed {
 
     get length(): Atom<number> {
         const source = this
-        return atomComputed(
+        return computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 return source.data.length
@@ -756,7 +757,7 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
         ) :
         undefined
 
-    stopAutoResetValue?.runEffect()
+    stopAutoResetValue?.run()
 
     return new RxList(
         function computation(this:Computed ) {

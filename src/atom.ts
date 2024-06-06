@@ -52,7 +52,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
     const handler:Handler = {
         get(target, key) {
             // 对外提供一种获取 value，但是不触发 track 的方式。在一些框架里面会用到
-            if (key === 'raw') return value
+            if (key === 'raw'||key ===ReactiveFlags.RAW) return value
 
             if (key === ReactiveFlags.IS_ATOM) return true
 

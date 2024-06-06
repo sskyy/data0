@@ -1,8 +1,8 @@
 // 需要按原来的序，监听增删改
-import {computed, Computed, ComputedData, destroyComputed} from "./computed";
+import {arrayComputed, computed, Computed, ComputedData, destroyComputed, mapComputed, setComputed} from "./computed";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Atom, atom, isAtom} from "./atom";
-import {isReactive} from "./reactive";
+import {isReactive, UnwrapReactive} from "./reactive";
 import {Notifier} from "./notify";
 import {assert} from "./util";
 import {ReactiveEffect} from "./reactiveEffect";
@@ -125,9 +125,9 @@ export function findIndex() {
 }
 
 // CAUTION incMap 是故意不考虑 source 中深层变化的，只关心数据本身的变化。所以在 mapFn 的时候读深层的对象不会硬气整个重算。
-export function incMap<T>(source: T[], mapFn:(arg0: Atom<T>) => any) : ReturnType<typeof computed>
-export function incMap<T, U>(source: Map<U, T>, mapFn: (arg0:T, arg1:U) => any) : ReturnType<typeof computed>
-export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : ReturnType<typeof computed>
+export function incMap<T>(source: T[], mapFn:(arg0: Atom<T>) => any) : UnwrapReactive<any[]>
+export function incMap<T, U>(source: Map<U, T>, mapFn: (arg0:T, arg1:U) => any) : UnwrapReactive<Map<any, any>>
+export function incMap<T>(source: Set<T>, mapFn: (arg0: T) => any) : UnwrapReactive<Set<any>>
 export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
     if (!isReactive(source)) {
         if (Array.isArray(source)) {
@@ -142,7 +142,6 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         }
     }
 
-
     let cache: any
 
     // CAUTION 一定要放在这里，因为要比下面的 computed 先建立才会先计算，才能被下面的 computed 依赖。
@@ -153,18 +152,15 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
         indexes = Array.isArray(source) ? getAtomIndexOfArray(source) : undefined
         Notifier.instance.resetTracking()
     }
-    return computed(
-        function computation(this: Computed) {
-            const { manualTrack: track, collectEffect: collect } = this
-            track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-            track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
-            if (Array.isArray(source) ) {
-                this.effectFramesArray = []
-            }else {
-                this.keyToEffectFrames = new WeakMap<any, ReactiveEffect[]>()
-            }
 
-            if (Array.isArray(source) ) {
+    return Array.isArray(source) ?
+        arrayComputed(
+            function computation(this: Computed) {
+                const { manualTrack: track, collectEffect: collect } = this
+                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                this.effectFramesArray = []
+
                 // 用来收集新增和删除是产生的 effectFrames
                 return source.map((item: any, index) => {
                     const getFrame = collect!()
@@ -172,38 +168,15 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                     //  目前好像没问题，因为如果是非对象情况，用户只能通过 [key]=? 来修改，这样会触发 EXPLICIT_KEY_CHANGE，然后重新计算。
                     //  只不过用户如果在这种情况下还想让 map 都不执行，而是获取更细力度的更新，那就暂时不行了。
                     const newItem = mapFn(item, indexes?.[index])
-                    this.effectFramesArray![index] = getFrame()
+                    this.effectFramesArray![index] = getFrame() as ReactiveEffect[]
                     return newItem
                 })
-            } else if (source instanceof Map) {
-                return new Map(Array.from(source.entries()).map(([key, value]) => {
-                    const getFrame = collect!()
-                    const newItem = mapFn(value, key)
-                    this.keyToEffectFrames!.set(key,  getFrame())
-                    return [key, newItem]
-                }))
-            } else if (source instanceof Set) {
-                // CAUTION 这里把每个元素都 atom 化了
-                cache = new Map()
-                const mappedData = Array.from(source.values()).map((value) => {
-                    const getFrame = collect!()
-                    const data = mapFn(value)
-                    this.keyToEffectFrames!.set(value,  getFrame())
-
-                    cache.set(value, data)
-                    return data
-                })
-                return new Set(mappedData)
-            } else {
-                assert(false, 'non-support map source type')
-            }
-        },
-        function applyMapArrayPatch(this: Computed, data, triggerInfos) {
-            const {collectEffect: collect, destroyEffect: destroy} = this
-            triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
-                assert(!!(method === 'splice' || result), 'trigger info has no method and result')
-                // Array
-                if (Array.isArray(source)) {
+            },
+            function applyMapArrayPatch(this: Computed, data, triggerInfos) {
+                const {collectEffect: collect, destroyEffect: destroy} = this
+                triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
+                    assert(!!(method === 'splice' || result), 'trigger info has no method and result')
+                    // Array
                     // 数组里面全部统一成了 splice
                     if (method === 'splice') {
                         // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
@@ -213,7 +186,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                             const item = source[index+ argv![0]]
                             const getFrame = collect!()
                             const newItem = mapFn(item, indexes?.[index+ argv![0]])
-                            effectFrames![index] = getFrame()
+                            effectFrames![index] = getFrame() as ReactiveEffect[]
                             return newItem
                         })
                         data.splice(argv![0], argv![1], ...newItems)
@@ -228,55 +201,115 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         const index = key as number
                         const getFrame = collect!()
                         data[index] = mapFn(source[index], indexes?.[index])
-                        const newFrame = getFrame()
+                        const newFrame = getFrame() as ReactiveEffect[]
                         this.effectFramesArray![index].forEach((effect) => {
                             destroy(effect)
                         })
                         this.effectFramesArray![index] = newFrame
-
                     }
-
-                // Map
-                } else if (source instanceof Map){
-                    // TODO Map 的 map 中是否会读到 key?如果要读的话，会不会 key 也要  reactive 化？？？
-                    if (method === 'clear') {
-                        const keys = Array.from(data.keys())
-                        data.clear()
-                        keys.forEach((key) => {
-                            const effectFrame = this.keyToEffectFrames!.get(key)!
-                            effectFrame.forEach((effect) => {
-                                destroy(effect)
-                            })
-                        })
-                    } else if (!method && result) {
-                        // 没有 method 说明是 explicit_key_change 变化
-                        result.add?.forEach(({ key, newValue }) => {
-                            const getFrame = collect!()
-                            data.set(key, mapFn(newValue))
-                            const newFrame = getFrame()
-                            this.keyToEffectFrames!.set(key, newFrame)
-                        })
-
-                        result.update?.forEach(({ key, newValue }) => {
-                            const getFrame = collect!()
-                            data.set(key, mapFn(newValue))
-                            const newFrame = getFrame()
-                            const originFrame = this.keyToEffectFrames!.get(key)!
-                            originFrame.forEach((effect) => {
-                                destroy(effect)
-                            })
-                            this.keyToEffectFrames!.set(key, newFrame)
-                        })
-
-                        result.remove?.forEach(({ key }) => {
-                            data.remove(key)
-                            const effectFrame = this.keyToEffectFrames!.get(key)!
-                            effectFrame.forEach((effect) => {
-                                destroy(effect)
-                            })
-                        })
+                })
+            },
+            true,
+            {
+                onDestroy() {
+                    cache?.clear()
+                    if (Array.isArray(source)&&mapFn.length>1) {
+                        removeAtomIndexDep(source)
                     }
-                }  else if (source instanceof Set){
+                }
+            },
+        ) : source instanceof Map ?
+        mapComputed(
+            function computation(this: Computed) {
+                const { manualTrack: track, collectEffect: collect } = this
+                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                this.keyToEffectFrames = new WeakMap<any, ReactiveEffect[]>()
+
+                return new Map(Array.from(source.entries()).map(([key, value]) => {
+                    const getFrame = collect!()
+                    const newItem = mapFn(value, key)
+                    this.keyToEffectFrames!.set(key,  getFrame() as ReactiveEffect[])
+                    return [key, newItem]
+                }))
+
+            },
+            function applyMapArrayPatch(this: Computed, data, triggerInfos) {
+                const {collectEffect: collect, destroyEffect: destroy} = this
+                triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
+                    assert(!!(method === 'splice' || result), 'trigger info has no method and result')
+
+                        // TODO Map 的 map 中是否会读到 key?如果要读的话，会不会 key 也要  reactive 化？？？
+                        if (method === 'clear') {
+                            const keys = Array.from(data.keys())
+                            data.clear()
+                            keys.forEach((key) => {
+                                const effectFrame = this.keyToEffectFrames!.get(key)!
+                                effectFrame.forEach((effect) => {
+                                    destroy(effect)
+                                })
+                            })
+                        } else if (!method && result) {
+                            // 没有 method 说明是 explicit_key_change 变化
+                            result.add?.forEach(({ key, newValue }) => {
+                                const getFrame = collect!()
+                                data.set(key, mapFn(newValue))
+                                const newFrame = getFrame() as ReactiveEffect[]
+                                this.keyToEffectFrames!.set(key, newFrame)
+                            })
+
+                            result.update?.forEach(({ key, newValue }) => {
+                                const getFrame = collect!()
+                                data.set(key, mapFn(newValue))
+                                const newFrame = getFrame() as ReactiveEffect[]
+                                const originFrame = this.keyToEffectFrames!.get(key)!
+                                originFrame.forEach((effect) => {
+                                    destroy(effect)
+                                })
+                                this.keyToEffectFrames!.set(key, newFrame)
+                            })
+
+                            result.remove?.forEach(({ key }) => {
+                                data.remove(key)
+                                const effectFrame = this.keyToEffectFrames!.get(key)!
+                                effectFrame.forEach((effect) => {
+                                    destroy(effect)
+                                })
+                            })
+                        }
+                })
+            },
+            true,
+            {
+                onDestroy() {
+                    cache?.clear()
+                }
+            },
+            undefined,
+        ):
+        setComputed(
+            function computation(this: Computed) {
+                const { manualTrack: track, collectEffect: collect } = this
+                track!(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                track!(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                this.keyToEffectFrames = new WeakMap<any, ReactiveEffect[]>()
+                // CAUTION 这里把每个元素都 atom 化了
+                cache = new Map()
+                const mappedData = Array.from(source.values()).map((value) => {
+                    const getFrame = collect!()
+                    const data = mapFn(value)
+                    this.keyToEffectFrames!.set(value,  getFrame() as ReactiveEffect[])
+
+                    cache.set(value, data)
+                    return data
+                })
+                return new Set(mappedData)
+
+            },
+            function applyMapArrayPatch(this: Computed, data, triggerInfos) {
+                const {collectEffect: collect, destroyEffect: destroy} = this
+                triggerInfos.forEach(({ method , argv, result, key, newValue   }) => {
+                    assert(!!(method === 'splice' || result), 'trigger info has no method and result')
                     if (method === 'clear') {
                         const values = Array.from(data.values())
                         data.clear()
@@ -292,7 +325,7 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                         result.add?.forEach(({ newValue }) => {
                             const getFrame = collect!()
                             data.add(mapFn(newValue))
-                            const newFrame = getFrame()
+                            const newFrame = getFrame() as ReactiveEffect[]
                             this.keyToEffectFrames!.set(newValue, newFrame)
                         })
 
@@ -305,21 +338,14 @@ export function incMap(source: ComputedData, mapFn: (...any: any[]) => any) {
                             })
                         })
                     }
-                }
-            })
-        },
-        // TODO 让外部决定什么时候 recompute
-        function onDirty(recompute) {
-            recompute()
-        },
+                })
+            },
+        true,
         {
             onDestroy() {
                 cache?.clear()
-                if (Array.isArray(source)&&mapFn.length>1) {
-                    removeAtomIndexDep(source)
-                }
             }
-        }
+        },
     )
 }
 
@@ -330,8 +356,8 @@ export function incWeakMap() {
 
 
 // TODO 要做 incremental 的话还要做每个元素的计数，才能处理 remove 的情况
-export function incUnique(source: any[]) : ReturnType<typeof computed>{
-    return computed(() => {
+export function incUnique(source: any[]) : UnwrapReactive<Set<any>>{
+    return setComputed(() => {
         return new Set(source.map(item => {
             return isAtom(item) ? item() : item
         }))

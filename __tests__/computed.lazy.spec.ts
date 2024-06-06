@@ -1,4 +1,4 @@
-import {atomComputed, computed, setDefaultScheduleRecomputedAsLazy, Computed} from "../src/computed";
+import {computed, setDefaultScheduleRecomputedAsLazy, Computed} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
@@ -85,7 +85,7 @@ describe('computed basic', () => {
             l2: 4
         })
 
-        const num = computed(() => {
+        const num = computed<{result:any}>(() => {
             return {
                 result: data.l1 + data.l2 + data2.l1 + data2.l2
             }
@@ -152,7 +152,7 @@ describe('computed return object with internal side effect', () => {
         }
 
         const run = atom(1)
-        const computedValue = atomComputed(({ onCleanup }) => {
+        const computedValue = computed(({ onCleanup }) => {
             run()
             const valueWithSideEffect = new InternalWithSideEffect()
             onCleanup(() => {
@@ -184,7 +184,7 @@ describe('patchable computed with lazy recompute', () => {
         const list2 = list.map(item => item + 1)
         let patchRuns = 0
 
-        const computed1 = atomComputed(
+        const computed1 = computed(
             function computation(this: Computed)  {
                 this.manualTrack(list2, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(list2, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);

@@ -357,7 +357,7 @@ export class Notifier {
     if (this.inEffectSession) {
       this.scheduleEffect(effect, info, debuggerEventExtraInfo)
     } else {
-      effect.run([info], debuggerEventExtraInfo)
+      effect.run([info])
     }
   }
   enableTracking() {

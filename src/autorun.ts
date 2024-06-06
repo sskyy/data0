@@ -29,7 +29,7 @@ import {DirtyCallback, Computed, GetterContext} from "./computed.js";
 
 export function autorun(fn: (context: GetterContext) => any, scheduleRerun?: DirtyCallback) {
     const instance = new Computed(fn, undefined, scheduleRerun || true)
-    instance.runEffect()
+    instance.run()
     // const instance = new Autorun(fn)
     return () => {
         instance.destroy()

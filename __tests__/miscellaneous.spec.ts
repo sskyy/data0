@@ -1,5 +1,6 @@
-import {atom, computed, incUnique, reactive, setDefaultScheduleRecomputedAsLazy} from "../src";
+import {atom, incUnique, reactive, setDefaultScheduleRecomputedAsLazy} from "../src";
 import {describe, expect, test} from "vitest";
+import {arrayComputed, mapComputed} from "../src/computed";
 
 setDefaultScheduleRecomputedAsLazy(true)
 
@@ -7,19 +8,20 @@ setDefaultScheduleRecomputedAsLazy(true)
 describe('computed on computed', () => {
     test('atom & computed', () => {
         const atom1 = atom<{items: any[]}>(null)
-        const computed1 = computed(function computed1()  {
+        const computed1 = arrayComputed<any>(function computed1()  {
+            debugger
             return atom1()?.items || []
         })
 
         // splice 不触发 forEach 为什么？？？
-        const computed2 = computed(function computed2() {
+        const computed2 = mapComputed(function computed2() {
             const result = new Map<string, any>()
             computed1.forEach((item: number) => {
                 result.set(item.toString(), item)
             })
             return result
         })
-
+        debugger
         atom1({items: [1,2,3]})
 
         expect(computed1).toShallowMatchObject([1,2,3])
@@ -33,7 +35,7 @@ describe('computed on computed', () => {
     test('splice should trigger foreach', () => {
 
         const arr1: number[] = reactive([])
-        const computed1 = computed(() => {
+        const computed1 = mapComputed(() => {
             const result = new Map<string, any>()
             arr1.forEach((item: number) => {
                 result.set(item.toString(), item)

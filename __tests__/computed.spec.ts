@@ -69,7 +69,7 @@ describe('computed basic', () => {
             l2: 4
         })
 
-        const num = computed(() => {
+        const num = computed<{result:any}>(() => {
             return {
                 result: data.l1 + data.l2 + data2.l1 + data2.l2
             }
@@ -96,7 +96,7 @@ describe('computed life cycle', () => {
         const b = atom(0)
         const outerComputed = computed(() => {
             a()
-            computed.as.inner(() => {
+            computed(() => {
                 b()
                 innerRuns ++
             })

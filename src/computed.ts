@@ -1,7 +1,7 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
-import {reactive, toRaw, UnwrapReactive} from './reactive'
-import {assert, isAsync, isGenerator, isReactivableType, replace, uuid, warn} from "./util";
+import {reactive, toRaw, toRawObject, UnwrapReactive} from './reactive'
+import {isAsync, isGenerator, replace, uuid, warn} from "./util";
 import {Atom, atom, isAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
@@ -45,12 +45,12 @@ export type SkipIndicator = { skip: boolean }
 
 
 export function destroyComputed(computedItem: ComputedData) {
-    const internal = computedToInternal.get(toRaw(computedItem))!
+    const internal = computedToInternal.get(toRawObject(computedItem))!
     ReactiveEffect.destroy(internal)
 }
 
 export function getComputedInternal(computedItem: ComputedData) {
-    return computedToInternal.get(computedItem)
+    return computedToInternal.get(toRawObject(computedItem))
 }
 
 const queuedRecomputes = new WeakSet<Computed>()
@@ -74,12 +74,13 @@ function defaultScheduleRecompute(this: Computed, recompute: (force?: boolean) =
     }
 }
 
-export const STATUS_CLEAN = -1
-export const STATUS_DIRTY = 1
-export const STATUS_RECOMPUTING_DEPS = 2
-export const STATUS_RECOMPUTING = 3
+export const STATUS_INITIAL = -2
+export const STATUS_DIRTY = -1
+export const STATUS_RECOMPUTING_DEPS = 1
+export const STATUS_RECOMPUTING = 2
+export const STATUS_CLEAN = 3
 
-type StatusType = typeof STATUS_CLEAN | typeof STATUS_DIRTY | typeof STATUS_RECOMPUTING_DEPS | typeof STATUS_RECOMPUTING
+type StatusType = typeof STATUS_INITIAL | typeof STATUS_CLEAN | typeof STATUS_DIRTY | typeof STATUS_RECOMPUTING_DEPS | typeof STATUS_RECOMPUTING
 
 /**
  * 计算和建立依赖过程。这里因为要支持 async / patch 模式，所以完全覆盖了 ReactiveEffect 的行为。
@@ -100,7 +101,8 @@ export class Computed extends ReactiveEffect {
     isPatchAsync? = false
     runtEffectId?: string
     asyncStatus?: Atom<null | boolean | string>
-    status: Atom<StatusType> = atom(STATUS_CLEAN)
+    status: Atom<StatusType> = atom(STATUS_INITIAL)
+    // status: Atom<StatusType> = atom(STATUS_CLEAN)
     triggerInfos: TriggerInfo[] = []
     scheduleRecompute?: DirtyCallback
     // 用来 patch 模式下，收集新增和删除是产生的 effectFrames
@@ -119,10 +121,17 @@ export class Computed extends ReactiveEffect {
     public isGeneratorGetter: boolean = false
     public isAsyncPatch: boolean = false
     public isGeneratorPatch: boolean = false
-    constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public forceAtom?: boolean) {
+    constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public dataType: ComputedDataType = 'atom') {
         super(getter)
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         if (!getter) return
+
+        this.data = this.dataType === 'atom' ?
+            atom(null) :
+            this.dataType === 'array' ? reactive([]) :
+            this.dataType === 'object' ? reactive({}) :
+            this.dataType === 'map' ? reactive(new Map()) :
+            reactive(new Set())
 
         this.isAsyncGetter = isAsync(getter)
         this.isGeneratorGetter = isGenerator(getter)
@@ -152,7 +161,7 @@ export class Computed extends ReactiveEffect {
         if (callbacks?.onRecompute) this.on('recompute', callbacks.onRecompute)
         if (callbacks?.onCleanup) this.on('cleanup', callbacks.onCleanup)
     }
-    public effectPromise?: Promise<any>
+    public cleanPromise?: Promise<any>
     runEffect() {
         let getterResult
 
@@ -166,13 +175,11 @@ export class Computed extends ReactiveEffect {
             }
             this.asyncStatus!(true)
             getterResult = this.isGeneratorGetter ? this.callGeneratorGetter(runEffectId) : this.callAsyncGetter()
-            this.effectPromise = getterResult
             getterResult.then((data:any) => {
                 if (this.runtEffectId !== runEffectId) return false
 
                 this.replaceData(data)
                 this.asyncStatus!(false)
-                delete this.effectPromise
             })
         } else {
             getterResult = this.callSimpleGetter()
@@ -245,6 +252,25 @@ export class Computed extends ReactiveEffect {
             effect.run()
         }
     }
+    resolveCleanPromise?: (value?: any) => any
+    rejectCleanPromise?: (value?: any) => any
+    createCleanPromise() {
+        const cleanAll = () => {
+            delete this.cleanPromise
+            delete this.resolveCleanPromise
+            delete this.rejectCleanPromise
+        }
+        this.cleanPromise = new Promise((res, rej) => {
+            this.resolveCleanPromise = (value:any) => {
+                res(value)
+                cleanAll()
+            }
+            this.rejectCleanPromise = (value:any) => {
+                rej(value)
+                cleanAll()
+            }
+        })
+    }
     // dep trigger/recursiveMarkDirty 时调用。没有 infos 说明是 markDirty
     run(infos?: TriggerInfo[]) {
         if (this.skipIndicator?.skip) return
@@ -252,9 +278,13 @@ export class Computed extends ReactiveEffect {
             this.triggerInfos.push(...infos)
         }
 
-        // markDirty
+        // markDirty, initial 状态不需要 mark dirty
         if (this.status.raw === STATUS_CLEAN) {
             this.status(STATUS_DIRTY)
+        }
+
+        if (!this.cleanPromise && (this.isAsync || this.isPatchAsync||!this.immediate)) {
+            this.createCleanPromise()
         }
 
         // 哪些情况可能出现 recomputing 过程中又触发了 run :
@@ -263,7 +293,7 @@ export class Computed extends ReactiveEffect {
         //  只需要获取 info 就行了，不需要再次触发 recompute/schedule 了。
         // 2. 在 async 模式下，任何依赖都可以再触发 recompute。
 
-        if (this.immediate || this.status.raw > STATUS_DIRTY) {
+        if (this.immediate || this.status.raw > STATUS_DIRTY || this.status.raw === STATUS_INITIAL) {
             this.recompute()
         } else {
             this.scheduleRecompute!(this.recompute, this.recursiveMarkDirty)
@@ -271,7 +301,7 @@ export class Computed extends ReactiveEffect {
     }
     // onTrack 由 notify 调用。
     onTrack() {
-        if(this.status.raw !== STATUS_CLEAN) {
+        if(this.status.raw === STATUS_DIRTY || this.status.raw === STATUS_INITIAL) {
             // async computed 不会出现读时才计算的情况，所以不需要 await。
             this.recompute()
         }
@@ -312,12 +342,17 @@ export class Computed extends ReactiveEffect {
         }
         this.markedDirtyEffects.clear()
         this.status(STATUS_CLEAN)
+        this.resolveCleanPromise?.()
     }
-
+    public recomputeId: number = 0
     async fullRecompute() {
+        const recomputeId = ++this.recomputeId
 
         const promises = this.forceDirtyDepRecompute()
         if (promises) await promises
+        if(this.recomputeId !== recomputeId) {
+            return
+        }
 
         this.prepareRecompute()
         // 默认行为，重算并且重新收集依赖
@@ -330,8 +365,9 @@ export class Computed extends ReactiveEffect {
             this.runEffect()
         }
 
-        // 当前 patch 完成后，发现有 dep 变脏。不用管了，肯定已经创建了新的 recompute
-        if(this.dirtyFromDeps.size) {
+        // 当前 patch 完成后，如果 recomputeId 已经变化，说明有新的 dep 变脏。这里不用管了。
+        // CAUTION 这里不能用 dirtyFromDeps.size 来判断，因为可能在当前 recompute 的时候，新 dep 变脏和新的 recomputeId 都已经算完了。
+        if(this.recomputeId !== recomputeId) {
             return
         }
 
@@ -339,6 +375,9 @@ export class Computed extends ReactiveEffect {
         this.completeRecompute()
     }
     async patchRecompute() {
+        // patch 也使用 recomputeId 是因为要判断是否被强制 fullRecompute 打断
+        const recomputeId = ++this.recomputeId
+
         const promises = this.forceDirtyDepRecompute()
         if (promises) await promises
 
@@ -362,7 +401,14 @@ export class Computed extends ReactiveEffect {
             }
         }
 
+        // 虽然 patch 的 recompute 是串行的，但是有可能被用户强制的 fullRecompute 打断。
+        // 这个时候就不用管了。
+        if (recomputeId !== this.recomputeId) {
+            return
+        }
+
         // 当前 patch 完成后，发现有 dep 变脏。立刻重新执行一个 recompute
+        //  这里可以用 dirtyFromDeps.size 来判断，因为 patch 模式总是
         if(this.dirtyFromDeps.size) {
             // 重置为 dirty，才能开启下一段 recompute
             this.status(STATUS_DIRTY)
@@ -371,42 +417,47 @@ export class Computed extends ReactiveEffect {
 
         this.completeRecompute()
     }
+    isRecomputing() {
+        return this.status.raw > STATUS_DIRTY && this.status.raw < STATUS_CLEAN
+    }
     // 由 this.run 调用
     recompute = async (forceRecompute = false): Promise<any> => {
         if ((this.status.raw === STATUS_CLEAN && !forceRecompute) || !this.active) return
 
-        const isFullRecompute = !this.applyPatch || forceRecompute
+        const needFullRecompute = this.status.raw === STATUS_INITIAL || !this.applyPatch || forceRecompute
+        // const isFullRecompute =  !this.applyPatch || forceRecompute
 
-        if (this.status.raw > STATUS_DIRTY) {
+        if (this.isRecomputing()) {
             // 没到重算阶段，任何 dep dirty 变化都不需要管， 因为会自动加入到 dirtyFromDeps 中。
             if (this.status() < STATUS_RECOMPUTING) {
-                return
+
             } else {
                 // 已经到重算阶段，
                 // 1. fullRecompute 要直接开启一个新的 recompute
-                if (isFullRecompute) {
-                    return this.fullRecompute()
+                if (needFullRecompute) {
+                    // 如果是 patch 模式的强制重算，要清空 triggerInfo
+                    if (this.applyPatch) {
+                        this.triggerInfos.length = 0
+                    }
+                    this.fullRecompute()
                 } else {
                     // 2. patchRecompute 会自行在上一个结尾处判断。所以这里也不用管了
-                    return
                 }
             }
         } else {
-            if (isFullRecompute) {
-                return this.fullRecompute()
+            if (needFullRecompute) {
+                // if (!this.resolveCleanPromise) debugger
+                this.fullRecompute()
             } else {
-                return this.patchRecompute()
+                this.patchRecompute()
             }
         }
+
+        return this.cleanPromise
     }
     runPatch() {
         if (this.isAsyncPatch || this.isGeneratorPatch) {
-            const patchPromise = this.isAsyncPatch ? this.runAsyncPatch() : this.runGeneratorPatch()
-            this.effectPromise = patchPromise
-            patchPromise.then(() => {
-                delete this.effectPromise
-            })
-            return patchPromise
+            return this.isAsyncPatch ? this.runAsyncPatch() : this.runGeneratorPatch()
         } else {
             return this.runSimplePatch()
         }
@@ -490,24 +541,11 @@ export class Computed extends ReactiveEffect {
 }
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
-export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean): ComputedResult<T>
-export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, forceAtom?: boolean, asyncInitialValue?: any): ComputedData {
-    const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, forceAtom)
-    if (internal.isAsync) {
-        assert(!(asyncInitialValue === undefined && forceAtom === undefined), 'async getter must use setInitialValue to set initial value.')
-        internal.data = forceAtom ? atom<any>(null) : asyncInitialValue
-    }
-    const initialValue = internal.runEffect()
+export type ComputedDataType = 'atom'|'array'|'object'|'map'|'set'
+function internalComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T
+function internalComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T {
+    const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, dataType)
 
-    if (!internal.isAsync) {
-        // 自动判断 data
-        internal.data = (forceAtom ?
-            atom(initialValue) :
-            isReactivableType(initialValue) ?
-                reactive(initialValue) :
-                atom(initialValue)
-        )
-    }
     internal.replaceData = function(newData: any) {
         Notifier.instance.pauseTracking()
         if (isAtom(this.data)) {
@@ -518,30 +556,46 @@ export function computed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyC
         Notifier.instance.resetTracking()
     }
 
-    computedToInternal.set(toRaw(internal.data), internal)
+    internal.run()
+
+    computedToInternal.set(toRawObject(internal.data), internal)
     return internal.data
 }
 
-export function atomComputed(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, true)
+
+export function computed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+    return internalComputed<Atom<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'atom')
 }
 
-computed.as = createDebugWithName(computed)
-computed.debug = createDebug(computed)
+export function arrayComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+    return internalComputed<UnwrapReactive<T[]>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'array')
+}
+export function objectComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+    return internalComputed<UnwrapReactive<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'object')
+}
+export function mapComputed<K, V>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+    return internalComputed<UnwrapReactive<Map<K, V>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'map')
+}
+export function setComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+    return internalComputed<UnwrapReactive<Set<T>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'set')
+}
+
+internalComputed.as = createDebugWithName(internalComputed)
+internalComputed.debug = createDebug(internalComputed)
 
 // 强制重算
 export function recompute(computedItem: ComputedData, force = false) {
-    const internal = computedToInternal.get(toRaw(computedItem))!
+    const internal = computedToInternal.get(toRawObject(computedItem))!
     internal.recompute(force)
 }
 
 // 目前 debug 用的
 export function isComputed(target: any) {
-    return !!computedToInternal.get(toRaw(target))
+    return !!computedToInternal.get(toRawObject(target))
 }
 
 // debug 时用的
 export function getComputedGetter(target: any) {
-    return computedToInternal.get(toRaw(target))?.getter
+    return computedToInternal.get(toRawObject(target))?.getter
 }
 

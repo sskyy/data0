@@ -81,6 +81,7 @@ function createArrayInstrumentations() {
 
       // 全部统一 成 splice，这样增量计算的地方容易写。
       let asSpliceArgs
+      debugger
       if (key === 'splice') {
         asSpliceArgs = args
       } else if (key === 'push') {

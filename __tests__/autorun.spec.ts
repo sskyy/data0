@@ -1,4 +1,4 @@
-import {atom, atomComputed, autorun, setDefaultScheduleRecomputedAsLazy} from "../src";
+import {atom, computed, autorun, setDefaultScheduleRecomputedAsLazy} from "../src";
 import {describe, expect, test} from "vitest";
 
 setDefaultScheduleRecomputedAsLazy(true)
@@ -7,7 +7,7 @@ setDefaultScheduleRecomputedAsLazy(true)
 describe('autorun', () => {
     test('with atomComputed', () => {
         const atom1 = atom<any>(null)
-        const computed1 = atomComputed(function computed1()  {
+        const computed1 = computed(function computed1()  {
             return atom1()
         })
 

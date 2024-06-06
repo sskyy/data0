@@ -1,6 +1,6 @@
 import { bench, describe } from 'vitest'
 import { computed as vComputed, reactive as vReactive} from "vue";
-import { computed } from "../src/computed";
+import { internalComputed } from "../src/computed";
 import { reactive } from "../src/reactive";
 import { incMap } from "../src/incremental.js";
 
@@ -14,7 +14,7 @@ describe('map and push', () => {
     })
 
     const x2 = reactive(Array(LENGTH).fill({value:0}))
-     computed(() => {
+     internalComputed(() => {
         return x2.map(item => ({value: item.value+1}))
     })
 
@@ -45,7 +45,7 @@ describe('map and unshift', () => {
     })
 
     const x2 = reactive(Array(LENGTH).fill({value:0}))
-    computed(() => {
+    internalComputed(() => {
         return x2.map(item => ({value: item.value+1}))
     })
 

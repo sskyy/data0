@@ -1,6 +1,6 @@
 import {
     ApplyPatchType,
-    atomComputed,
+    computed,
     CallbacksType,
     Computed,
     DirtyCallback,
@@ -25,7 +25,7 @@ export class RxMap<K, V> extends Computed{
         const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter as GetterType : undefined
         const source = typeof sourceOrGetter === 'function' ? undefined : sourceOrGetter
         // 自己可能是 computed，也可能是最初的 reactive
-        super(getter, applyPatch, scheduleRecompute, callbacks, skipIndicator, forceAtom)
+        super(getter, applyPatch, scheduleRecompute, callbacks, skipIndicator, 'map')
         this.getter = getter
         // 自己是 source
         if (source) {
@@ -35,7 +35,7 @@ export class RxMap<K, V> extends Computed{
         }
 
         if (this.getter) {
-            this.runEffect()
+            this.run()
         }
     }
     replace = (source: EntryType|PlainObjectType|Map<K,V>) => {
@@ -235,7 +235,7 @@ export class RxMap<K, V> extends Computed{
     }
     get size() {
         const source = this
-        return atomComputed(
+        return computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY)
                 return source.data.size

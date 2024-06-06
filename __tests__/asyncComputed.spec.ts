@@ -2,7 +2,7 @@ import {RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
 import {atom} from "../src/atom.js";
 import {
-    atomComputed,
+    computed,
     autorun,
     Computed,
     ReactiveEffect,
@@ -15,15 +15,13 @@ setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('async computed', () => {
-    let fetchPromise: any
     const fetchData = (offset:number, legnth:number): Promise<number[]> => {
         const data = Array(100).fill(0).map((_, index) => index)
-        fetchPromise = new Promise((resolve) => {
+        return new Promise((resolve) => {
             return setTimeout(() => {
                 resolve(data.slice(offset, offset + legnth))
             }, 50)
         })
-        return fetchPromise
     }
 
     const wait = (time: number) => {
@@ -54,34 +52,26 @@ describe('async computed', () => {
 
         expect(list.asyncStatus!()).toBeTruthy()
 
-        await wait(100)
-        await list.effectPromise
-        await wait(10)
+        await list.cleanPromise
         expect(list.asyncStatus!()).toBe(false)
         expect(innerRuns).toBe(1)
 
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         expect(status).toMatchObject(['before fetch', 'fetching', 'fetch done', false])
         offset(10)
-        await wait(100)
-        await list.effectPromise
-        await wait(50)
+        await list.cleanPromise
         expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
         expect(innerRuns).toBe(2)
 
 
         length(5)
-        await wait(100)
-        await list.effectPromise
-        await wait(10)
+        await list.cleanPromise
         expect(list.data).toMatchObject([10, 11, 12, 13, 14])
         expect(innerRuns).toBe(3)
 
         offset(11)
         length(6)
-        await wait(100)
-        await fetchPromise
-        await wait(10)
+        await list.cleanPromise
         expect(list.data).toMatchObject([11, 12, 13, 14, 15, 16])
         // 计算是在 next micro task 中的，所以应该是被合并了
         expect(innerRuns).toBe(4)
@@ -107,33 +97,25 @@ describe('async computed', () => {
         expect(list.data).toMatchObject([])
         expect(list.asyncStatus!()).toBeTruthy()
 
-        await wait(100)
-        await fetchPromise
-        await wait(10)
+        await list.cleanPromise
         expect(list.asyncStatus!()).toBe(false)
         expect(innerRuns).toBe(1)
 
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         offset(10)
-        await wait(100)
-        await list.effectPromise
-        await wait(50)
+        await list.cleanPromise
         expect(list.data).toMatchObject([10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
         expect(innerRuns).toBe(2)
 
 
         length(5)
-        await wait(100)
-        await fetchPromise
-        await wait(10)
+        await list.cleanPromise
         expect(list.data).toMatchObject([10, 11, 12, 13, 14])
         expect(innerRuns).toBe(3)
 
         offset(11)
         length(6)
-        await wait(100)
-        await fetchPromise
-        await wait(10)
+        await list.cleanPromise
         expect(list.data).toMatchObject([11, 12, 13, 14, 15, 16])
         // 计算是在 next micro task 中的，所以应该是被合并了
         expect(innerRuns).toBe(4)
@@ -144,7 +126,7 @@ describe('async computed', () => {
         const runTrigger = atom(0)
         let innerRuns = 0
         let inRecompute = false
-        const data = atomComputed(function*() {
+        const data = computed<number>(function*() {
             inRecompute = true
             const newNum = runTrigger()
             innerRuns++
@@ -201,14 +183,12 @@ describe('async computed', () => {
                 patchRuns++
             }
         )
-        await wait(11)
-        await fetchPromise
-        await wait(11)
+        await list.cleanPromise
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
         length(20)
         length(30)
-        await wait(200)
+        await list.cleanPromise
         expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
         // 应该只拍一次，因为 asyncComputed 默认泡在 next micro task 中
         expect(patchRuns).toBe(1)
@@ -237,8 +217,7 @@ describe('async computed', () => {
 
             }
         )
-        await wait(11)
-        await fetchPromise
+        await list.cleanPromise
         await wait(11)
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
@@ -248,16 +227,15 @@ describe('async computed', () => {
 
         expect(inPatch).toBe(true)
         length(30)
-        await list.effectPromise
+        await list.cleanPromise
         expect(patchRuns).toBe(2)
 
-        await wait(200)
         expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
     })
 
     test('async patch interrupted with more dirty deps trigger', async () => {
         const length = atom(10)
-        const length2 = atomComputed(() => length())
+        const length2 = computed<number>(() => length())
         let patchRuns = 0
         let inPatch = false
         const list = new RxList<number>(
@@ -278,9 +256,8 @@ describe('async computed', () => {
                 inPatch = false
             }
         )
-        await wait(11)
-        await fetchPromise
-        await wait(11)
+
+        await list.cleanPromise
         expect(list.data).toMatchObject([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
         length(20)
@@ -289,13 +266,10 @@ describe('async computed', () => {
 
         expect(inPatch).toBe(true)
         length(30)
-        await wait(10)
-        await list.effectPromise
-        await wait(100)
+        await list.cleanPromise
 
         expect(patchRuns).toBe(2)
 
-        await wait(200)
         expect(list.data).toMatchObject(Array(30).fill(0).map((_, index) => index))
     })
 
