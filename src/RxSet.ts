@@ -1,0 +1,306 @@
+import {ApplyPatchType, CallbacksType, computed, Computed, DirtyCallback, GetterType} from "./computed.js";
+import {Atom} from "./atom.js";
+import {ITERATE_KEY, Notifier, TriggerInfo} from "./notify.js";
+import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
+import {assert} from "./util.js";
+import {ReactiveEffect} from "./reactiveEffect.js";
+
+export class RxSet<T> extends Computed {
+    data!: Set<T>
+    trackClassInstance = true
+
+    constructor(sourceOrGetter: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
+        const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter : undefined
+        const source = typeof sourceOrGetter !== 'function' ? sourceOrGetter : undefined
+
+        // 自己可能是 computed，也可能是最初的 reactive
+        super(getter, applyPatch, scheduleRecompute, callbacks, undefined, undefined)
+        this.getter = getter
+
+        // 自己是 source
+        this.data = source instanceof Set ? source : new Set(Array.isArray(source) ? source : [])
+
+        if (this.getter) {
+            this.run()
+        }
+    }
+    replaceData(newData: T[]|Set<T>) {
+        return this.replace(newData)
+    }
+
+    replace(newData: T[]|Set<T>) {
+        const old = this.data
+        this.data = newData instanceof Set ? newData : new Set(newData)
+
+        old.forEach((value) => {
+            if(!this.data.has(value)) {
+                Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key: value, oldValue: value})
+            }
+        })
+
+        this.data.forEach((value) => {
+            if(!old.has(value)) {
+                Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
+            }
+        })
+
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'replace', argv: [newData]})
+
+        return this
+    }
+
+    // 显式 set 某一个 index 的值
+    add(value: T) {
+        if (!this.data.has(value)) {
+            this.data.add(value)
+            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
+            Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'add', argv: [value]})
+        }
+
+        return this
+    }
+    clear() {
+        return this.replace([])
+    }
+    delete(value:T) {
+        if (this.data.has(value)) {
+            this.data.delete(value)
+            Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key: value, argv: [value]})
+            Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'delete', argv: [value]})
+        }
+        return this
+    }
+    has(value:T): Atom<boolean> {
+        const base = this
+        //  has 是 n(1) 的操作，所以不用 applyPatch 了。
+        return computed(() => {
+            debugger
+            Notifier.instance.track(base, TrackOpTypes.ITERATE, ITERATE_KEY)
+            return base.data.has(value)
+        })
+    }
+    // 在当前 set 里，但不在 other set 里
+    difference(other: RxSet<T>): RxSet<T> {
+        const base = this
+
+        return new RxSet(
+            function computation(this: RxSet<T>) {
+                this.manualTrack(base, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(other, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return new Set([...base.data].filter(x => !other.data.has(x)))
+            },
+            function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
+                    if(source === base) {
+                        if (method === 'add') {
+                            if (!other.data.has(argv![0])) {
+                                this.add(argv![0])
+                            }
+                        } else if (method === 'delete') {
+                            this.delete(argv![0])
+                        } else {
+                            // 只支持 replace method
+                            assert(method === 'replace', 'only support replace method')
+                            if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
+                                // 自己清空了，直接清空
+                                this.clear()
+                            } else {
+                                // 重新计算
+                                this.replace(new Set([...base.data].filter(x => other.data.has(x))))
+                            }
+                        }
+                    } else {
+                        if (method === 'add') {
+                            //  other 增加了，直接尝试 delete
+                            this.delete(argv![0])
+                        } else if (method === 'delete') {
+                            if(base.data.has(argv![0])) {
+                                this.add(argv![0])
+                            }
+                        } else {
+                            // 只支持 replace method
+                            assert(method === 'replace', 'only support replace method')
+                            if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
+                                // other 清空了，直接把 base 的数据全加进去
+                                base.data.forEach(x => this.add(x))
+                            } else {
+                                // 重新计算
+                                this.replace(new Set([...base.data].filter(x => other.data.has(x))))
+                            }
+                        }
+                    }
+                })
+            }
+        )
+    }
+    intersection(other: RxSet<T>): RxSet<T> {
+        const base = this
+
+        return new RxSet(
+            function computation(this: RxSet<T>) {
+                this.manualTrack(base, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(other, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return new Set([...base.data].filter(x => other.data.has(x)))
+            },
+            function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
+                    if (method === 'add') {
+                        const toCheck = source === base ? other : base
+                        if (toCheck.data.has(argv![0])) {
+                            this.add(argv![0])
+                        }
+                    } else if (method === 'delete') {
+                        // 不管谁的 delete，都直接尝试 delete
+                        this.delete(argv![0])
+                    } else {
+                        // 只支持 replace method
+                        assert(method === 'replace', 'only support replace method')
+                        if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
+                            // 任何一方清空了，我们也直接清空
+                            this.clear()
+                        } else {
+                            // 重新计算
+                            this.replace(new Set([...base.data].filter(x => other.data.has(x))))
+                        }
+                    }
+                })
+            }
+        )
+    }
+    symmetricDifference(other: RxSet<T>): RxSet<T> {
+        const base = this
+
+        return new RxSet(
+            function computation(this: RxSet<T>) {
+                this.manualTrack(base, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(other, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return new Set([...base.data].filter(x => !other.data.has(x)).concat([...other.data].filter(x => !base.data.has(x))))
+            },
+            function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
+                    if (method === 'add') {
+                        const toCheck = source === base ? other : base
+                        if (!toCheck.data.has(argv![0])) {
+                            this.add(argv![0])
+                        } else {
+                            this.delete(argv![0])
+                        }
+                    } else if (method === 'delete') {
+                        const toCheck = source === base ? other : base
+                        if (toCheck.data.has(argv![0])) {
+                            this.add(argv![0])
+                        } else {
+                            this.delete(argv![0])
+                        }
+                    } else {
+                        // 只支持 replace method
+                        assert(method === 'replace', 'only support replace method')
+                        if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
+                            // 任何一方清空了，我们也直接清空
+                            // 任何一方清空了，直接把另一方全部加进去就行了
+                            const toReplace = source === base ? other : base
+                            toReplace.data.forEach(x => this.add(x))
+                        } else {
+                            // 重新计算
+                            this.replace(new Set([...base.data].filter(x => !other.data.has(x)).concat([...other.data].filter(x => !base.data.has(x)))))
+                        }
+                    }
+                })
+            }
+        )
+    }
+    union(other: RxSet<T>): RxSet<T> {
+        const base = this
+
+        return new RxSet(
+            function computation(this: RxSet<T>) {
+                this.manualTrack(base, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(other, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return new Set([...base.data, ...other.data])
+            },
+            function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
+                    if (method === 'add') {
+                        // 不管是哪个 source，都直接尝试 add
+                        this.add(argv![0])
+                    } else if (method === 'delete') {
+                        const toCheck = source === base ? other : base
+                        if (!toCheck.data.has(argv![0])) {
+                            this.delete(argv![0])
+                        }
+                    } else {
+                        // 只支持 replace method
+                        assert(method === 'replace', 'only support replace method')
+                        if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
+                            // 任何一方清空了，我们也直接清空
+                            const toReplace = source === base ? other : base
+                            this.replace([...toReplace.data])
+                        } else {
+                            // 重新计算
+                            this.replace(new Set([...base.data, ...other.data]))
+                        }
+                    }
+                })
+            }
+        )
+    }
+
+    isSubsetOf(other: RxSet<T>): Atom<boolean> {
+        const base = this
+        const intersection = this.intersection(other)
+
+        return computed(() => {
+            return intersection.size() === base.size()
+        }, undefined, undefined, {
+            onDestroy() {
+                intersection.destroy()
+            }
+        })
+
+    }
+    isSupersetOf(other: RxSet<T>): Atom<boolean> {
+        return other.isSubsetOf(this)
+    }
+    isDisjointFrom(other: RxSet<T>): Atom<boolean> {
+        const intersection = this.intersection(other)
+        return computed(() => {
+            return intersection.size() === 0
+        }, undefined, undefined, {
+            onDestroy() {
+                intersection.destroy()
+            }
+        })
+    }
+    forEach(handler: (item: T) => void) {
+        this.data.forEach(handler)
+        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
+    }
+    toList() {
+        // FIXME
+    }
+    toArray() {
+        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
+        return [...this.data]
+    }
+
+
+    get size(): Atom<number> {
+        const source = this
+        return computed(
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return source.data.size
+            },
+            function applyPatch(this: Computed, data: Atom<number>){
+                data(source.data.size)
+            }
+        )
+    }
+
+    // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
+    onUntrack(_effect: ReactiveEffect) {
+
+    }
+}
+
+
