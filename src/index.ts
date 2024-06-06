@@ -1,6 +1,17 @@
 export {reactive, isReactive, rawStructureClone, toRaw, type UnwrapReactive} from './reactive'
 export {atom, isAtom, type Atom} from './atom'
-export {computed, type ComputedData, destroyComputed, recompute, Computed, setDefaultScheduleRecomputedAsLazy} from './computed'
+export {
+    computed,
+    arrayComputed,
+    objectComputed,
+    mapComputed,
+    setComputed,
+    type ComputedData,
+    destroyComputed,
+    recompute,
+    Computed,
+    setDefaultScheduleRecomputedAsLazy
+} from './computed'
 export * from './notify'
 export {TrackOpTypes, TriggerOpTypes} from "./operations";
 export * from './incremental'
