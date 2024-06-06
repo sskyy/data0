@@ -15,7 +15,6 @@ describe('incremental map', () => {
         expect(mappedArr).toShallowMatchObject([4,5,6])
         expect(mapFnRuns).toBe(3)
 
-        debugger
         source.splice(1, 0, 5)
         expect(mappedArr).toShallowMatchObject([4,8,5,6])
         expect(mapFnRuns).toBe(4)

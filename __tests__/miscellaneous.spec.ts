@@ -9,7 +9,6 @@ describe('computed on computed', () => {
     test('atom & computed', () => {
         const atom1 = atom<{items: any[]}>(null)
         const computed1 = arrayComputed<any>(function computed1()  {
-            debugger
             return atom1()?.items || []
         })
 
@@ -21,7 +20,6 @@ describe('computed on computed', () => {
             })
             return result
         })
-        debugger
         atom1({items: [1,2,3]})
 
         expect(computed1).toShallowMatchObject([1,2,3])
