@@ -307,21 +307,22 @@ export class Computed extends ReactiveEffect {
         }
         this.dispatch('track', this.data)
     }
+    hasAsyncDirtyDep() {
 
-    forceDirtyDepRecompute() {
+    }
+    forceDirtyDepRecompute = (): Promise<any>|undefined => {
         this.status(STATUS_RECOMPUTING_DEPS)
         const promises: Promise<any>[] = []
-        while(this.dirtyFromDeps.size) {
-            // CAUTION 不需要自己在这里把 this.dirtyFromDeps 清空，dep recompute 成功后会自己从 dirtyFromDeps 中移除自己。
-            for(const effect of this.dirtyFromDeps) {
-                if (effect.isAsync) {
-                    promises.push(effect.recompute())
-                } else {
-                    effect.recompute()
-                }
+        // CAUTION 不需要自己在这里把 this.dirtyFromDeps 清空，dep recompute 成功后会自己从 dirtyFromDeps 中移除自己。
+        for(const effect of this.dirtyFromDeps) {
+            if (effect.isAsync) {
+                promises.push(effect.recompute())
+            } else {
+                effect.recompute()
             }
         }
-        return promises.length ? Promise.all(promises) : undefined
+
+        return promises.length ? Promise.all(promises).then(this.forceDirtyDepRecompute) : undefined
     }
     prepareRecompute() {
         this.status(STATUS_RECOMPUTING)
