@@ -6,6 +6,7 @@ import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
+import {RxSet} from "./RxSet";
 
 type MapOptions<U> = {
     beforePatch?: (triggerInfo: InputTriggerInfo) => any,
@@ -653,16 +654,16 @@ export class RxList<T> extends Computed {
         this.atomIndexes = undefined
     }
 
-    createSelection(currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue?: boolean) {
+    createSelection(currentValues: RxSet<T|number>|Atom<T|null|number>, autoResetValue?: boolean) {
         return createSelection(this, currentValues, autoResetValue)
     }
-    createIndexKeySelection(currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue?:boolean) {
+    createIndexKeySelection(currentValues: RxSet<number>|Atom<null|number>, autoResetValue?:boolean) {
         return createIndexKeySelection(this, currentValues, autoResetValue)
     }
 }
 
 
-export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
+export function createSelection<T>(source: RxList<T>, currentValues: RxSet<T|number>|Atom<T|null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
     function trackCurrentValues(list: Computed) {
         if (isAtom(currentValues)) {
             list.manualTrack(currentValues, TrackOpTypes.ATOM, 'value');
@@ -679,7 +680,7 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
     const itemToIndicator: Map<any, Atom<boolean>> = new Map()
 
     function createNewIndicator(item:T) {
-        const indicator = atom(isAtom(currentValues) ? currentValues.raw === item : currentValues.data.includes(item))
+        const indicator = atom(isAtom(currentValues) ? currentValues.raw === item : currentValues.data.has(item))
         itemToIndicator.set(item, indicator)
         return indicator
     }
@@ -690,8 +691,8 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
                 currentValues(null)
             }
         } else {
-            if(currentValues.data.includes(item)) {
-                currentValues.splice(currentValues.data.indexOf(item), 1)
+            if(currentValues.data.has(item)) {
+                currentValues.delete(item)
             }
         }
     }
@@ -702,9 +703,9 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
             const newItemsInArgs = argv!.slice(2)
             const deleteItems: T[] = methodResult || []
             list.splice(argv![0], argv![1], ...newItemsInArgs.map((item) => [item, createNewIndicator(item)] as [T, Atom<boolean>]))
-                deleteItems.forEach((item) => {
-                    itemToIndicator.delete(item)
-                })
+            deleteItems.forEach((item) => {
+                itemToIndicator.delete(item)
+            })
         } else {
             //explicit key change
             const {  newValue, key } = triggerInfo
@@ -715,24 +716,28 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
 
     function updateIndicatorsFromCurrentValueChange(triggerInfo: TriggerInfo) {
         const { oldValue, newValue, method } = triggerInfo
-
+        debugger
         if(isAtom(currentValues)) {
             itemToIndicator.get(oldValue as T)?.(false)
             itemToIndicator.get(newValue as T)?.(true)
         } else {
-            // RxList，只有 splice 操作
-            assert(method === 'splice', 'RxList currentValues can only support splice')
-
-            const deleteItems = triggerInfo.methodResult
-            const insertItems = triggerInfo.argv!.slice(2);
-
-            (deleteItems as T[]).forEach((item:T) => {
-                const indicator = itemToIndicator?.get(item)
-                indicator?.(false)
-            })
-            insertItems.forEach((item:T) => {
+            // RxSet，有 add/delete/replace method
+            let newItems: T[] = []
+            let deletedItems: T[] = []
+            if (method === 'add') {
+                newItems = [triggerInfo.argv![0] as T]
+            } else if (method === 'delete') {
+                deletedItems = [triggerInfo.argv![0] as T]
+            } else {
+                [newItems, deletedItems] = triggerInfo.methodResult as [T[], T[]]
+            }
+            newItems.forEach((item) => {
                 const indicator = itemToIndicator?.get(item)
                 indicator?.(true)
+            })
+            deletedItems.forEach((item) => {
+                const indicator = itemToIndicator?.get(item)
+                indicator?.(false)
             })
         }
     }
@@ -775,9 +780,6 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
                     updateIndicatorsFromSourceChange(this, triggerInfo)
                 } else {
                     // 来自 currentValues 的变化，需要同步 indicators
-                    if (!isAtom(currentValues)) {
-                        assert(triggerInfo.method === 'splice', 'currentValues can only support splice')
-                    }
                     updateIndicatorsFromCurrentValueChange(triggerInfo)
                 }
             })
@@ -793,7 +795,7 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxList<T|nu
 }
 
 
-export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxList<T|number>|Atom<T|null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
+export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxSet<number>|Atom<null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
 
     function trackCurrentValues(list: Computed) {
         if (isAtom(currentValues)) {
@@ -820,14 +822,11 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxL
             if (deleteCount !== insertCount) {
                 const startIndex = argv![0] as number
 
-                const selectedValues = isAtom(currentValues) ? [currentValues.raw] : currentValues.data
-                const outOfValueIndexes:number[] = []
+                const selectedValues = isAtom(currentValues) ? (currentValues.raw ? [currentValues.raw] : []) : [...currentValues.data]
                 // 因为 index 产生了变化，所以要更新 indicator
-                selectedValues.forEach((value, valueIndex) => {
+                selectedValues.forEach((value) => {
                     const index = value as number
-                    if (index > list.data.length - 1) {
-                        outOfValueIndexes.push(valueIndex)
-                    } else {
+                    if (index < list.data.length ) {
                         // 只有 index 在后面的才是还存在，并且受了影响需要处理的。
                         if (index >= startIndex && deleteCount !== insertCount) {
                             const indexAfterChange = index + insertCount - deleteCount
@@ -838,23 +837,7 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxL
                         newIndicator?.(true)
                     }
                 })
-
-                // 处理超出的 index
-                if (autoResetValue && outOfValueIndexes.length > 0) {
-                    if (isAtom(currentValues)) {
-                        // 不用判断，如果有，肯定就是 currentValues 超过了
-                        currentValues(null)
-                    } else {
-                        // 重新触发一下。
-                        outOfValueIndexes.forEach((valueIndex, index) => {
-                            // CAUTION 因为删除一个 index 就会变化，所以要减去 index
-                            currentValues.splice(outOfValueIndexes[0]-index, 0)
-                        })
-                    }
-                }
             }
-
-
         }
         // 不需要处理 explicit key change
     }
@@ -866,14 +849,20 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxL
             list.data[oldValue as number]?.[1](false)
             list.data[newValue as number]?.[1](true)
         } else {
-            // RxList，只有 splice 操作
-            assert(method === 'splice', 'RxList currentValues can only support splice')
+            // RxSet，有 add/delete/replace method
+            let deleteItems: number[] = []
+            let insertItems: number[] = []
+            if (method === 'add') {
+                insertItems = [triggerInfo.argv![0] as number]
+            } else if (method === 'delete') {
+                deleteItems = [triggerInfo.argv![0] as number]
+            } else {
+                [deleteItems, insertItems] = triggerInfo.methodResult as [number[], number[]]
+            }
 
-            const deleteItems = triggerInfo.methodResult
-            const insertItems = triggerInfo.argv!.slice(2);
 
-            (deleteItems as number[]).forEach((index) => {
-                list.data[index][1](false)
+            (deleteItems as number[]).forEach((item) => {
+                list.data[item][1](false)
             })
             insertItems.forEach((item:number) => {
                 list.data[item][1](true)
@@ -882,8 +871,36 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxL
     }
 
     function createNewIndicator(index: number) {
-        return atom(isAtom(currentValues) ? currentValues.raw === index : currentValues.data.includes(index))
+        return atom(isAtom(currentValues) ? currentValues.raw === index : currentValues.data.has(index))
     }
+
+    const autoResetValueEffect = autoResetValue ?
+        new Computed(
+            function(this: Computed){
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+            },
+            function(_, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { method } = triggerInfo
+                    assert(method === 'splice', 'currentValues can only support splice')
+                    const newLength = source.data.length
+                    if (isAtom(currentValues)) {
+                        if (currentValues.raw && currentValues.raw >= newLength) {
+                            currentValues(null)
+                        }
+                    } else {
+                        // RxSet
+                        currentValues.data.forEach((item) => {
+                            if (item >= newLength) {
+                                currentValues.delete(item)
+                            }
+                        })
+                    }
+                })
+            },
+            true
+        ) :
+        undefined
 
     return new RxList<[T, Atom<boolean>]>(
         function  computation(this: Computed) {
@@ -898,13 +915,15 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxL
                     // 来自 source 的变化，需要同步 indicators
                     updateIndicatorsFromSourceChange(this, triggerInfo)
                 } else {
-                    // 来自 currentValues 的变化，需要同步 indicators
-                    if (!isAtom(currentValues)) {
-                        assert(triggerInfo.method === 'splice', 'currentValues can only support splice')
-                    }
                     updateIndicatorsFromCurrentValueChange(this, triggerInfo)
                 }
             })
+        },
+        undefined,
+        {
+            onDestroy() {
+                autoResetValueEffect?.destroy()
+            }
         }
     )
 

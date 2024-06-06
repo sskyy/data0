@@ -1,6 +1,7 @@
 import {describe, expect, test} from "vitest";
 import {RxMap} from "../src/RxMap.js";
-import {RxList, setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
+import {setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
+import {RxSet} from "../src/RxSet";
 
 setDefaultScheduleRecomputedAsLazy(true)
 
@@ -66,14 +67,14 @@ describe('RxMap', () => {
 
         const valuesList = rawEdgesById.values()
 
-        const selectedEdges = new RxList<any>([rawEdges[0]])
+        const selectedEdges = new RxSet<any>([rawEdges[0]])
         const valueWithSelected = valuesList.createSelection(selectedEdges)
 
         const selectedValues = valueWithSelected.map(([_, selected]) => selected)
 
         expect(selectedValues.toArray().map(v => v())).toMatchObject([true, false])
 
-        selectedEdges.push(rawEdges[1])
+        selectedEdges.add(rawEdges[1])
         expect(selectedValues.toArray().map(v => v())).toMatchObject([true, true])
 
         // 新增一个 edge，然后再选中
@@ -83,7 +84,7 @@ describe('RxMap', () => {
         expect(selectedValues.toArray().map(v => v())).toMatchObject([true, true, false])
 
         //
-        selectedEdges.push(newEdge)
+        selectedEdges.add(newEdge)
         expect(selectedValues.toArray().map(v => v())).toMatchObject([true, true, true])
     })
 

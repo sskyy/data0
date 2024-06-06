@@ -3,6 +3,7 @@ import {describe, expect, test} from "vitest";
 import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
 import {autorun} from "../src/autorun.js";
 import {atom} from "../src/atom.js";
+import {RxSet} from "../src/RxSet";
 
 setDefaultScheduleRecomputedAsLazy(true)
 
@@ -459,7 +460,7 @@ describe('RxList chained computed', () => {
 
     test('chained with createSelection', () => {
         const showMore = atom(false)
-        const selected = new RxList<number>( ()=> {
+        const selected = new RxSet<number>( ()=> {
             return showMore() ? [1,2,3,4,5] : [1,2,3]
         })
 
@@ -472,7 +473,6 @@ describe('RxList chained computed', () => {
         })
 
         expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, false, false, false, false])
-
         showMore(true)
         computedList.toArray()
         expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, true, true, false, false])

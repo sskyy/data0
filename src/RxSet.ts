@@ -2,8 +2,7 @@ import {ApplyPatchType, CallbacksType, computed, Computed, DirtyCallback, Getter
 import {Atom} from "./atom.js";
 import {ITERATE_KEY, Notifier, TriggerInfo} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
-import {assert} from "./util.js";
-import {ReactiveEffect} from "./reactiveEffect.js";
+import {RxList} from "./RxList";
 
 export class RxSet<T> extends Computed {
     data!: Set<T>
@@ -28,25 +27,30 @@ export class RxSet<T> extends Computed {
         return this.replace(newData)
     }
 
-    replace(newData: T[]|Set<T>) {
+    replace(newData: T[]|Set<T>): [T[], T[]]{
         const old = this.data
         this.data = newData instanceof Set ? newData : new Set(newData)
+
+        const newItems: T[] = []
+        const deletedItems: T[] = []
 
         old.forEach((value) => {
             if(!this.data.has(value)) {
                 Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key: value, oldValue: value})
+                deletedItems.push(value)
             }
-        })
+        });
 
-        this.data.forEach((value) => {
+        [...newData].forEach((value) => {
             if(!old.has(value)) {
                 Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
+                newItems.push(value)
             }
         })
 
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'replace', argv: [newData]})
+        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'replace', argv: [newData], methodResult: [newItems, deletedItems]})
 
-        return this
+        return [newItems, deletedItems]
     }
 
     // 显式 set 某一个 index 的值
@@ -90,44 +94,38 @@ export class RxSet<T> extends Computed {
                 return new Set([...base.data].filter(x => !other.data.has(x)))
             },
             function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
-                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
-                    if(source === base) {
-                        if (method === 'add') {
-                            if (!other.data.has(argv![0])) {
-                                this.add(argv![0])
-                            }
-                        } else if (method === 'delete') {
-                            this.delete(argv![0])
-                        } else {
-                            // 只支持 replace method
-                            assert(method === 'replace', 'only support replace method')
-                            if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
-                                // 自己清空了，直接清空
-                                this.clear()
-                            } else {
-                                // 重新计算
-                                this.replace(new Set([...base.data].filter(x => other.data.has(x))))
-                            }
-                        }
+                triggerInfos.forEach(({ methodResult, method, argv, newValue, source, result}) => {
+                    let newItems: T[] = []
+                    let deletedItems: T[] = []
+                    if (method === 'add')  {
+                        newItems = [argv![0]]
+                    } else if (method === 'delete') {
+                        deletedItems = [argv![0]]
                     } else {
-                        if (method === 'add') {
-                            //  other 增加了，直接尝试 delete
-                            this.delete(argv![0])
-                        } else if (method === 'delete') {
-                            if(base.data.has(argv![0])) {
-                                this.add(argv![0])
+                        // 只支持 replace method
+                        [newItems, deletedItems] = methodResult as [T[], T[]]
+                    }
+
+                    if(source === base) {
+                        newItems.forEach(x => {
+                            if (!other.data.has(x)) {
+                                this.add(x)
                             }
-                        } else {
-                            // 只支持 replace method
-                            assert(method === 'replace', 'only support replace method')
-                            if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
-                                // other 清空了，直接把 base 的数据全加进去
-                                base.data.forEach(x => this.add(x))
-                            } else {
-                                // 重新计算
-                                this.replace(new Set([...base.data].filter(x => other.data.has(x))))
+                        })
+
+                        deletedItems.forEach(x => {
+                            this.delete(x)
+                        })
+                    } else {
+                        newItems.forEach(x => {
+                            this.delete(x)
+                        })
+
+                        deletedItems.forEach(x => {
+                            if(base.data.has(x)) {
+                                this.add(x)
                             }
-                        }
+                        })
                     }
                 })
             }
@@ -143,30 +141,33 @@ export class RxSet<T> extends Computed {
                 return new Set([...base.data].filter(x => other.data.has(x)))
             },
             function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
-                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
-                    if (method === 'add') {
-                        const toCheck = source === base ? other : base
-                        if (toCheck.data.has(argv![0])) {
-                            this.add(argv![0])
-                        }
+                triggerInfos.forEach(({type, method, methodResult, argv, newValue, source, result}) => {
+                    let newItems: T[] = []
+                    let deletedItems: T[] = []
+                    if (method === 'add')  {
+                        newItems = [argv![0]]
                     } else if (method === 'delete') {
-                        // 不管谁的 delete，都直接尝试 delete
-                        this.delete(argv![0])
+                        deletedItems = [argv![0]]
                     } else {
                         // 只支持 replace method
-                        assert(method === 'replace', 'only support replace method')
-                        if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
-                            // 任何一方清空了，我们也直接清空
-                            this.clear()
-                        } else {
-                            // 重新计算
-                            this.replace(new Set([...base.data].filter(x => other.data.has(x))))
-                        }
+                        [newItems, deletedItems] = methodResult as [T[], T[]]
                     }
+
+                    newItems.forEach(x => {
+                        const toCheck = source === base ? other : base
+                        if (toCheck.data.has(x)) {
+                            this.add(x)
+                        }
+                    })
+
+                    deletedItems.forEach(x => {
+                        this.delete(x)
+                    })
                 })
             }
         )
     }
+    // 差集
     symmetricDifference(other: RxSet<T>): RxSet<T> {
         const base = this
 
@@ -177,34 +178,35 @@ export class RxSet<T> extends Computed {
                 return new Set([...base.data].filter(x => !other.data.has(x)).concat([...other.data].filter(x => !base.data.has(x))))
             },
             function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
-                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
-                    if (method === 'add') {
-                        const toCheck = source === base ? other : base
-                        if (!toCheck.data.has(argv![0])) {
-                            this.add(argv![0])
-                        } else {
-                            this.delete(argv![0])
-                        }
+                triggerInfos.forEach(({methodResult, method, argv, newValue, source, result}) => {
+                    let newItems: T[] = []
+                    let deletedItems: T[] = []
+                    if (method === 'add')  {
+                        newItems = [argv![0]]
                     } else if (method === 'delete') {
-                        const toCheck = source === base ? other : base
-                        if (toCheck.data.has(argv![0])) {
-                            this.add(argv![0])
-                        } else {
-                            this.delete(argv![0])
-                        }
+                        deletedItems = [argv![0]]
                     } else {
                         // 只支持 replace method
-                        assert(method === 'replace', 'only support replace method')
-                        if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
-                            // 任何一方清空了，我们也直接清空
-                            // 任何一方清空了，直接把另一方全部加进去就行了
-                            const toReplace = source === base ? other : base
-                            toReplace.data.forEach(x => this.add(x))
-                        } else {
-                            // 重新计算
-                            this.replace(new Set([...base.data].filter(x => !other.data.has(x)).concat([...other.data].filter(x => !base.data.has(x)))))
-                        }
+                        [newItems, deletedItems] = methodResult as [T[], T[]]
                     }
+
+                    newItems.forEach(x => {
+                        const toCheck = source === base ? other : base
+                        if (!toCheck.data.has(x)) {
+                            this.add(x)
+                        } else {
+                            this.delete(x)
+                        }
+                    })
+
+                    deletedItems.forEach(x => {
+                        const toCheck = source === base ? other : base
+                        if (toCheck.data.has(x)) {
+                            this.add(x)
+                        } else {
+                            this.delete(x)
+                        }
+                    })
                 })
             }
         )
@@ -219,27 +221,30 @@ export class RxSet<T> extends Computed {
                 return new Set([...base.data, ...other.data])
             },
             function applyPatch(this: RxSet<T>, data:any, triggerInfos: TriggerInfo[]) {
-                triggerInfos.forEach(({type, method, argv, newValue, source, result}) => {
-                    if (method === 'add') {
-                        // 不管是哪个 source，都直接尝试 add
-                        this.add(argv![0])
+                triggerInfos.forEach(({methodResult, method, argv, newValue, source, result}) => {
+
+                    let newItems: T[] = []
+                    let deletedItems: T[] = []
+                    if (method === 'add')  {
+                        newItems = [argv![0]]
                     } else if (method === 'delete') {
-                        const toCheck = source === base ? other : base
-                        if (!toCheck.data.has(argv![0])) {
-                            this.delete(argv![0])
-                        }
+                        deletedItems = [argv![0]]
                     } else {
                         // 只支持 replace method
-                        assert(method === 'replace', 'only support replace method')
-                        if (Array.isArray(argv![0]) ? argv![0].length === 0 : argv![0].size === 0) {
-                            // 任何一方清空了，我们也直接清空
-                            const toReplace = source === base ? other : base
-                            this.replace([...toReplace.data])
-                        } else {
-                            // 重新计算
-                            this.replace(new Set([...base.data, ...other.data]))
-                        }
+                        [newItems, deletedItems] = methodResult as [T[], T[]]
                     }
+
+                    newItems.forEach(x => {
+                        this.add(x)
+                    })
+
+                    deletedItems.forEach(x => {
+                        const toCheck = source === base ? other : base
+                        if (!toCheck.data.has(x)) {
+                            this.delete(x)
+                        } else {
+                        }
+                    })
                 })
             }
         )
@@ -275,8 +280,37 @@ export class RxSet<T> extends Computed {
         this.data.forEach(handler)
         Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
     }
-    toList() {
-        // FIXME
+    toList(): RxList<T> {
+        const base = this
+        return new RxList(
+            function computation(this: RxList<T>) {
+                // 监听 ADD 和 DELETE type
+                this.manualTrack(base, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                return [...base.data]
+            },
+            function applyPatch(this: RxList<T>, data:any, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach(({methodResult, method, argv, newValue, source, result}) => {
+                    let newItems: T[] = []
+                    let deletedItems: T[] = []
+                    if (method === 'add')  {
+                        newItems = [argv![0]]
+                    } else if (method === 'delete') {
+                        deletedItems = [argv![0]]
+                    } else {
+                        // 只支持 replace method
+                        [newItems, deletedItems] = methodResult as [T[], T[]]
+                    }
+
+                    newItems.forEach(x => {
+                        this.push(x)
+                    })
+
+                    deletedItems.forEach(x => {
+                        this.splice(this.data.indexOf(x), 1)
+                    })
+                })
+            }
+        )
     }
     toArray() {
         Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
@@ -297,10 +331,6 @@ export class RxSet<T> extends Computed {
         )
     }
 
-    // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
-    onUntrack(_effect: ReactiveEffect) {
-
-    }
 }
 
 

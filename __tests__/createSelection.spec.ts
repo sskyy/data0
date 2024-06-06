@@ -2,6 +2,7 @@ import {createIndexKeySelection, createSelection, RxList} from "../src/RxList.js
 import {describe, expect, test} from "vitest";
 import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/computed.js";
 import {atom} from "../src/atom.js";
+import {RxSet} from "../src/RxSet";
 
 setDefaultScheduleRecomputedAsLazy(true)
 
@@ -17,7 +18,7 @@ describe('RxList multiple match', () => {
 
         let innerRuns = 0
 
-        const selected = new RxList([list.at(0)!])
+        const selected = new RxSet([list.at(0)!])
         const uniqueMatch = createSelection(list, selected, true)
         const selectedList = uniqueMatch.map(([_, selected]) => {
             return computed(() => {
@@ -30,24 +31,24 @@ describe('RxList multiple match', () => {
         expect(innerRuns).toBe(4)
 
         // 新增
-        selected.push(list.at(1)!)
+        selected.add(list.at(1)!)
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, false, false])
         expect(innerRuns).toBe(5)
 
         // 连续新增
-        selected.push(list.at(2)!)
+        selected.add(list.at(2)!)
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, true, false])
         expect(innerRuns).toBe(6)
 
         // 删除
-        selected.splice(1, 1)
+        selected.delete(list.at(1)!)
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true, false])
         expect(innerRuns).toBe(7)
 
         // source 删除第一个，因为设置了 autoReset，所以 selectedList 里面应该也要删掉
         list.splice(0, 1)
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
-        expect(selected.data).toMatchObject([list.at(1)!])
+        expect(selected.toArray()).toMatchObject([list.at(1)!])
         expect(innerRuns).toBe(7)
     })
 
@@ -171,7 +172,7 @@ describe('createSelection use index as key', () => {
 
         let innerRuns = 0
 
-        const selected = new RxList([0])
+        const selected = new RxSet([0])
         const uniqueMatch = createIndexKeySelection(list, selected, true)
         const selectedList = uniqueMatch.map(([_, selected]) => {
             return computed(() => {
@@ -181,19 +182,18 @@ describe('createSelection use index as key', () => {
         })
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
         expect(innerRuns).toBe(4)
-
         // 新增
-        selected.push(1)
+        selected.add(1)
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, false, false])
         expect(innerRuns).toBe(5)
 
         // 连续新增
-        selected.push(2)
+        selected.add(2)
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, true, true, false])
         expect(innerRuns).toBe(6)
 
         // 删除
-        selected.splice(1, 1)
+        selected.delete(1)
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, true, false])
         expect(innerRuns).toBe(7)
 
