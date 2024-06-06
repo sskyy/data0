@@ -20,6 +20,7 @@ export {LinkedList} from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";
 export {RxList, createSelection} from './RxList'
 export {RxMap} from './RxMap'
+export {RxSet} from './RxSet'
 export * from './RxTime'
 export {AsyncRxSlice} from "./AsyncRxSlice.js";
 export {ManualCleanup} from "./manualCleanup.js";
