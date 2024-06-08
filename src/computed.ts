@@ -57,30 +57,25 @@ const queuedRecomputes = new WeakSet<Computed>()
 
 // 如果是 async 的，用 queueMicrotask 来调度。
 // 如果不是 async 的，用 markDirty 而不是直接 recompute
-function defaultScheduleRecompute(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
-    if (this.isAsync) {
-        if (queuedRecomputes.has(this)) return
-        queuedRecomputes.add(this)
-        queueMicrotask(() => {
-            recompute()
-            queuedRecomputes.delete(this)
-        })
-    } else {
-        if (defaultScheduleRecomputedAsLazy) {
-            markDirty()
-        } else {
-            recompute()
-        }
-    }
+function defaultAsyncSchedule(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
+    if (queuedRecomputes.has(this)) return
+    queuedRecomputes.add(this)
+    queueMicrotask(() => {
+        recompute()
+        queuedRecomputes.delete(this)
+    })
 }
 
-export const STATUS_INITIAL = -2
 export const STATUS_DIRTY = -1
 export const STATUS_RECOMPUTING_DEPS = 1
 export const STATUS_RECOMPUTING = 2
 export const STATUS_CLEAN = 3
 
-type StatusType = typeof STATUS_INITIAL | typeof STATUS_CLEAN | typeof STATUS_DIRTY | typeof STATUS_RECOMPUTING_DEPS | typeof STATUS_RECOMPUTING
+type StatusType = typeof STATUS_CLEAN | typeof STATUS_DIRTY | typeof STATUS_RECOMPUTING_DEPS | typeof STATUS_RECOMPUTING
+
+export const  FULL_RECOMPUTE_PHASE = 1
+export const  PATCH_PHASE = 2
+type Phase = typeof FULL_RECOMPUTE_PHASE | typeof PATCH_PHASE
 
 /**
  * 计算和建立依赖过程。这里因为要支持 async / patch 模式，所以完全覆盖了 ReactiveEffect 的行为。
@@ -99,9 +94,11 @@ export class Computed extends ReactiveEffect {
     // recomputing = false
     isAsync = false
     isPatchAsync? = false
+    inPatch = false
+    phase: Phase  = FULL_RECOMPUTE_PHASE
     runtEffectId?: string
     asyncStatus?: Atom<null | boolean | string>
-    status: Atom<StatusType> = atom(STATUS_INITIAL)
+    status: Atom<StatusType>
     // status: Atom<StatusType> = atom(STATUS_CLEAN)
     triggerInfos: TriggerInfo[] = []
     scheduleRecompute?: DirtyCallback
@@ -110,7 +107,7 @@ export class Computed extends ReactiveEffect {
     keyToEffectFrames: WeakMap<any, ReactiveEffect[]> = new WeakMap()
     manualTracking = false
     public dirtyFromDeps= new Set<Computed>()
-    public markedDirtyEffects: Set<Set<Computed>> = new Set()
+    public markedDirtyEffects: Set<Computed> = new Set()
     // TODO 需要一个更好的约定
     public get debugName() {
         return getDebugName(this.data)
@@ -123,8 +120,11 @@ export class Computed extends ReactiveEffect {
     public isGeneratorPatch: boolean = false
     constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public dataType: ComputedDataType = 'atom') {
         super(getter)
+        this.status = atom(typeof getter === 'function' ? STATUS_DIRTY : STATUS_CLEAN)
+
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         if (!getter) return
+
 
         this.data = this.dataType === 'atom' ?
             atom(null) :
@@ -150,10 +150,11 @@ export class Computed extends ReactiveEffect {
 
         if (typeof scheduleRecompute === 'function') {
             this.scheduleRecompute = scheduleRecompute
-        } else if(scheduleRecompute ===true){
-            this.immediate = true
+        } else if(this.isAsync && scheduleRecompute !== true) {
+            // async 默认用 nextTick 来调度，但是可以通过传递 true 来强制立即执行。
+            this.scheduleRecompute = defaultAsyncSchedule
         } else {
-            this.scheduleRecompute = defaultScheduleRecompute.bind(this)
+            this.immediate = true
         }
 
         if (callbacks?.onDestroy) this.on('destroy', callbacks.onDestroy)
@@ -170,7 +171,7 @@ export class Computed extends ReactiveEffect {
             this.runtEffectId = runEffectId
 
             // 说明上一次的还在执行中！，立即设为 false，再重新开始
-            if(this.asyncStatus!()) {
+            if(this.asyncStatus!.raw) {
                 this.asyncStatus!(false)
             }
             this.asyncStatus!(true)
@@ -178,12 +179,13 @@ export class Computed extends ReactiveEffect {
             getterResult.then((data:any) => {
                 if (this.runtEffectId !== runEffectId) return false
 
-                this.replaceData(data)
+                // this.replaceData(data)
                 this.asyncStatus!(false)
+                return data
             })
         } else {
             getterResult = this.callSimpleGetter()
-            this.replaceData(getterResult)
+            // this.replaceData(getterResult)
         }
 
         return getterResult
@@ -246,11 +248,18 @@ export class Computed extends ReactiveEffect {
 
         for(const effect of depEffects) {
             if (effect instanceof Computed) {
+
                 effect.dirtyFromDeps.add(this)
-                this.markedDirtyEffects.add(effect.dirtyFromDeps)
+                this.markedDirtyEffects.add(effect)
             }
+        }
+
+        // CAUTION 一定要分成两个循环，因为 effect.run 可能随时会触发 this 重算，使得 status 变为 clean，
+        //  如果在下一个 effect 中把 clean 的 dep 添加进去了，就再也清理不了了。
+        for(const effect of depEffects) {
             effect.run()
         }
+
     }
     resolveCleanPromise?: (value?: any) => any
     rejectCleanPromise?: (value?: any) => any
@@ -271,21 +280,22 @@ export class Computed extends ReactiveEffect {
             }
         })
     }
-    // dep trigger/recursiveMarkDirty 时调用。没有 infos 说明是 markDirty
-    run(infos?: TriggerInfo[]) {
+    // dep trigger/recursiveMarkDirty/onTrack 时调用。
+    // 1. 没有 infos 和 immediate 说明是 markDirty，是否启动由自己决定
+    // 2. 有 infos 说明是 dep trigger，是否启动由自己决定
+    // 3. 没有 infos 但有 immediate 是 onTrack 的强制启动，可能是初始化时。
+    run(infos: TriggerInfo[] =[], immediate = false) {
         if (this.skipIndicator?.skip) return
-        if (infos) {
+        if (infos.length) {
             this.triggerInfos.push(...infos)
         }
 
         // markDirty, initial 状态不需要 mark dirty
         if (this.status.raw === STATUS_CLEAN) {
+            this.dispatch('dirty')
             this.status(STATUS_DIRTY)
         }
 
-        if (!this.cleanPromise && (this.isAsync || this.isPatchAsync||!this.immediate)) {
-            this.createCleanPromise()
-        }
 
         // 哪些情况可能出现 recomputing 过程中又触发了 run :
         // 1. 在 lazy recompute 模式下，可能出现依赖是一个 atomComputed，
@@ -293,37 +303,19 @@ export class Computed extends ReactiveEffect {
         //  只需要获取 info 就行了，不需要再次触发 recompute/schedule 了。
         // 2. 在 async 模式下，任何依赖都可以再触发 recompute。
 
-        if (this.immediate || this.status.raw > STATUS_DIRTY || this.status.raw === STATUS_INITIAL) {
+        if (immediate || this.immediate || this.status.raw > STATUS_DIRTY) {
             this.recompute()
         } else {
             this.scheduleRecompute!(this.recompute, this.recursiveMarkDirty)
         }
-    }
-    // onTrack 由 notify 调用。
-    onTrack() {
-        if(this.status.raw === STATUS_DIRTY || this.status.raw === STATUS_INITIAL) {
-            // async computed 不会出现读时才计算的情况，所以不需要 await。
-            this.recompute()
-        }
-        this.dispatch('track', this.data)
-    }
-    hasAsyncDirtyDep() {
 
-    }
-    forceDirtyDepRecompute = (): Promise<any>|undefined => {
-        this.status(STATUS_RECOMPUTING_DEPS)
-        const promises: Promise<any>[] = []
-        // CAUTION 不需要自己在这里把 this.dirtyFromDeps 清空，dep recompute 成功后会自己从 dirtyFromDeps 中移除自己。
-        for(const effect of this.dirtyFromDeps) {
-            if (effect.isAsync) {
-                promises.push(effect.recompute())
-            } else {
-                effect.recompute()
-            }
+        // 如果不是已经开始重算或者立刻开始计算，那么从标记为脏也要创建 cleanPromise
+        // 如果在 scheduleRecompute 或者 recompute 已经开始，那么由里面判断是否要建立 cleanPromise
+        if (this.status.raw === STATUS_DIRTY && !this.cleanPromise ) {
+            this.createCleanPromise()
         }
-
-        return promises.length ? Promise.all(promises).then(this.forceDirtyDepRecompute) : undefined
     }
+
     prepareRecompute() {
         this.status(STATUS_RECOMPUTING)
         // 可以用于清理一些用户自己的副作用。
@@ -336,56 +328,61 @@ export class Computed extends ReactiveEffect {
             this.lastCleanupFn()
         }
     }
-    completeRecompute() {
-        // 重算阶段顺利完成，并且没有新的 dep 变脏，这里可以清理一些状态了。
-        for(const effects of this.markedDirtyEffects) {
-            effects.delete(this)
-        }
-        this.markedDirtyEffects.clear()
-        this.status(STATUS_CLEAN)
-        this.resolveCleanPromise?.()
-    }
+
     public recomputeId: number = 0
     async fullRecompute() {
         const recomputeId = ++this.recomputeId
-
-        const promises = this.forceDirtyDepRecompute()
-        if (promises) await promises
-        if(this.recomputeId !== recomputeId) {
-            return
-        }
+        this.inPatch = false
+        // 每次 full recompute 清空所有的 triggerInfos，这样才能使 patchable recompute 不错乱。
+        this.triggerInfos.length = 0
 
         this.prepareRecompute()
         // 默认行为，重算并且重新收集依赖
         // CAUTION 用户一定要自己保证在第一次 await 之前读取了所有依赖。
+        let result: any = undefined
         if (this.isAsync) {
+            if (!this.cleanPromise) this.createCleanPromise()
+
             // CAUTION 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
             //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，使用户产生困惑（空户可能认为自己写的非 async 就应该同步就计算），所以这里要区分一下。
-            await this.runEffect()
+            result = await this.runEffect()
         } else {
-            this.runEffect()
+            result = this.runEffect()
         }
 
-        // 当前 patch 完成后，如果 recomputeId 已经变化，说明有新的 dep 变脏。这里不用管了。
-        // CAUTION 这里不能用 dirtyFromDeps.size 来判断，因为可能在当前 recompute 的时候，新 dep 变脏和新的 recomputeId 都已经算完了。
+        // 在 async fullRecompute 时，是有可能因为 dep 变化触发新的 trigger 的和新的 fullRecompute 的。
+        // 这时就会 recomputeId 不一致，老的 recompute 就不用管了。
         if(this.recomputeId !== recomputeId) {
             return
         }
 
-        // 顺利完成 recompute
-        this.completeRecompute()
+
+        Notifier.instance.createEffectSession()
+
+        this.replaceData(result)
+        this.status(STATUS_CLEAN)
+
+        if (this.applyPatch) {
+            this.phase = PATCH_PHASE
+        }
+        Notifier.instance.digestEffectSession()
+        this.resolveCleanPromise?.()
+        this.dispatch('clean')
+
     }
     async patchRecompute() {
+        this.inPatch = true
         // patch 也使用 recomputeId 是因为要判断是否被强制 fullRecompute 打断
         const recomputeId = ++this.recomputeId
 
-        const promises = this.forceDirtyDepRecompute()
-        if (promises) await promises
+        this.dispatch('recomputeDeps')
 
         this.prepareRecompute()
 
         let patchResult:any
         if (this.isPatchAsync) {
+            if (!this.cleanPromise) this.createCleanPromise()
+
             patchResult = await this.runPatch()
         } else {
             patchResult = this.runPatch()
@@ -393,63 +390,69 @@ export class Computed extends ReactiveEffect {
         // explicit return false 说明出现了无法 patch 的情况，表示一定要重算
         if (patchResult===false) {
             this.triggerInfos.length = 0
+            this.inPatch = false
             if (this.isAsync) {
+                if (!this.cleanPromise) this.createCleanPromise()
+
                 // CAUTION 这里用不用 await 的区别在于，后面的代码会不会放到 next micro task 中执行。
                 //  为了防止同步 computed 中最后的 isRecomputing 被放到了 micro task 中，使用户产生困惑（空户可能认为自己写的非 async 就应该同步就计算），所以这里要区分一下。
-                await this.runEffect()
+                await this.fullRecompute()
             } else {
-                this.runEffect()
+                this.fullRecompute()
             }
         }
-
         // 虽然 patch 的 recompute 是串行的，但是有可能被用户强制的 fullRecompute 打断。
         // 这个时候就不用管了。
         if (recomputeId !== this.recomputeId) {
             return
         }
 
-        // 当前 patch 完成后，发现有 dep 变脏。立刻重新执行一个 recompute
-        //  这里可以用 dirtyFromDeps.size 来判断，因为 patch 模式总是
-        if(this.dirtyFromDeps.size) {
-            // 重置为 dirty，才能开启下一段 recompute
-            this.status(STATUS_DIRTY)
-            return this.recompute()
-        }
 
-        this.completeRecompute()
+        this.inPatch = false
+        this.status(STATUS_CLEAN)
+        this.sendTriggerInfos()
+        this.dispatch('clean')
+        this.resolveCleanPromise?.()
     }
-    isRecomputing() {
-        return this.status.raw > STATUS_DIRTY && this.status.raw < STATUS_CLEAN
+    savedTriggerInfos: Parameters<Notifier["trigger"]>[] = []
+    trigger(...args: Parameters<Notifier["trigger"]>) {
+        this.savedTriggerInfos.push(args)
     }
-    // 由 this.run 调用
+    sendTriggerInfos() {
+        const infos = [...this.savedTriggerInfos]
+        this.savedTriggerInfos.length = 0
+        Notifier.instance.createEffectSession()
+        for(const info of infos) {
+            Notifier.instance.trigger(...info)
+        }
+        Notifier.instance.digestEffectSession()
+    }
+    // 由 this.run/onTrack/forceDirtyDepsRecompute 调用
     recompute = async (forceRecompute = false): Promise<any> => {
         if ((this.status.raw === STATUS_CLEAN && !forceRecompute) || !this.active) return
 
-        const needFullRecompute = this.status.raw === STATUS_INITIAL || !this.applyPatch || forceRecompute
-        // const isFullRecompute =  !this.applyPatch || forceRecompute
+        // 四种类型计算：
+        // async/sync * full/patchable
 
-        if (this.isRecomputing()) {
-            // 没到重算阶段，任何 dep dirty 变化都不需要管， 因为会自动加入到 dirtyFromDeps 中。
-            if (this.status() < STATUS_RECOMPUTING) {
+        // 这三种情况需要开启新的 fullRecompute。
+        // 1. 外部强制的 recompute
+        // 2. full recompute 模式
+        // 3. patchable recompute 的 initial 状态
+        // 剩下就只有 patchable recompute 的 patch 阶段了
 
-            } else {
-                // 已经到重算阶段，
-                // 1. fullRecompute 要直接开启一个新的 recompute
-                if (needFullRecompute) {
-                    // 如果是 patch 模式的强制重算，要清空 triggerInfo
-                    if (this.applyPatch) {
-                        this.triggerInfos.length = 0
-                    }
-                    this.fullRecompute()
-                } else {
-                    // 2. patchRecompute 会自行在上一个结尾处判断。所以这里也不用管了
-                }
-            }
+        // 非 async 的计算不会被打断，都是一次性就执行完了。
+        // 1. forceRecompute 会打断所有的 async 的计算。
+        // 2. async full recompute 自己会打断上一次的
+        // 3. async patchable
+        // 3.1. 在计算过程中就不需要管了
+        // 3.2. 不在就开启新的 patch 计算。
+
+        const needFullRecompute = forceRecompute|| !this.applyPatch || this.phase === FULL_RECOMPUTE_PHASE
+
+        if (needFullRecompute) {
+            this.fullRecompute()
         } else {
-            if (needFullRecompute) {
-                // if (!this.resolveCleanPromise) debugger
-                this.fullRecompute()
-            } else {
+            if (!this.inPatch) {
                 this.patchRecompute()
             }
         }
@@ -513,12 +516,6 @@ export class Computed extends ReactiveEffect {
     replaceData(newData: any) {
 
     }
-    pushRecomputingStack = () => {
-
-    }
-    popRecomputingStack = () => {
-
-    }
 
     // 给继承者在 apply catch 中用的 工具函数
     manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {
@@ -557,7 +554,7 @@ function internalComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, di
         Notifier.instance.resetTracking()
     }
 
-    internal.run()
+    internal.run([], true)
 
     computedToInternal.set(toRawObject(internal.data), internal)
     return internal.data

@@ -94,8 +94,8 @@ export class ReactiveEffect extends ManualCleanup {
             this.children.length = 0
 
         } else {
-            // FIXME 应该有个暂存变量，要 complete 的时候才真实替换
-            // 如果是 async 的，只需要push scope 就行了。
+            // async 模式下是通过暂存一个 track 函数到 asyncTracks 中，然后在 completeTracking 时执行。
+            // 所以这里只需要 push scope 就行了。
             ReactiveEffect.activeScopes.push(this)
             if (isFirst) {
                 this.asyncTracks.length = 0
@@ -121,7 +121,6 @@ export class ReactiveEffect extends ManualCleanup {
                 this.asyncTracks.length = 0
             }
 
-            // FIXME 应该有个暂存变量，要 complete 的时候才真实替换
             ReactiveEffect.activeScopes.pop()
         }
     }
@@ -174,7 +173,9 @@ export class ReactiveEffect extends ManualCleanup {
     onTrack() {
 
     }
+    onTrackDep(dep: any) {
 
+    }
 
     cleanup() {
         const {deps} = this

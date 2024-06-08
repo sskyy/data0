@@ -67,7 +67,7 @@ function createArrayInstrumentations() {
       }
 
       // 因为数组的各种操作可能出现很多的 set，因此这里需要创建一个 session 用来合并重复的 Effect
-      Notifier.instance.createEffectSession()
+      // Notifier.instance.createEffectSession()
       // 针对 长列表 unshift 的场景，需要判断一下有没有 computed 显式监听了 key.
       //  不然这里一路触发所有的 key 会很慢。
       let res
@@ -95,7 +95,7 @@ function createArrayInstrumentations() {
 
       Notifier.instance.trigger(rawTarget, TriggerOpTypes.METHOD, { method: 'splice', argv: asSpliceArgs})
 
-      Notifier.instance.digestEffectSession()
+      // Notifier.instance.digestEffectSession()
 
       Notifier.instance.resetTracking()
 

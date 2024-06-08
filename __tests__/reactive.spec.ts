@@ -37,9 +37,11 @@ describe('reactive basic', () => {
 describe('number/string atom with primitive operations', () => {
     test('with number operator', () => {
         const num = atom(1)
+        // @ts-ignore
         expect(num + 2).toBe(3)
 
         num(5)
+        // @ts-ignore
         expect(num - 3).toBe(2)
     })
 

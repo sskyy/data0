@@ -310,7 +310,7 @@ describe('RxList', () => {
         ])
 
         const grouped = list.groupBy(item => item.score > 2 ? 'high' : 'low')
-        expect(Array.from(grouped.data.keys())).toMatchObject(['low', 'high'])
+        expect(Array.from(grouped.keys().toArray())).toMatchObject(['low', 'high'])
         expect(grouped.data.get('low')!.toArray()).toMatchObject([{id:1, score: 1}, {id:2, score: 2}])
         expect(grouped.data.get('high')!.toArray()).toMatchObject([{id:3, score: 3}, {id:4, score: 4}])
 
@@ -484,10 +484,132 @@ describe('RxList chained computed', () => {
             return selected
         })
 
+        const itemToSelected = selectionList.toMap()
+
         expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, false, false, false, false])
+        expect(itemToSelected.get(1)!()).toBe(true)
+        expect(itemToSelected.get(2)!()).toBe(true)
+        expect(itemToSelected.get(3)!()).toBe(true)
+
+
         showMore(true)
         computedList.toArray()
         expect(computedList.toArray().map(i => i())).toMatchObject([true,true,true, true, true, false, false])
+        expect(itemToSelected.get(1)!()).toBe(true)
+        expect(itemToSelected.get(2)!()).toBe(true)
+        expect(itemToSelected.get(3)!()).toBe(true)
+        expect(itemToSelected.get(4)!()).toBe(true)
+        expect(itemToSelected.get(5)!()).toBe(true)
+
+    })
+
+
+    test('chained with async', async () => {
+
+        const currentPage = atom(1)
+        const rowsPerPage = atom(1)
+
+        const tasks = new RxList<{id: number}>(async function() {
+            const result = Array(rowsPerPage()).fill((currentPage()-1)*rowsPerPage()).map((i, index) => ({id:i+index}))
+            await new Promise(resolve => setTimeout(resolve, 100))
+            return result
+        })
+
+        const selectedIds = new RxSet<number>([])
+        const taskIds = tasks.map(task => task.id)
+        const taskIdsWithSelection = taskIds.createSelection(selectedIds)
+        const taskIdToSelection = taskIdsWithSelection.toMap()
+
+        let id2Runs = 0
+        let id3Runs = 0
+        let id4Runs = 0
+
+        taskIds.on('recompute', () => {
+            id2Runs++
+        })
+
+
+        taskIdsWithSelection.on('recompute', ()=> {
+            id3Runs++
+        })
+
+
+        taskIdToSelection.on('recompute', ()=> {
+            id4Runs++
+        })
+
+        // 2,3,4
+        let id5Runs = 0
+        let id6Runs = 0
+
+        const tasksWithSelection = tasks.map(task => {
+            // console.log(task.id, taskIdToSelection.get(task.id), taskIdToSelection.data, taskIdsWithSelection.data)
+            id5Runs++
+            return {
+                task,
+                // selected: taskIdToSelection.get(task.id)
+                selected: computed(function(){
+                    // console.log(task.id, taskIdToSelection.get(task.id)?.raw )
+                    id6Runs++
+                    return taskIdToSelection.get(task.id)?.()
+                })
+            }
+        })
+
+
+
+        let id7Runs = 0
+
+        let selectedList:any[] = []
+
+        autorun(() => {
+            id7Runs++
+            selectedList = []
+            tasksWithSelection.forEach((i) => {
+                selectedList.push(i.selected())
+            })
+        })
+
+        expect(selectedList).toMatchObject([])
+        await new Promise(resolve => setTimeout(resolve, 400))
+
+        expect(id2Runs).toBe(1)
+        expect(id3Runs).toBe(1)
+        expect(id4Runs).toBe(1)
+        expect(id5Runs).toBe(1)
+        expect(id6Runs).toBe(2)
+        expect(id7Runs).toBe(3)
+
+        expect(selectedList).toMatchObject([false])
+
+
+
+        const currentPageSelectedIds = selectedIds.intersection(taskIds.toSet())
+        const allSelected = computed<boolean>(function() {
+            return !!(taskIds.length() && currentPageSelectedIds.size() === taskIds.length())
+        })
+
+        // CAUTION 这里用两个 autorun 是为了模拟多个 dependent 的情况
+        let isAllSelected = false
+        autorun(() => {
+            isAllSelected = allSelected()
+        })
+
+        let isAllSelected2 = false
+        autorun(function(){
+            isAllSelected2 = allSelected()
+        })
+
+        expect(isAllSelected).toBe(false)
+        expect(isAllSelected2).toBe(false)
+
+        selectedIds.add(0)
+        expect(id6Runs).toBe(3)
+        expect(id7Runs).toBe(4)
+        expect(selectedList).toMatchObject([true])
+        expect(isAllSelected).toBe(true)
+        expect(isAllSelected2).toBe(true)
+        // FIXME
 
     })
 })

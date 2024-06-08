@@ -1,3 +1,4 @@
+import {ReactiveEffect} from "./reactiveEffect";
 
 export const debugTarget = new WeakSet<Function>()
 export function isDebugTarget(target: Function) {
@@ -85,5 +86,11 @@ export function setDebugName(target: any, name: string) {
     return reactiveTargetName.set(target, name)
 }
 
+export function onTrack(effect: ReactiveEffect, callback:Function) {
+    effect.on('track', callback)
+}
+export function onTrigger(effect: ReactiveEffect, callback:Function) {
+    effect.on('trigger', callback)
+}
 
 

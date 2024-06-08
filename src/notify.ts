@@ -121,7 +121,8 @@ export class Notifier {
 
     const activeEffect = ReactiveEffect.activeScopes.at(-1)
     if (computedInternal &&  computedInternal!== activeEffect) {
-      computedInternal.onTrack()
+      // CAUTION 这里即使没有 activeEffect 也要执行，因为 onTrack 要触发 computed 计算。
+      computedInternal.onTrack(activeEffect)
     }
 
     if (!activeEffect || !this.shouldTrack) return

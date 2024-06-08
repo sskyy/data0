@@ -1,4 +1,4 @@
-import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
+import {arrayComputed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
 import {LinkedList} from '../src/LinkedList'
 import { describe, test, expect } from "vitest";
 
@@ -8,7 +8,7 @@ describe('computed based on linkedList', () => {
     test('atom & computed', () => {
         const list = new LinkedList([{value: 1}, {value:2}, {value: 3}])
 
-        const computedArr = computed(() => {
+        const computedArr = arrayComputed(() => {
             const result = []
             for(let i of list) {
                 result.push(i.item.value)

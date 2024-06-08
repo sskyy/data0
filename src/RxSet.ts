@@ -20,7 +20,7 @@ export class RxSet<T> extends Computed {
         this.data = source instanceof Set ? source : new Set(Array.isArray(source) ? source : [])
 
         if (this.getter) {
-            this.run()
+            this.run([], true)
         }
     }
     replaceData(newData: T[]|Set<T>) {
@@ -36,20 +36,20 @@ export class RxSet<T> extends Computed {
 
         old.forEach((value) => {
             if(!this.data.has(value)) {
-                Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key: value, oldValue: value})
+                this.trigger(this, TriggerOpTypes.DELETE, { key: value, oldValue: value})
                 deletedItems.push(value)
             }
         });
 
         [...newData].forEach((value) => {
             if(!old.has(value)) {
-                Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
+                this.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
                 newItems.push(value)
             }
         })
 
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'replace', argv: [newData], methodResult: [newItems, deletedItems]})
-
+        this.trigger(this, TriggerOpTypes.METHOD, { method: 'replace', argv: [newData], methodResult: [newItems, deletedItems]})
+        this.sendTriggerInfos()
         return [newItems, deletedItems]
     }
 
@@ -57,10 +57,10 @@ export class RxSet<T> extends Computed {
     add(value: T) {
         if (!this.data.has(value)) {
             this.data.add(value)
-            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
-            Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'add', argv: [value]})
+            this.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
+            this.trigger(this, TriggerOpTypes.METHOD, { method: 'add', argv: [value]})
         }
-
+        this.sendTriggerInfos()
         return this
     }
     clear() {
@@ -69,16 +69,16 @@ export class RxSet<T> extends Computed {
     delete(value:T) {
         if (this.data.has(value)) {
             this.data.delete(value)
-            Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key: value, argv: [value]})
-            Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'delete', argv: [value]})
+            this.trigger(this, TriggerOpTypes.DELETE, { key: value, argv: [value]})
+            this.trigger(this, TriggerOpTypes.METHOD, { method: 'delete', argv: [value]})
         }
+        this.sendTriggerInfos()
         return this
     }
     has(value:T): Atom<boolean> {
         const base = this
         //  has 是 n(1) 的操作，所以不用 applyPatch 了。
         return computed(() => {
-            debugger
             Notifier.instance.track(base, TrackOpTypes.ITERATE, ITERATE_KEY)
             return base.data.has(value)
         })

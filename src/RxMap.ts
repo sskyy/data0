@@ -35,7 +35,7 @@ export class RxMap<K, V> extends Computed{
         }
 
         if (this.getter) {
-            this.run()
+            this.run([], true)
         }
     }
     replace = (source: EntryType|PlainObjectType|Map<K,V>) => {
@@ -50,9 +50,10 @@ export class RxMap<K, V> extends Computed{
         }
 
         entries.forEach(([key, value]) => {
-            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
+            this.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
         })
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, {method: 'replace', argv: [source]})
+        this.trigger(this, TriggerOpTypes.METHOD, {method: 'replace', argv: [source]})
+        this.sendTriggerInfos()
     }
     replaceData = this.replace
 
@@ -62,10 +63,11 @@ export class RxMap<K, V> extends Computed{
         const oldValue = this.data.get(key)
         this.data.set(key, value)
         if (hasValue) {
-            Notifier.instance.trigger(this, TriggerOpTypes.SET, { key, newValue: value, oldValue})
+            this.trigger(this, TriggerOpTypes.SET, { key, newValue: value, oldValue})
         } else {
-            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
+            this.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
         }
+        this.sendTriggerInfos()
     }
 
     delete(key: K) {
@@ -73,31 +75,34 @@ export class RxMap<K, V> extends Computed{
         if (hasValue) {
             const oldValue = this.data.get(key)
             this.data.delete(key)
-            Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key, newValue: undefined, oldValue})
+            this.trigger(this, TriggerOpTypes.DELETE, { key, newValue: undefined, oldValue})
         }
+        this.sendTriggerInfos()
     }
 
     clear() {
         const entries = Array.from(this.data.entries())
         this.data.clear()
         entries.forEach(([key, value]) => {
-            Notifier.instance.trigger(this, TriggerOpTypes.DELETE, { key,  oldValue: value})
+            this.trigger(this, TriggerOpTypes.DELETE, { key,  oldValue: value})
         })
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method: 'clear'})
+        this.trigger(this, TriggerOpTypes.METHOD, { method: 'clear'})
+        this.sendTriggerInfos()
     }
 
     // track methods
     get(key: K) {
-        const value = this.data.get(key)
+        // 先执行 track 才会触发 recompute
         Notifier.instance.track(this, TrackOpTypes.GET, key)
-        return value
+        return this.data.get(key)
     }
     forEach(handler: (item: V, index: K) => void) {
+        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
+
         for(let [key, value ] of this.data) {
             handler(value!, key)
         }
         // track iterator
-        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
     }
     [Symbol.iterator]() {
         let index = 0;
@@ -158,8 +163,6 @@ export class RxMap<K, V> extends Computed{
                             assert(false, 'unreachable')
                         }
                     }
-
-
                 })
             }
         )

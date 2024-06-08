@@ -39,8 +39,7 @@ export class RxList<T> extends Computed {
         // 自己是 source
         this.data = source || []
         if (this.getter) {
-            // super.runEffect()
-            this.run()
+            this.run([], true)
         }
     }
     replaceData(newData: T[]) {
@@ -60,8 +59,8 @@ export class RxList<T> extends Computed {
         return this.splice(0, 0, ...items)
     }
     splice( start: number, deleteCount: number, ...items: T[]) {
-        Notifier.instance.pauseTracking()
-        Notifier.instance.createEffectSession()
+        this.pauseAutoTrack()
+        // Notifier.instance.createEffectSession()
 
         const originLength = this.data.length
         const deleteItemsCount = Math.min(deleteCount, originLength - start)
@@ -78,7 +77,7 @@ export class RxList<T> extends Computed {
         // 只有当有 indexKeyDeps 的时候才需要手动查找 dep 和触发，这样效率更高
         if (this.indexKeyDeps?.size > 0){
             for (let i = start; i < changedIndexEnd; i++) {
-                Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues[i]})
+                this.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues[i]})
             }
         }
 
@@ -91,10 +90,11 @@ export class RxList<T> extends Computed {
         }
         // CAUTION 无论有没有 indexKeyDeps 都要触发 Iterator_Key，
         //  特别这里注意，我们利用传了 key 就会把对应 key 的 dep 拿出来的特性来 trigger ITERATE_KEY.
-        Notifier.instance.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
+        this.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
 
-        Notifier.instance.digestEffectSession()
-        Notifier.instance.resetTracking()
+        // Notifier.instance.digestEffectSession()
+        this.sendTriggerInfos()
+        this.resetAutoTrack()
         return result
     }
     // 显式 set 某一个 index 的值
@@ -104,11 +104,13 @@ export class RxList<T> extends Computed {
 
         // 这里还是用 trigger TriggerOpTypes.SET，因为系统在处理 TriggerOpTypes.SET 的时候还会对 listLike 的数据 触发 ITERATE_KEY。
         if (index > this.data.length - 1) {
-            Notifier.instance.trigger(this, TriggerOpTypes.ADD, { key: index, newValue: value, oldValue})
+            this.trigger(this, TriggerOpTypes.ADD, { key: index, newValue: value, oldValue})
         } else {
-            Notifier.instance.trigger(this, TriggerOpTypes.SET, { key: index, newValue: value, oldValue})
+            this.trigger(this, TriggerOpTypes.SET, { key: index, newValue: value, oldValue})
         }
-        Notifier.instance.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue})
+        this.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue})
+        this.sendTriggerInfos()
+
         return oldValue
     }
 
@@ -197,6 +199,7 @@ export class RxList<T> extends Computed {
 
                     const { method , argv  ,key } = triggerInfo
                     assert((method === 'splice' || key !== undefined), 'trigger info has no method and key')
+                    assert(triggerInfo.source === source, 'unexpected triggerInfo source')
 
                     options?.beforePatch?.(triggerInfo)
 
@@ -747,7 +750,6 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxSet<T|num
 
     function updateIndicatorsFromCurrentValueChange(triggerInfo: TriggerInfo) {
         const { oldValue, newValue, method } = triggerInfo
-        debugger
         if(isAtom(currentValues)) {
             itemToIndicator.get(oldValue as T)?.(false)
             itemToIndicator.get(newValue as T)?.(true)

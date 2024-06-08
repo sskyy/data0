@@ -91,12 +91,12 @@ describe('RxList multiple match', () => {
         // source 删除
         const first= list.at(0)
         selected(first)
-        expect(innerRuns).toBe(9)
+        expect(innerRuns).toBe(10)
         // 删掉第一个
         list.splice(0, 1)
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false])
         expect(selected.raw).toBeNull()
-        expect(innerRuns).toBe(9)
+        expect(innerRuns).toBe(10)
     })
 
     test('create unique selection using object as key with value not reset', () => {
