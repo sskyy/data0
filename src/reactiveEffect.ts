@@ -170,7 +170,7 @@ export class ReactiveEffect extends ManualCleanup {
 
     }
     // notify track 时调用
-    onTrack() {
+    onTrack(...args: any[]) {
 
     }
     onTrackDep(dep: any) {
