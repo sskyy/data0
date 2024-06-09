@@ -116,6 +116,12 @@ atom.fixed = function<T>(initValue: T) {
     return getValue as Atom<T>
 }
 
+atom.lazy = function<T>(getter: () => T) {
+    def(getter, ReactiveFlags.IS_ATOM, true)
+    return getter as Atom<T>
+}
+
+
 atom.as = new Proxy({}, {
     get(p, name: string) {
         return (initialValue: Parameters<typeof atom>[0], interceptor: Parameters<typeof atom>[1]) => {
