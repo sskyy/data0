@@ -1,4 +1,4 @@
-import {arrayComputed, computed, objectComputed, setDefaultScheduleRecomputedAsLazy} from "../src/computed";
+import {arrayComputed, computed, objectComputed, scheduleNextMicroTask} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
@@ -7,7 +7,6 @@ import {autorun} from "../src";
 
 describe('computed basic', () => {
     beforeEach(() => {
-        setDefaultScheduleRecomputedAsLazy(false)
     })
 
     test('atom & computed', () => {
@@ -89,7 +88,6 @@ describe('computed basic', () => {
 
 describe('computed life cycle', () => {
     beforeEach(() => {
-        setDefaultScheduleRecomputedAsLazy(false)
     })
     test('should destroy inner computed', () => {
         let innerRuns = 0
@@ -122,7 +120,6 @@ describe('computed life cycle', () => {
 
 describe('computed return object with internal side effect', () => {
     beforeEach(() => {
-        setDefaultScheduleRecomputedAsLazy(false)
     })
     test('should call cleanup method', () => {
         let destroyCalled = 0
@@ -146,5 +143,36 @@ describe('computed return object with internal side effect', () => {
         run(2)
         expect(destroyCalled).toBe(1)
 
+    })
+})
+
+
+function wait(time: number) {
+    return new Promise(resolve => {
+        setTimeout(resolve, time)
+    })
+}
+
+describe('computed with scheduler', () => {
+    test('next micro task', async () => {
+        const num1 = atom(1)
+        const num2 = atom(2)
+        let computedRuns = 0
+        const num3 = computed<number|undefined>(() => {
+            computedRuns ++
+            return num1() + num2()
+        }, undefined, scheduleNextMicroTask)
+
+        expect(num3()).toBe(3)
+        expect(computedRuns).toBe(1)
+
+        num1(2)
+        num2(3)
+        expect(num3()).toBe(3)
+        expect(computedRuns).toBe(1)
+
+        await wait(1)
+        expect(num3()).toBe(5)
+        expect(computedRuns).toBe(2)
     })
 })

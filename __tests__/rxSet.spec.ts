@@ -1,8 +1,5 @@
 import {describe, expect, test} from "vitest";
-import {setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
 import {RxSet} from "../src/RxSet";
-
-setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('RxSet', () => {

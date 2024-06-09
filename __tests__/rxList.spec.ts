@@ -1,11 +1,9 @@
 import {createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {computed, setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
+import {computed} from "../src/index.js";
 import {autorun} from "../src/autorun.js";
 import {atom} from "../src/atom.js";
 import {RxSet} from "../src/RxSet";
-
-setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('RxList', () => {

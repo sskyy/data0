@@ -6,12 +6,10 @@ import {
     autorun,
     Computed,
     ReactiveEffect,
-    setDefaultScheduleRecomputedAsLazy,
     TrackOpTypes
 } from "../src/index.js";
 
 
-setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('async computed', () => {

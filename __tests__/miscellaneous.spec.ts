@@ -1,8 +1,6 @@
-import {atom, incUnique, reactive, setDefaultScheduleRecomputedAsLazy} from "../src";
+import {atom, incUnique, reactive} from "../src";
 import {describe, expect, test} from "vitest";
 import {arrayComputed, mapComputed} from "../src/computed";
-
-setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('computed on computed', () => {

@@ -263,3 +263,7 @@ export function replace(source: any, nextSourceValue: any) {
         assert(false, 'unknown source type to replace data')
     }
 }
+
+export function nextTick(fn: () => any) {
+    Promise.resolve().then(fn)
+}

@@ -1,9 +1,6 @@
 import {describe, expect, test} from "vitest";
 import {RxMap} from "../src/RxMap.js";
-import {setDefaultScheduleRecomputedAsLazy} from "../src/index.js";
 import {RxSet} from "../src/RxSet";
-
-setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('RxMap', () => {

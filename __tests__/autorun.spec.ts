@@ -1,7 +1,5 @@
-import {atom, computed, autorun, setDefaultScheduleRecomputedAsLazy} from "../src";
+import {atom, autorun, computed} from "../src";
 import {describe, expect, test} from "vitest";
-
-setDefaultScheduleRecomputedAsLazy(true)
 
 
 describe('autorun', () => {

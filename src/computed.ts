@@ -1,16 +1,11 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, toRawObject, UnwrapReactive} from './reactive'
-import {isAsync, isGenerator, replace, uuid, warn} from "./util";
+import {isAsync, isGenerator, nextTick, replace, uuid, warn} from "./util";
 import {Atom, atom, isAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
 
-
-export let defaultScheduleRecomputedAsLazy = true
-export const setDefaultScheduleRecomputedAsLazy = (lazy = true) => {
-    defaultScheduleRecomputedAsLazy = lazy
-}
 
 export const computedToInternal = new WeakMap<any, Computed>()
 
@@ -57,10 +52,20 @@ const queuedRecomputes = new WeakSet<Computed>()
 
 // 如果是 async 的，用 queueMicrotask 来调度。
 // 如果不是 async 的，用 markDirty 而不是直接 recompute
-function defaultAsyncSchedule(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
+export function scheduleNextMicroTask(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
     if (queuedRecomputes.has(this)) return
     queuedRecomputes.add(this)
     queueMicrotask(() => {
+        recompute()
+        queuedRecomputes.delete(this)
+    })
+}
+
+
+export function scheduleNextTick(this: Computed, recompute: (force?: boolean) => void, markDirty: () => any) {
+    if (queuedRecomputes.has(this)) return
+    queuedRecomputes.add(this)
+    nextTick(() => {
         recompute()
         queuedRecomputes.delete(this)
     })
@@ -152,7 +157,7 @@ export class Computed extends ReactiveEffect {
             this.scheduleRecompute = scheduleRecompute
         } else if(this.isAsync && scheduleRecompute !== true) {
             // async 默认用 nextTick 来调度，但是可以通过传递 true 来强制立即执行。
-            this.scheduleRecompute = defaultAsyncSchedule
+            this.scheduleRecompute = scheduleNextMicroTask
         } else {
             this.immediate = true
         }

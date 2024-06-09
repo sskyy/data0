@@ -10,7 +10,8 @@ export {
     destroyComputed,
     recompute,
     Computed,
-    setDefaultScheduleRecomputedAsLazy
+    scheduleNextTick,
+    scheduleNextMicroTask
 } from './computed'
 export * from './notify'
 export {TrackOpTypes, TriggerOpTypes} from "./operations";
