@@ -7,7 +7,7 @@ import {setDebugName} from "./debug";
 export type UpdateFn<T> = (prev: T) => T
 
 // export type Atom<T = any> = ((newValue?: any| UpdateFn<T>) => any) & { __v_isAtom: boolean } & T
-export type AtomBase<T> = { __v_isAtom: true, raw: T }
+export type AtomBase<T> = { [ReactiveFlags.IS_ATOM]: true, raw: T }
     & { (newValue?: any) : T }
 
 export type Atom<T = any> = T extends object ?  T & AtomBase<T> : AtomBase<T>
@@ -108,6 +108,14 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
     return finalProxy
 }
 
+atom.fixed = function<T>(initValue: T) {
+    function getValue() {
+        return initValue
+    }
+    def(getValue, ReactiveFlags.IS_ATOM, true)
+    return getValue as Atom<T>
+}
+
 atom.as = new Proxy({}, {
     get(p, name: string) {
         return (initialValue: Parameters<typeof atom>[0], interceptor: Parameters<typeof atom>[1]) => {
@@ -119,5 +127,5 @@ atom.as = new Proxy({}, {
 
 export function isAtom<T>(r: Atom<T> | unknown): r is Atom<T>
 export function isAtom(r: any): r is Atom<any> {
-    return !!(r && r.__v_isAtom)
+    return !!(r && r[ReactiveFlags.IS_ATOM])
 }
