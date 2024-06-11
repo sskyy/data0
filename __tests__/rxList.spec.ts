@@ -541,13 +541,11 @@ describe('RxList chained computed', () => {
         let id6Runs = 0
 
         const tasksWithSelection = tasks.map(task => {
-            // console.log(task.id, taskIdToSelection.get(task.id), taskIdToSelection.data, taskIdsWithSelection.data)
             id5Runs++
             return {
                 task,
                 // selected: taskIdToSelection.get(task.id)
                 selected: computed(function(){
-                    // console.log(task.id, taskIdToSelection.get(task.id)?.raw )
                     id6Runs++
                     return taskIdToSelection.get(task.id)?.()
                 })

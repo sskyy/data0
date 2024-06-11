@@ -187,6 +187,7 @@ export class ReactiveEffect extends ManualCleanup {
         }
     }
     destroy() {
+        this.dispatch('destroy')
         ReactiveEffect.destroy(this)
     }
     async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => any, afterRun: (isLast?:boolean) => any)   {

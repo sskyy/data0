@@ -59,8 +59,8 @@ export class RxSet<T> extends Computed {
             this.data.add(value)
             this.trigger(this, TriggerOpTypes.ADD, { key: value, newValue: value})
             this.trigger(this, TriggerOpTypes.METHOD, { method: 'add', argv: [value]})
+            this.sendTriggerInfos()
         }
-        this.sendTriggerInfos()
         return this
     }
     clear() {
@@ -71,8 +71,8 @@ export class RxSet<T> extends Computed {
             this.data.delete(value)
             this.trigger(this, TriggerOpTypes.DELETE, { key: value, argv: [value]})
             this.trigger(this, TriggerOpTypes.METHOD, { method: 'delete', argv: [value]})
+            this.sendTriggerInfos()
         }
-        this.sendTriggerInfos()
         return this
     }
     has(value:T): Atom<boolean> {

@@ -1,7 +1,7 @@
 import {
     ApplyPatchType,
-    computed,
     CallbacksType,
+    computed,
     Computed,
     DirtyCallback,
     GetterType,
@@ -40,19 +40,34 @@ export class RxMap<K, V> extends Computed{
     }
     replace = (source: EntryType|PlainObjectType|Map<K,V>) => {
         let entries: EntryType
+
+        const oldKeys = new Set(this.data.keys())
         if (source instanceof Map) {
-            this.data = source
             entries = Array.from(source.entries())
         } else {
-            this.data.clear()
             entries = Array.isArray(source) ? source : Object.entries(source)
-            this.data = new Map(entries)
         }
 
         entries.forEach(([key, value]) => {
-            this.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
+            const hasValue = this.data.has(key)
+            this.data.set(key, value)
+            if (hasValue) {
+                this.trigger(this, TriggerOpTypes.SET, { key, newValue: value})
+            } else {
+                this.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
+            }
+            oldKeys.delete(key)
         })
-        this.trigger(this, TriggerOpTypes.METHOD, {method: 'replace', argv: [source]})
+
+        const deleteEntries: [K, V][] = []
+        oldKeys.forEach((key, value) => {
+            const oldValue = this.data.get(key)!
+            this.data.delete(key)
+            this.trigger(this, TriggerOpTypes.DELETE, { key, oldValue})
+            deleteEntries.push([key, oldValue])
+        })
+
+        this.trigger(this, TriggerOpTypes.METHOD, {method: 'replace', argv: [source], methodResult: deleteEntries})
         this.sendTriggerInfos()
     }
     replaceData = this.replace
@@ -63,21 +78,29 @@ export class RxMap<K, V> extends Computed{
         const oldValue = this.data.get(key)
         this.data.set(key, value)
         if (hasValue) {
+            if (value === oldValue) return
+
             this.trigger(this, TriggerOpTypes.SET, { key, newValue: value, oldValue})
         } else {
             this.trigger(this, TriggerOpTypes.ADD, { key, newValue: value})
         }
+        this.trigger(this, TriggerOpTypes.METHOD, { method: 'set', argv: [key, value], methodResult: [hasValue, oldValue]})
+
         this.sendTriggerInfos()
     }
 
     delete(key: K) {
         const hasValue = this.data.has(key)
+        let oldValue:V|undefined
         if (hasValue) {
-            const oldValue = this.data.get(key)
+            oldValue = this.data.get(key)
             this.data.delete(key)
             this.trigger(this, TriggerOpTypes.DELETE, { key, newValue: undefined, oldValue})
+
+            this.trigger(this, TriggerOpTypes.METHOD, { method: 'delete', argv: [key], methodResult: oldValue})
+
+            this.sendTriggerInfos()
         }
-        this.sendTriggerInfos()
     }
 
     clear() {
@@ -86,7 +109,7 @@ export class RxMap<K, V> extends Computed{
         entries.forEach(([key, value]) => {
             this.trigger(this, TriggerOpTypes.DELETE, { key,  oldValue: value})
         })
-        this.trigger(this, TriggerOpTypes.METHOD, { method: 'clear'})
+        this.trigger(this, TriggerOpTypes.METHOD, { method: 'clear', methodResult: entries})
         this.sendTriggerInfos()
     }
 
@@ -123,119 +146,67 @@ export class RxMap<K, V> extends Computed{
         };
     }
 
-    // reactive methods
-    entries(): RxList<[K, V]> {
-        const source = this
-        const keys: K[] = []
 
-        return new RxList<[K, V]>(
-            function computation(this: RxList<[K, V]>) {
-                this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY);
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-
-                keys.push(...source.data.keys())
-
-                return Array.from(source.data.entries()) as [K, V][]
-            },
-            function applyPatch(this: RxList<[K, V]>, data: Atom<EntryType>, triggerInfos){
-                triggerInfos.forEach(info => {
-                    if (info.type === TriggerOpTypes.METHOD) {
-                        if (info.method === 'clear') {
-                            this.splice(0, this.data.length)
-                            keys.splice(0, keys.length)
-                        }else {
-                            assert(false, 'unreachable')
-                        }
-                    } else {
-                        const newKey = info.key as K
-                        const newValue = info.newValue as V
-                        if (info.type === TriggerOpTypes.ADD) {
-                            this.push([newKey, newValue])
-                            keys.push(newKey)
-                        } else if (info.type === TriggerOpTypes.SET) {
-                            const index = keys.indexOf(newKey)
-                            this.set(index, [newKey, newValue])
-                        } else if (info.type === TriggerOpTypes.DELETE) {
-                            const index = keys.indexOf(newKey)
-                            this.splice(index, 1)
-                            keys.splice(index, 1)
-                        }else {
-                            assert(false, 'unreachable')
-                        }
-                    }
-                })
-            }
-        )
+    _keysCache: RxList<K>|null = null
+    _keysDep = 0
+    deleteKeysCache() {
+        this._keysDep--
+        if (this._keysDep ===0) {
+            this._keysCache!.destroy()
+        }
     }
-    values() {
+    getKeysCache(): RxList<K> {
         const source = this
-        return new RxList<V>(
-            function computation(this: RxList<V>) {
-                this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY);
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
 
-                return Array.from(source.data.values())
-            },
-            function applyPatch(this: RxList<V>, data: Atom<V[]>, triggerInfos){
-                triggerInfos.forEach(info => {
-                    if (info.type === TriggerOpTypes.METHOD) {
-                        if (info.method === 'clear') {
-                            this.splice(0, this.data.length)
-                        }else {
-                            assert(false, 'unreachable')
-                        }
-                    } else {
-                        if (info.type === TriggerOpTypes.ADD) {
-                            this.push(info.newValue as V)
-                        } else if (info.type === TriggerOpTypes.SET) {
-                            const index = this.data.indexOf(info.oldValue as V)
-                            this.splice(index, 1, info.newValue as V)
-                        } else if (info.type === TriggerOpTypes.DELETE) {
-                            const index = this.data.indexOf(info.oldValue as V)
-                            this.splice(index, 1)
-                        }else {
-                            assert(false, 'unreachable')
-                        }
-                    }
-                })
-            }
-        )
-    }
-    keys() {
-        const source = this
-        return new RxList<K>(
+        this._keysCache = new RxList<K>(
             function computation(this: RxList<K>) {
-                this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY);
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-
                 return Array.from(source.data.keys())
             },
             function applyPatch(this: RxList<K>, data: Atom<K[]>, triggerInfos){
-                triggerInfos.forEach(info => {
+                for(let info of triggerInfos) {
                     if (info.type === TriggerOpTypes.METHOD) {
-                        if (info.method === 'clear') {
-                            this.splice(0, this.data.length)
-                        }else {
-                            assert(false, 'unreachable')
-                        }
-                    } else {
-                        const newKey = info.key as K
-                        if (info.type === TriggerOpTypes.ADD) {
-                            this.push(newKey)
-                        } else if (info.type === TriggerOpTypes.SET) {
-
-                        } else if (info.type === TriggerOpTypes.DELETE) {
-                            const index = this.data.indexOf(newKey)
+                        if (info.method === 'clear' || info.method === 'replace') {
+                            return false
+                        } else if (info.method === 'set') {
+                            const [hasValue] = info.methodResult as [boolean, V]
+                            if (!hasValue) {
+                                this.push(info.argv![0]! as K)
+                            }
+                        } else if(info.method === 'delete') {
+                            const index = this.data.indexOf(info.argv![0] as K)
                             this.splice(index, 1)
                         } else {
                             assert(false, 'unreachable')
                         }
+                    } else {
+                        assert(false, 'unreachable')
                     }
-
-                })
+                }
             }
         )
+
+        this._keysDep++
+        return this._keysCache
     }
+    keys() {
+        const facade= this.getKeysCache().map(key => key)
+        facade.on('destroy', () => this.deleteKeysCache())
+        return facade
+    }
+    values() {
+        const keys = this.getKeysCache()
+        const values = keys.map(key => this.get(key)!)
+        values.on('destroy', () => this.deleteKeysCache())
+        return values
+    }
+    entries(): RxList<[K, V]> {
+        const keys =  this.getKeysCache()
+        const entries = keys.map(key => [key, this.get(key)] as [K, V])
+        entries.on('destroy', () => this.deleteKeysCache())
+        return entries
+    }
+
     get size() {
         const source = this
         return computed(
