@@ -130,7 +130,7 @@ describe('computed return object with internal side effect', () => {
         }
 
         const run = atom(1)
-        autorun(({ onCleanup }) => {
+        const stopAutorun = autorun(({ onCleanup }) => {
             run()
             const valueWithSideEffect = new InternalWithSideEffect()
             onCleanup(() => {
@@ -142,6 +142,10 @@ describe('computed return object with internal side effect', () => {
         expect(destroyCalled).toBe(0)
         run(2)
         expect(destroyCalled).toBe(1)
+
+        stopAutorun()
+        expect(destroyCalled).toBe(2)
+
 
     })
 })

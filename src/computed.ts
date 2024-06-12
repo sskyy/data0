@@ -539,8 +539,15 @@ export class Computed extends ReactiveEffect {
     resetAutoTrack = () => {
         Notifier.instance.resetTracking()
     }
+    destroy() {
+        this.lastCleanupFn?.()
+        super.destroy()
+    }
     collectEffect = ReactiveEffect.collectEffect
-    destroyEffect = ReactiveEffect.destroy
+    destroyEffect = (effect: ReactiveEffect) => {
+        // 因为可能是 computed，destroy 和 ReactiveEffect 不一样，所以要调用它自己身的
+        effect.destroy()
+    }
 }
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
