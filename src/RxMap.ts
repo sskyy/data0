@@ -146,77 +146,57 @@ export class RxMap<K, V> extends Computed{
         };
     }
 
-
-    _keysCache: RxList<K>|null = null
-    _keysDep = 0
-    deleteKeysCache() {
-        this._keysDep--
-        if (this._keysDep ===0) {
-            this._keysCache!.destroy()
-        }
-    }
-    getKeysCache(): RxList<K> {
+    keys() {
         const source = this
-
-        this._keysCache = new RxList<K>(
-            function computation(this: RxList<K>) {
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-                return Array.from(source.data.keys())
-            },
-            function applyPatch(this: RxList<K>, data: Atom<K[]>, triggerInfos){
-                for(let info of triggerInfos) {
-                    if (info.type === TriggerOpTypes.METHOD) {
-                        if (info.method === 'clear' || info.method === 'replace') {
-                            return false
-                        } else if (info.method === 'set') {
-                            const [hasValue] = info.methodResult as [boolean, V]
-                            if (!hasValue) {
-                                this.push(info.argv![0]! as K)
+        return this.getCachedValue('keys', () => {
+            return new RxList<K>(
+                function computation(this: RxList<K>) {
+                    this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                    return Array.from(source.data.keys())
+                },
+                function applyPatch(this: RxList<K>, data: Atom<K[]>, triggerInfos){
+                    for(let info of triggerInfos) {
+                        if (info.type === TriggerOpTypes.METHOD) {
+                            if (info.method === 'clear' || info.method === 'replace') {
+                                return false
+                            } else if (info.method === 'set') {
+                                const [hasValue] = info.methodResult as [boolean, V]
+                                if (!hasValue) {
+                                    this.push(info.argv![0]! as K)
+                                }
+                            } else if(info.method === 'delete') {
+                                const index = this.data.indexOf(info.argv![0] as K)
+                                this.splice(index, 1)
+                            } else {
+                                assert(false, 'unreachable')
                             }
-                        } else if(info.method === 'delete') {
-                            const index = this.data.indexOf(info.argv![0] as K)
-                            this.splice(index, 1)
                         } else {
                             assert(false, 'unreachable')
                         }
-                    } else {
-                        assert(false, 'unreachable')
                     }
                 }
-            }
-        )
-
-        this._keysDep++
-        return this._keysCache
-    }
-    keys() {
-        const facade= this.getKeysCache().map(key => key)
-        facade.on('destroy', () => this.deleteKeysCache())
-        return facade
+            )
+        })
     }
     values() {
-        const keys = this.getKeysCache()
-        const values = keys.map(key => this.get(key)!)
-        values.on('destroy', () => this.deleteKeysCache())
-        return values
+        return this.getCachedValue('values', () => this.keys().map(key => this.get(key)!))
     }
     entries(): RxList<[K, V]> {
-        const keys =  this.getKeysCache()
-        const entries = keys.map(key => [key, this.get(key)] as [K, V])
-        entries.on('destroy', () => this.deleteKeysCache())
-        return entries
+        return this.getCachedValue('entries', () => this.keys().map(key => [key, this.get(key)] as [K, V]))
     }
 
     get size() {
         const source = this
-        return computed(
-            function computation(this: Computed) {
-                this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY)
-                return source.data.size
-            },
-            function applyPatch(this: Computed, data: Atom<number>, triggerInfos){
-                data(source.data.size)
-            }
-        )
+        return this.getCachedValue('size', () => {
+            return computed(
+                function computation(this: Computed) {
+                    this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY)
+                    return source.data.size
+                },
+                function applyPatch(this: Computed, data: Atom<number>, triggerInfos) {
+                    data(source.data.size)
+                }
+            )
+        })
     }
 }

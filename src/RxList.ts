@@ -74,12 +74,22 @@ export class RxList<T> extends Computed {
             oldValues[i] = this.data[i]
         }
         const result = this.data.splice(start, deleteCount, ...items)
+
+
+        // CAUTION 无论有没有 indexKeyDeps 都要触发 Iterator_Key，
+        //  特别这里注意，我们利用传了 key 就会把对应 key 的 dep 拿出来的特性来 trigger ITERATE_KEY.
+        //  CAUTION 一定先 trigger method，这样可能后面某些被删除的 atomIndexes 变化就不需要了。
+        this.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
         // 只有当有 indexKeyDeps 的时候才需要手动查找 dep 和触发，这样效率更高
         if (this.indexKeyDeps?.size > 0){
             for (let i = start; i < changedIndexEnd; i++) {
                 this.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues[i]})
             }
         }
+
+        // CATION 特别注意这里 atomIndexes 的变化也要先 catch 住
+        Notifier.instance.createEffectSession()
+        this.sendTriggerInfos()
 
         if (this.atomIndexes) {
             this.atomIndexes.splice(start, deleteCount, ...items.map((_, index) => atom(index + start)))
@@ -88,12 +98,8 @@ export class RxList<T> extends Computed {
                 this.atomIndexes[i]?.(i)
             }
         }
-        // CAUTION 无论有没有 indexKeyDeps 都要触发 Iterator_Key，
-        //  特别这里注意，我们利用传了 key 就会把对应 key 的 dep 拿出来的特性来 trigger ITERATE_KEY.
-        this.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
+        Notifier.instance.digestEffectSession()
 
-        // Notifier.instance.digestEffectSession()
-        this.sendTriggerInfos()
         this.resetAutoTrack()
         return result
     }
@@ -171,6 +177,8 @@ export class RxList<T> extends Computed {
             source.addAtomIndexesDep()
         }
 
+        let addedAtomIndexesDep = useIndex
+
         // CAUTION cleanupFns 是用户自己用 context.onCleanup 收集的，因为可能用到 mapFn 中的局部变量
         //  如果可以直接从 mapFn return value 中来销毁副作用，那么应该使用 options.onCleanup 来注册一个统一的销毁函数，这样能提升性能，不需要建立 cleanupFns 数组。
         let cleanupFns: MapCleanupFn[]|undefined
@@ -181,18 +189,54 @@ export class RxList<T> extends Computed {
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
                 cleanupFns = useContext ? [] : undefined
 
-                return source.data.map((_: T, index) => {
-                    const getFrame = ReactiveEffect.collectEffect!()
+                const result: U[] = []
+                source.data.forEach((_, i) => {
+                    // const getFrame = ReactiveEffect.collectEffect!()
                     const mapContext: MapContext|undefined = useContext ? {
                         onCleanup(fn: MapCleanupFn) {
-                            cleanupFns![index] = fn
+                            cleanupFns![i] = fn
                         }
                     } : undefined
-                    // CAUTION 注意这里的 item 要用 at 拿包装过的 reactive 对象
-                    const newItem = mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!)
-                    this.effectFramesArray![index] = getFrame() as ReactiveEffect[]
-                    return newItem
+
+                    let newItemIndex: Atom<number>|undefined
+                    const newItemRun = new Computed(() => {
+                        // CAUTION 特别注意这里面的变量，我们只希望  track 用户 mapFn 里面用到的外部  reactive 对象，不希望 track 到自己的 key/index。
+                        if(newItemIndex) {
+                            this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw], newItemIndex!, mapContext!))
+                        } else {
+                            result[i] = mapFn(source.data[i], source.atomIndexes?.[i]!, mapContext!)
+                        }
+                    }, undefined, true)
+
+                    newItemRun.run()
+
+                    if (newItemRun.hasDeps()) {
+                        if (!addedAtomIndexesDep) {
+                            source.addAtomIndexesDep()
+                            addedAtomIndexesDep = true
+                        }
+                        newItemIndex = source.atomIndexes![i]!
+                    }
+                    this.effectFramesArray![i] = [newItemRun] as ReactiveEffect[]
+
                 })
+
+                return result
+
+
+                // return source.data.map((_: T, index) => {
+                //     const getFrame = ReactiveEffect.collectEffect!()
+                //     const mapContext: MapContext|undefined = useContext ? {
+                //         onCleanup(fn: MapCleanupFn) {
+                //             cleanupFns![index] = fn
+                //         }
+                //     } : undefined
+                //     // CAUTION 注意这里的 item 要用 at 拿包装过的 reactive 对象
+                //     // FIXME mapFn 是否要手动包裹 autorun 来监听对其他 reactive 对象的依赖？
+                //     const newItem = mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!)
+                //     this.effectFramesArray![index] = getFrame() as ReactiveEffect[]
+                //     return newItem
+                // })
             },
             function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
                 triggerInfos.forEach((triggerInfo) => {
@@ -209,16 +253,45 @@ export class RxList<T> extends Computed {
                         const effectFrames: ReactiveEffect[][] = []
                         const newCleanups: MapCleanupFn[] = []
                         const newItems = newItemsInArgs.map((_, index) => {
-                            const item = source.at(index+ argv![0])!
-                            const getFrame = this.collectEffect()
                             const mapContext: MapContext|undefined = useContext ? {
                                 onCleanup(fn: MapCleanupFn) {
                                     newCleanups![index] = fn
                                 }
                             } : undefined
-                            const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]]!, mapContext!)
-                            effectFrames![index] = getFrame() as ReactiveEffect[]
-                            return newItem
+                            let newItem: U
+                            const newIndex = index + argv![0]!
+                            let newItemIndex: Atom<number>|undefined
+
+                            const newItemRun = new Computed(() => {
+                                // 说明是内部有依赖变换发生的更新。
+                                if (newItemIndex) {
+                                    this.set(newItemIndex.raw, mapFn(source.data[index+ argv![0]]!, newItemIndex, mapContext!))
+                                } else {
+                                    newItem = mapFn(source.data[index+ argv![0]]!, source.atomIndexes?.[newIndex]!, mapContext!)
+                                }
+                            }, undefined, true)
+                            newItemRun.run()
+
+                            if (newItemRun.hasDeps()) {
+                                if (!addedAtomIndexesDep) {
+                                    source.addAtomIndexesDep()
+                                    addedAtomIndexesDep = true
+                                }
+                                newItemIndex = source.atomIndexes![newIndex]!
+                            }
+                            effectFrames![index] = [newItemRun] as ReactiveEffect[]
+                            return newItem!
+
+                            // const item = source.at(index+ argv![0])!
+                            // const getFrame = this.collectEffect()
+                            // const mapContext: MapContext|undefined = useContext ? {
+                            //     onCleanup(fn: MapCleanupFn) {
+                            //         newCleanups![index] = fn
+                            //     }
+                            // } : undefined
+                            // const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]]!, mapContext!)
+                            // effectFrames![index] = getFrame() as ReactiveEffect[]
+                            // return newItem
                         })
                         const deletedItems = this.splice(argv![0], argv![1], ...newItems)
                         const deletedFrames = this.effectFramesArray!.splice(argv![0], argv![1], ...effectFrames)
@@ -258,7 +331,8 @@ export class RxList<T> extends Computed {
 
                         this.set(index, mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!))
                         const newFrame = getFrame() as ReactiveEffect[]
-                        this.effectFramesArray![index].forEach((effect) => {
+                        debugger
+                        this.effectFramesArray![index]?.forEach((effect) => {
                             this.destroyEffect(effect)
                         })
                         this.effectFramesArray![index] = newFrame
@@ -276,7 +350,7 @@ export class RxList<T> extends Computed {
             options?.scheduleRecompute,
             {
                 onDestroy(this: RxList<U>)  {
-                    if (useIndex) {
+                    if (addedAtomIndexesDep) {
                         source.removeAtomIndexesDep()
                     }
                     if (cleanupFns) {
@@ -567,24 +641,25 @@ export class RxList<T> extends Computed {
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     if (method === 'splice') {
+                        debugger
                         const deleteItems = methodResult as T[] || []
                         deleteItems.forEach((item) => {
                             const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(item) : item[inputIndexKey]
-                            this.data.delete(indexKey)
+                            this.delete(indexKey)
                         })
                         const newItemsInArgs = argv!.slice(2)
                         newItemsInArgs.forEach((item) => {
                             const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(item) : item[inputIndexKey]
 
                             assert(!this.data.has(indexKey), 'indexBy key is already exist')
-                            this.data.set(indexKey, item)
+                            this.set(indexKey, item)
                         })
                     } else {
                         // explicit key change
                         const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(oldValue as T) : (oldValue as T)[inputIndexKey]
-                        this.data.delete(indexKey)
+                        this.delete(indexKey)
                         const newKey = typeof inputIndexKey === 'function' ? inputIndexKey(newValue as T) : (newValue as T)[inputIndexKey]
-                        this.data.set(newKey, newValue as T)
+                        this.set(newKey, newValue as T)
                     }
                 })
             }
@@ -667,15 +742,17 @@ export class RxList<T> extends Computed {
 
     get length(): Atom<number> {
         const source = this
-        return computed(
-            function computation(this: Computed) {
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                return source.data.length
-            },
-            function applyPatch(this: Computed, data: Atom<number>){
-                data(source.data.length)
-            }
-        )
+        return this.getCachedValue('length', () => {
+            return computed(
+                function computation(this: Computed) {
+                    this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                    return source.data!.length
+                },
+                function applyPatch(this: Computed, data: Atom<number>){
+                    data(source.data.length)
+                }
+            )
+        })
     }
 
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。

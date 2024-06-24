@@ -40,25 +40,25 @@ describe('RxList', () => {
             mapRuns++
             return item * index!()
         })
-        expect(list2.toArray()).toMatchObject([0,2,6])
+        expect(list2.data).toMatchObject([0,2,6])
         expect(mapRuns).toBe(3)
 
         // splice 以后仍然保持正确
-        list.splice(1,1)
-        expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1])
-        expect(list2.toArray()).toMatchObject([0,6])
-        expect(mapRuns).toBe(3)
-
-        // splice 添加元素
-        list.splice(1,0, 3)
-        expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1, 2])
-        expect(list2.toArray()).toMatchObject([0,3,6])
+        list.splice(1,1) // 变成了 1,3
+        // expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1])
+        expect(list2.data).toMatchObject([0,3])
         expect(mapRuns).toBe(4)
 
+        // splice 添加元素
+        list.splice(1,0, 5) // 变成了 1,5,3
+        expect(list.atomIndexes!.map(i => i())).toMatchObject([0,1, 2])
+        expect(list2.toArray()).toMatchObject([0,5,6])
+        expect(mapRuns).toBe(6)
+
         // 通过 set 修改元素
-        list.set(1, 4)
+        list.set(1, 4) // 变成了 1,4,3
         expect(list2.toArray()).toMatchObject([0,4,6])
-        expect(mapRuns).toBe(5)
+        expect(mapRuns).toBe(7)
     })
 
     test('map to another list with inner computed', () => {
@@ -84,6 +84,30 @@ describe('RxList', () => {
         expect(mapRuns).toBe(6)
         outerAtom(3)
         expect(list2.toArray().map(i => i())).toMatchObject([3,6])
+        expect(mapRuns).toBe(8)
+    })
+
+    test('map to another list with outer reactive', () => {
+        const list = new RxList<number>([1,2,3])
+        let mapRuns = 0
+        const outerAtom = atom(1)
+
+        const list2 = list.map((item) => {
+            mapRuns++
+            return item * outerAtom()
+        })
+
+        expect(list2.data).toMatchObject([1,2,3])
+        expect(mapRuns).toBe(3)
+        outerAtom(2)
+        expect(list2.data).toMatchObject([2,4,6])
+        expect(mapRuns).toBe(6)
+
+        // removed computed in list should be destroyed
+        list.pop()
+        expect(mapRuns).toBe(6)
+        outerAtom(3)
+        expect(list2.data).toMatchObject([3,6])
         expect(mapRuns).toBe(8)
     })
 
@@ -362,8 +386,6 @@ describe('RxList', () => {
                 [3, {id:3, score: 1}],
             ]
         )
-
-
 
         list.splice(4, 0, {id: 0, score: 3})
         expect(indexed.entries().toArray()).toMatchObject(

@@ -10,7 +10,7 @@ export class ReactiveEffect extends ManualCleanup {
     public isRunningAsync = false
     public eventToCallbacks: Map<string, Set<Function>> = new Map()
     public asyncTracks : Array<() => void> = []
-    static destroy(effect: ReactiveEffect, fromParent?: boolean) {
+    static destroy(effect: ReactiveEffect, fromParent = false, ignoreChildren = false) {
         if (!effect.active) return
 
         effect.cleanup()
@@ -27,9 +27,11 @@ export class ReactiveEffect extends ManualCleanup {
         }
 
         delete effect.parent
-        effect.children.forEach(child => {
-            ReactiveEffect.destroy(child, true)
-        })
+        if (!ignoreChildren) {
+            effect.children.forEach(child => {
+                ReactiveEffect.destroy(child, true)
+            })
+        }
         effect.children = []
         effect.dispatch('destroy')
     }
@@ -186,9 +188,9 @@ export class ReactiveEffect extends ManualCleanup {
             deps.length = 0
         }
     }
-    destroy() {
+    destroy(ignoreChildren = false) {
         this.dispatch('destroy')
-        ReactiveEffect.destroy(this)
+        ReactiveEffect.destroy(this, false, ignoreChildren)
     }
     async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => any, afterRun: (isLast?:boolean) => any)   {
         // run generator，每次之前要调用 beforeRun，每次之后要调用 afterRun

@@ -522,6 +522,9 @@ export class Computed extends ReactiveEffect {
 
     }
 
+    hasDeps() {
+        return this.deps.length > 0
+    }
     // 给继承者在 apply catch 中用的 工具函数
     manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {
         Notifier.instance.enableTracking()
@@ -539,14 +542,23 @@ export class Computed extends ReactiveEffect {
     resetAutoTrack = () => {
         Notifier.instance.resetTracking()
     }
-    destroy() {
+    destroy(ignoreChildren = false) {
         this.lastCleanupFn?.()
-        super.destroy()
+        delete this.lastCleanupFn
+        super.destroy( ignoreChildren)
     }
     collectEffect = ReactiveEffect.collectEffect
     destroyEffect = (effect: ReactiveEffect) => {
         // 因为可能是 computed，destroy 和 ReactiveEffect 不一样，所以要调用它自己身的
         effect.destroy()
+    }
+    cachedValues = new Map<any, any>()
+    getCachedValue<T>(effect:any, createFn: () => T) : T{
+        let value = this.cachedValues.get(effect)
+        if (!value) {
+            this.cachedValues.set(effect, value = createFn())
+        }
+        return value
     }
 }
 
