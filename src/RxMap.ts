@@ -185,7 +185,7 @@ export class RxMap<K, V> extends Computed{
         return this.getCachedValue('entries', () => this.keys().map(key => [key, this.get(key)] as [K, V]))
     }
 
-    get size() {
+    get size(): Atom<number> {
         const source = this
         return this.getCachedValue('size', () => {
             return computed(
