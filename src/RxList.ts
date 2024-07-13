@@ -598,7 +598,7 @@ export class RxList<T> extends Computed {
                         newItemsInArgs.forEach((item) => {
                             const groupKey = getKey(item)
                             if (!this.data.has(groupKey)) {
-                                this.data.set(groupKey, new RxList([]))
+                                this.set(groupKey, new RxList([]))
                             }
                             this.data.get(groupKey)!.push(item)
                         })
@@ -611,7 +611,7 @@ export class RxList<T> extends Computed {
 
                         const newGroupKey = getKey(newValue as T)
                         if (!this.data.has(newGroupKey)) {
-                            this.data.set(newGroupKey, new RxList([]))
+                            this.set(newGroupKey, new RxList([]))
                         }
                         this.data.get(newGroupKey)!.push(newValue as T)
                     }

@@ -357,6 +357,28 @@ describe('RxList', () => {
     })
 
 
+    test('groupBy with non-exist key', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        const grouped = list.groupBy(item => item.score > 4 ? 'high' : 'low')
+        expect(Array.from(grouped.keys().toArray())).toMatchObject(['low'])
+
+        const highList = computed(() => grouped.get('high')?.toArray() || [])
+        expect(highList()).toMatchObject([])
+
+        list.push({id: 5, score: 5})
+        expect(Array.from(grouped.keys().toArray())).toMatchObject(['low', 'high'])
+        expect(grouped.get('high')!.toArray()).toMatchObject([{id: 5, score: 5}])
+        expect(highList()).toMatchObject([{id: 5, score: 5}])
+
+
+    })
+
     // indexBy
     test('indexBy', () => {
         const list = new RxList<{id:number, score: number}>([
