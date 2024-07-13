@@ -114,7 +114,7 @@ export class RxList<T> extends Computed {
         } else {
             this.trigger(this, TriggerOpTypes.SET, { key: index, newValue: value, oldValue})
         }
-        this.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue})
+        this.trigger(this, TriggerOpTypes.EXPLICIT_KEY_CHANGE, { key: index, newValue: value, oldValue, methodResult: oldValue})
         this.sendTriggerInfos()
 
         return oldValue
