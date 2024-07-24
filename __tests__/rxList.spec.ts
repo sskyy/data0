@@ -356,6 +356,80 @@ describe('RxList', () => {
         expect(grouped.get('high')!.toArray()).toMatchObject([])
     })
 
+    test('every with true to false', () => {
+        const list = new RxList([1,2,3,4,5,6,7,8,9])
+        const everyGT0 = list.every(i => i > 0)
+        expect(everyGT0()).toBe(true)
+
+        // push 10 没有影响
+        list.push(10)
+        expect(everyGT0()).toBe(true)
+
+        // unshift 1 没有影响
+        list.unshift(1)
+        expect(everyGT0()).toBe(true)
+
+        // unshift -1 在第一个 mismatch 之前，gt0 变 false
+        list.unshift(-1)
+        expect(everyGT0()).toBe(false)
+
+        // shift -1 ，gt0 变 true
+        list.shift()
+        expect(everyGT0()).toBe(true)
+    })
+
+    test('every with false to true', () => {
+        const list = new RxList([1,2,3,4,5,6,7,8,9])
+        const everyLT5 = list.every(i => i <5)
+        expect(everyLT5()).toBe(false)
+
+        // push 10 没有影响
+        list.push(10)
+        expect(everyLT5()).toBe(false)
+
+        // pop 没有影响
+        list.pop()
+        expect(everyLT5()).toBe(false)
+
+        // 在 1 后面插入一个 10，没有影响
+        list.splice(1, 0, 10)
+        expect(everyLT5()).toBe(false)
+
+        // unshift 0 没有影响
+        list.unshift(0)
+        expect(everyLT5()).toBe(false)
+
+
+        list.splice(1, Infinity)
+        expect(everyLT5()).toBe(true)
+    })
+
+    test('any', () => {
+        const list = new RxList([1,2,3,4,5,6,7,8,9])
+        const anyGT5 = list.any(i => i > 5)
+        expect(anyGT5()).toBe(true)
+
+        // push 4 没有影响
+        list.push(4)
+        expect(anyGT5()).toBe(true)
+
+        // unshift 6 没有影响
+        list.unshift(6)
+        expect(anyGT5()).toBe(true)
+
+        // shift 6 没影响
+        list.shift()
+        expect(anyGT5()).toBe(true)
+
+        // pop 4 ，没影响
+        list.pop()
+        expect(anyGT5()).toBe(true)
+
+        // 从 5 开始全部删了，没有大于 5 的了
+        list.splice(4, Infinity)
+        expect(anyGT5()).toBe(false)
+    })
+
 
     test('groupBy with non-exist key', () => {
         const list = new RxList<{id:number, score: number}>([

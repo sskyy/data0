@@ -563,7 +563,98 @@ export class RxList<T> extends Computed {
             }
         )
     }
+    every(fn: (item:T) => boolean): Atom<boolean> {
+        const source = this
+        let firstMismatchIndex = Infinity
 
+        return computed(
+            function computation(this: Computed){
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+
+                // autoTrack filter 的过程，如果依赖了其他的 reactive 对象，后面在 applyPatch 的时候就要 return  false 走全量计算。
+                this.autoTrack()
+                const result =  source.data.every((item, i) => {
+                    const matched = fn(item)
+                    if (!matched) {
+                        firstMismatchIndex = i
+                    }
+                    return matched
+                })
+                this.resetAutoTrack()
+                return result
+            },
+            function applyPatch(this:Computed, data: Atom<boolean>, triggerInfos: TriggerInfo[]) {
+                triggerInfos.forEach((triggerInfo) => {
+                    const { source: triggerSource, method , argv  ,key, newValue} = triggerInfo
+                    // 如果是 match fn 变化了，就直接重算
+                    if (triggerSource !== source) return false
+
+                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
+                    if (method === 'splice') {
+                        const [startIndex, length, ...newItems] = argv!
+                        if (startIndex > firstMismatchIndex) {
+                            // 在第一个匹配项之后的变化，对结果没有影响
+                            return
+                        } else {
+                            // 修改是在第一个 mismatch 的前面
+                            const lastDeletedIndex = length === 0 ? -1 : startIndex + length - 1
+                            if (lastDeletedIndex < firstMismatchIndex) {
+                                // 遍历所有的 newItems，如果有新的不匹配项，就更新 firstMismatchIndex
+                                for (let i = 0; i < newItems.length; i++) {
+                                    if (!fn(newItems[i])) {
+                                        firstMismatchIndex = startIndex + i
+                                        data(false)
+                                        return
+                                    }
+                                }
+                            } else {
+                                // 修改的部分涵盖了第一个 mismatch，从 startIndex 开始完后重新查找
+                                firstMismatchIndex = Infinity
+                                for (let i = startIndex; i < source.data.length; i++) {
+                                    if (!fn(source.data[i])) {
+                                        firstMismatchIndex = i
+                                    }
+                                }
+                                data(firstMismatchIndex === Infinity)
+
+                            }
+                        }
+                    } else {
+                        // explicit key change
+                        const index = key as number
+                        if (index > firstMismatchIndex) {
+                            // 在第一个匹配项之后的变化，对结果没有影响
+                            return
+                        } else if (index < firstMismatchIndex) {
+                            // 出现了新的更前面的 match
+                            if (!fn(newValue as T)) {
+                                firstMismatchIndex= index
+                                data(false)
+                                return
+                            }
+                        } else {
+                            // 修改的就是第一个不匹配的
+                            if (fn(newValue as T)) {
+                                // 变成匹配了，继续去寻找第一个不匹配的了。
+                                firstMismatchIndex = Infinity
+                                for(let i = index + 1; i < source.data.length; i++) {
+                                    if (!fn(source.data[i])) {
+                                        firstMismatchIndex = i
+                                        break
+                                    }
+                                }
+                            }
+                            data(firstMismatchIndex === Infinity)
+                        }
+                    }
+                })
+            }
+        )
+    }
+    any(fn: (item:T) => boolean) : Atom<boolean>{
+        return computed(() => !this.every((item:T) => !fn(item))())
+    }
     groupBy<K>(getKey: (item: T) => K) {
         const source = this
         return new RxMap<K, RxList<T>>(
