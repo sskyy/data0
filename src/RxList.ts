@@ -1,4 +1,4 @@
-import {ApplyPatchType, computed, CallbacksType, Computed, DirtyCallback, GetterType} from "./computed.js";
+import {ApplyPatchType, CallbacksType, computed, Computed, DirtyCallback, GetterType} from "./computed.js";
 import {Atom, atom, isAtom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier, TriggerInfo} from "./notify.js";
@@ -368,7 +368,7 @@ export class RxList<T> extends Computed {
         )
     }
     // 另一种 map
-    reduce<U>(reduceFn: (last: RxList<U>, item: T, index: number) => any) {
+    reduce<U>(reduceFn: (last: RxList<U>, item: T, index: number) => any): RxList<U> {
         const source = this
         return new RxList(
             function computation(this: RxList<U>) {
@@ -509,7 +509,7 @@ export class RxList<T> extends Computed {
         )
     }
 
-    filter(filterFn: (item:T) => boolean) {
+    filter(filterFn: (item:T) => boolean): RxList<T> {
         const source = this
         return new RxList(
             function computation(this: RxList<T>) {

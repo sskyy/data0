@@ -11,7 +11,11 @@ export {
     recompute,
     Computed,
     scheduleNextTick,
-    scheduleNextMicroTask
+    scheduleNextMicroTask,
+    STATUS_DIRTY,
+    STATUS_RECOMPUTING_DEPS,
+    STATUS_RECOMPUTING,
+    STATUS_CLEAN,
 } from './computed'
 export * from './notify'
 export {TrackOpTypes, TriggerOpTypes} from "./operations";

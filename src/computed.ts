@@ -76,7 +76,7 @@ export const STATUS_RECOMPUTING_DEPS = 1
 export const STATUS_RECOMPUTING = 2
 export const STATUS_CLEAN = 3
 
-type StatusType = typeof STATUS_CLEAN | typeof STATUS_DIRTY | typeof STATUS_RECOMPUTING_DEPS | typeof STATUS_RECOMPUTING
+export type StatusType = typeof STATUS_CLEAN | typeof STATUS_DIRTY | typeof STATUS_RECOMPUTING_DEPS | typeof STATUS_RECOMPUTING
 
 export const  FULL_RECOMPUTE_PHASE = 1
 export const  PATCH_PHASE = 2
