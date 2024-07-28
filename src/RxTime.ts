@@ -1,5 +1,5 @@
 import {Atom, isAtom, atom} from "./atom.js";
-import {autorun} from "./autorun.js";
+import {autorun} from "./common";
 import {assert} from "./util.js";
 
 type Operation = {
