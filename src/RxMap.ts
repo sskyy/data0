@@ -34,6 +34,8 @@ export class RxMap<K, V> extends Computed{
             this.data = new Map()
         }
 
+        this.createComputedMetas()
+
         if (this.getter) {
             this.run([], true)
         }
@@ -145,58 +147,60 @@ export class RxMap<K, V> extends Computed{
             }
         };
     }
+    public keys!: () => RxList<K>
+    public entries!: () => RxList<[K, V]>
+    public values!: () => RxList<V>
+    public size!: Atom<number>
+    createComputedMetas() {
+        // FIXME 目前不能用 cache 的方法在读时才创建。
+        //  因为如果是在 autorun 等  computed 中读的，会导致在cleanup 时把
+        //  相应的 computed 当做 children destroy 掉。
 
-    keys() {
         const source = this
-        return this.getCachedValue('keys', () => {
-            return new RxList<K>(
-                function computation(this: RxList<K>) {
-                    this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
-                    return Array.from(source.data.keys())
-                },
-                function applyPatch(this: RxList<K>, data: Atom<K[]>, triggerInfos){
-                    for(let info of triggerInfos) {
-                        if (info.type === TriggerOpTypes.METHOD) {
-                            if (info.method === 'clear' || info.method === 'replace') {
-                                return false
-                            } else if (info.method === 'set') {
-                                const [hasValue] = info.methodResult as [boolean, V]
-                                if (!hasValue) {
-                                    this.push(info.argv![0]! as K)
-                                }
-                            } else if(info.method === 'delete') {
-                                const index = this.data.indexOf(info.argv![0] as K)
-                                this.splice(index, 1)
-                            } else {
-                                assert(false, 'unreachable')
+        const keys = new RxList<K>(
+            function computation(this: RxList<K>) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                return Array.from(source.data.keys())
+            },
+            function applyPatch(this: RxList<K>, data: Atom<K[]>, triggerInfos){
+                for(let info of triggerInfos) {
+                    if (info.type === TriggerOpTypes.METHOD) {
+                        if (info.method === 'clear' || info.method === 'replace') {
+                            return false
+                        } else if (info.method === 'set') {
+                            const [hasValue] = info.methodResult as [boolean, V]
+                            if (!hasValue) {
+                                this.push(info.argv![0]! as K)
                             }
+                        } else if(info.method === 'delete') {
+                            const index = this.data.indexOf(info.argv![0] as K)
+                            this.splice(index, 1)
                         } else {
                             assert(false, 'unreachable')
                         }
+                    } else {
+                        assert(false, 'unreachable')
                     }
                 }
-            )
-        })
-    }
-    values() {
-        return this.getCachedValue('values', () => this.keys().map(key => this.get(key)!))
-    }
-    entries(): RxList<[K, V]> {
-        return this.getCachedValue('entries', () => this.keys().map(key => [key, this.get(key)] as [K, V]))
-    }
+            }
+        )
+        this.keys = () => keys
 
-    get size(): Atom<number> {
-        const source = this
-        return this.getCachedValue('size', () => {
-            return computed(
-                function computation(this: Computed) {
-                    this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY)
-                    return source.data.size
-                },
-                function applyPatch(this: Computed, data: Atom<number>, triggerInfos) {
-                    data(source.data.size)
-                }
-            )
-        })
+        const values = this.keys().map(key => this.get(key)!)
+        this.values = () => values
+
+        const entries = this.keys().map(key => [key, this.get(key)] as [K, V])
+        this.entries = () => entries
+
+
+        this.size = computed(
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.ITERATE, ITERATE_KEY)
+                return source.data.size
+            },
+            function applyPatch(this: Computed, data: Atom<number>, triggerInfos) {
+                data(source.data.size)
+            }
+        )
     }
 }

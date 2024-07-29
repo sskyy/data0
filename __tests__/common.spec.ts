@@ -1,6 +1,12 @@
-import {atom, autorun, computed} from "../src";
+import {Atom, atom, autorun, computed, RxList} from "../src";
 import {describe, expect, test} from "vitest";
 import {once} from "../src/common";
+
+function wait(time: number) {
+    return new Promise(resolve => {
+        setTimeout(resolve, time)
+    })
+}
 
 
 describe('common utils', () => {
@@ -20,6 +26,19 @@ describe('common utils', () => {
         atom1(1)
         expect(history).toMatchObject([null, 1])
 
+    })
+
+    test('autorun should not destroy length', () => {
+        const list = new RxList<number>([])
+        const history: number[] = []
+        autorun(() => {
+            history.push(list.length())
+        })
+
+        list.push(1)
+        expect(history).toMatchObject([0, 1])
+        list.push(2)
+        expect(history).toMatchObject([0, 1, 2])
     })
 
     test('once with atom', () => {
@@ -47,13 +66,23 @@ describe('common utils', () => {
     })
 
     test('once with scheduler', async () => {
-        const atom1 = atom<number>(0)
-        const onceRunsWithValue:number[] = []
-        
+        const list = new RxList<{id:number, status:Atom<string>}>([])
+        const pendingList = list.filter(item => item.status() === 'pending')
+        const processingList = list.filter(item => item.status() === 'processing')
+
+        const p1 = {id: 1, status: atom('pending')}
+        list.push(p1)
+
+
+        let stopped = false
         once(() => {
-            onceRunsWithValue.push(atom1())
-            if(atom1() > 5) {
-                return true
+            if (pendingList.length() > 0) {
+                Promise.resolve().then(() => pendingList.at(0)!.status('processing'))
+            } else {
+                if (processingList.length() ==0) {
+                    stopped = true
+                    return true
+                }
             }
         }, (rerun) => {
             setTimeout(() => {
@@ -61,11 +90,20 @@ describe('common utils', () => {
             }, 100)
         })
 
-        expect(onceRunsWithValue).toMatchObject([0])
-        atom1(7)
-        expect(onceRunsWithValue).toMatchObject([0])
+        expect(pendingList.length.raw).toBe(1)
+        await wait(1)
+        expect(pendingList.length.raw).toBe(0)
+        expect(processingList.length.raw).toBe(1)
+        expect(stopped).toBe(false)
+
+        p1.status('done')
+        expect(pendingList.length.raw).toBe(0)
+        expect(processingList.length.raw).toBe(0)
+        expect(stopped).toBe(false)
+
         await new Promise(resolve => setTimeout(resolve, 200))
-        expect(onceRunsWithValue).toMatchObject([0, 7])
+        expect(stopped).toBe(true)
+
     })
 })
 

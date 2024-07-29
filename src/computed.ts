@@ -311,6 +311,10 @@ export class Computed extends ReactiveEffect {
         // 2. 在 async 模式下，任何依赖都可以再触发 recompute。
 
         if (immediate || this.immediate || this.status.raw > STATUS_DIRTY) {
+            if (this.status.raw > STATUS_DIRTY && !this.isAsync) {
+                throw new Error('')
+                console.warn('detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop')
+            }
             this.recompute()
         } else {
             this.scheduleRecompute!(this.recompute, this.recursiveMarkDirty)

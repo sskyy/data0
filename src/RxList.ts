@@ -50,6 +50,7 @@ export class RxList<T> extends Computed {
         if (this.getter) {
             this.run([], true)
         }
+        this.createComputedMetas()
     }
     replaceData(newData: T[]) {
         this.splice(0, this.data.length, ...newData)
@@ -726,21 +727,25 @@ export class RxList<T> extends Computed {
             }
         )
     }
-
-    get length(): Atom<number> {
+    public length!: Atom<number>
+    createComputedMetas( ) {
+        // FIXME 目前不能用 cache 的方法在读时才创建。
+        //  因为如果是在 autorun 等  computed 中读的，会导致在cleanup 时把
+        //  相应的 computed 当做 children destroy 掉。
         const source = this
-        return this.getCachedValue('length', () => {
-            return computed(
-                function computation(this: Computed) {
-                    this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                    return source.data!.length
-                },
-                function applyPatch(this: Computed, data: Atom<number>){
-                    data(source.data.length)
-                }
-            )
-        })
+        this.length = computed(
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                debugger
+                return source.data!.length
+            },
+            function applyPatch(this: Computed, data: Atom<number>){
+                debugger
+                data(source.data.length)
+            }
+        )
     }
+
 
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
     onUntrack(_effect: ReactiveEffect) {

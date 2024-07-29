@@ -19,6 +19,7 @@ export class RxSet<T> extends Computed {
         // 自己是 source
         this.data = source instanceof Set ? source : new Set(Array.isArray(source) ? source : [])
 
+        this.createComputedMetas()
         if (this.getter) {
             this.run([], true)
         }
@@ -316,11 +317,13 @@ export class RxSet<T> extends Computed {
         Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
         return [...this.data]
     }
-
-
-    get size(): Atom<number> {
+    public size!: Atom<number>
+    createComputedMetas() {
+        // FIXME 目前不能用 cache 的方法在读时才创建。
+        //  因为如果是在 autorun 等  computed 中读的，会导致在cleanup 时把
+        //  相应的 computed 当做 children destroy 掉。
         const source = this
-        return computed(
+        this.size = computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 return source.data.size
@@ -330,7 +333,6 @@ export class RxSet<T> extends Computed {
             }
         )
     }
-
 }
 
 
