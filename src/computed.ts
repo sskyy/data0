@@ -29,6 +29,7 @@ export type ApplyPatchType = SimpleApplyPatchType | GeneratorApplyPatchType
 
 
 export type GetterContext = {
+    lastValue: ComputedData,
     onCleanup: (fn: () => any) => void,
     asyncStatus: Atom<null | boolean | string>,
 }
@@ -234,6 +235,7 @@ export class Computed extends ReactiveEffect {
 
     createGetterContext(): GetterContext | undefined {
         return (this.getter && this.getter?.length > 0) ? {
+            lastValue: this.data,
             onCleanup: (fn: () => any) => this.lastCleanupFn = fn,
             asyncStatus: this.asyncStatus!,
         } : undefined

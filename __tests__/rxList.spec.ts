@@ -1,6 +1,6 @@
 import {createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {computed} from "../src/index.js";
+import {Atom, computed} from "../src/index.js";
 import {autorun} from "../src/common";
 import {atom} from "../src/atom.js";
 import {RxSet} from "../src/RxSet";
@@ -214,7 +214,25 @@ describe('RxList', () => {
         expect(found()).toMatchObject({id:5, score: 3})
 
         list.splice(2, Infinity)
-        expect(found()).toBe(null)
+        expect(found()).toBe(undefined)
+    })
+
+    test('find with reactive in find condition', () => {
+        const list = new RxList<{id:number, score: Atom<number>}>([])
+        const found = list.find(item => item.score() > 2)
+        expect(found()).toBe(undefined)
+
+        const i1 = {id:1, score: atom(1)}
+        const i2 = {id:1, score: atom(1)}
+        const i3 = {id:1, score: atom(1)}
+        list.splice(0, 0, i1,i2,i3)
+
+        expect(found()).toBe(undefined)
+        i1.score(3)
+        expect(found()).toBe(i1)
+
+        i2.score(4)
+        expect(found()).toBe(i1)
 
     })
 
@@ -242,6 +260,28 @@ describe('RxList', () => {
 
         list.splice(2, Infinity)
         expect(found()).toBe(-1)
+    })
+
+    test('findIndex with reactive in find condition', () => {
+        const list = new RxList<{id:number, score: Atom<number>}>([])
+        const found = list.findIndex(item => item.score() > 2)
+        expect(found()).toBe(-1)
+
+        const i1 = {id:1, score: atom(1)}
+        const i2 = {id:1, score: atom(1)}
+        const i3 = {id:1, score: atom(1)}
+        list.splice(0, 0, i1,i2,i3)
+
+        expect(found()).toBe(-1)
+        i1.score(3)
+        expect(found()).toBe(0)
+
+        i2.score(4)
+        expect(found()).toBe(0)
+
+        debugger
+        i1.score(1)
+        expect(found()).toBe(1)
     })
 
     test('filter', () => {
@@ -300,7 +340,43 @@ describe('RxList', () => {
         expect(filtered.toArray()).toMatchObject([
             {id:4, score: 4}
         ])
+    })
 
+    test('filter with new items', () => {
+        const standard = atom(2)
+        const list = new RxList<{id:number, score: number}>([])
+        const filtered = list.filter(item => item.score > standard())
+        expect(filtered.toArray()).toMatchObject([])
+        list.push({id:1, score: 1})
+        expect(filtered.toArray()).toMatchObject([])
+        list.push({id:2, score: 3})
+        expect(filtered.toArray()).toMatchObject([{id:2, score: 3}])
+        list.push({id:3, score: 4})
+        expect(filtered.toArray()).toMatchObject([{id:2, score: 3}, {id:3, score: 4}])
+    })
+
+    test('filter with computed in item', () => {
+        const createItem = ( id:number, score = 0) => {
+            return {
+                id,
+                score: atom(score)
+            }
+        }
+        const i1 = createItem(1)
+        const i2 = createItem(2)
+        const i3 = createItem(3)
+        const list = new RxList<{id:number, score: Atom<number>}>([])
+
+        const filtered = list.filter(item => item.score() > 3)
+
+        // 新添加进去的，应该也要能响应
+        list.splice(0, 0, i1, i2, i3)
+
+        expect(filtered.toArray()).toMatchObject([])
+        i1.score(4)
+        expect(filtered.toArray().map(f => f.id)).toMatchObject([1])
+        i2.score(5)
+        expect(filtered.toArray().map(f => f.id)).toMatchObject([1,2])
     })
 
     // should track iterator key
@@ -404,9 +480,9 @@ describe('RxList', () => {
         expect(everyLT5()).toBe(true)
     })
 
-    test('any', () => {
+    test('some', () => {
         const list = new RxList([1,2,3,4,5,6,7,8,9])
-        const anyGT5 = list.any(i => i > 5)
+        const anyGT5 = list.some(i => i > 5)
         expect(anyGT5()).toBe(true)
 
         // push 4 没有影响
@@ -427,6 +503,30 @@ describe('RxList', () => {
 
         // 从 5 开始全部删了，没有大于 5 的了
         list.splice(4, Infinity)
+        expect(anyGT5()).toBe(false)
+    })
+
+    test('some with reactive in condition', () => {
+        const list = new RxList<{id:number, score: Atom<number>}>([])
+        const anyGT5 = list.some(i => i.score() > 5)
+
+        const i1 = {id:1, score: atom(1)}
+        const i2 = {id:1, score: atom(1)}
+        const i3 = {id:1, score: atom(1)}
+
+        list.splice(0, 0, i1,i2,i3)
+        expect(anyGT5()).toBe(false)
+
+        i1.score(6)
+        expect(anyGT5()).toBe(true)
+
+        i2.score(6)
+        expect(anyGT5()).toBe(true)
+
+        i1.score(1)
+        expect(anyGT5()).toBe(true)
+
+        i2.score(1)
         expect(anyGT5()).toBe(false)
     })
 

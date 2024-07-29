@@ -1,4 +1,12 @@
-import {ApplyPatchType, CallbacksType, computed, Computed, DirtyCallback, GetterType} from "./computed.js";
+import {
+    ApplyPatchType,
+    CallbacksType,
+    computed,
+    Computed,
+    destroyComputed,
+    DirtyCallback,
+    GetterType
+} from "./computed.js";
 import {Atom, atom, isAtom} from "./atom.js";
 import {Dep} from "./dep.js";
 import {InputTriggerInfo, ITERATE_KEY, Notifier, TriggerInfo} from "./notify.js";
@@ -7,6 +15,7 @@ import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
 import {RxSet} from "./RxSet";
+import {autorun} from "./common";
 
 type MapOptions<U> = {
     beforePatch?: (triggerInfo: InputTriggerInfo) => any,
@@ -222,21 +231,6 @@ export class RxList<T> extends Computed {
                 })
 
                 return result
-
-
-                // return source.data.map((_: T, index) => {
-                //     const getFrame = ReactiveEffect.collectEffect!()
-                //     const mapContext: MapContext|undefined = useContext ? {
-                //         onCleanup(fn: MapCleanupFn) {
-                //             cleanupFns![index] = fn
-                //         }
-                //     } : undefined
-                //     // CAUTION 注意这里的 item 要用 at 拿包装过的 reactive 对象
-                //     // FIXME mapFn 是否要手动包裹 autorun 来监听对其他 reactive 对象的依赖？
-                //     const newItem = mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!)
-                //     this.effectFramesArray![index] = getFrame() as ReactiveEffect[]
-                //     return newItem
-                // })
             },
             function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
                 triggerInfos.forEach((triggerInfo) => {
@@ -281,17 +275,6 @@ export class RxList<T> extends Computed {
                             }
                             effectFrames![index] = [newItemRun] as ReactiveEffect[]
                             return newItem!
-
-                            // const item = source.at(index+ argv![0])!
-                            // const getFrame = this.collectEffect()
-                            // const mapContext: MapContext|undefined = useContext ? {
-                            //     onCleanup(fn: MapCleanupFn) {
-                            //         newCleanups![index] = fn
-                            //     }
-                            // } : undefined
-                            // const newItem = mapFn(item, source.atomIndexes?.[index+ argv![0]]!, mapContext!)
-                            // effectFrames![index] = getFrame() as ReactiveEffect[]
-                            // return newItem
                         })
                         const deletedItems = this.splice(argv![0], argv![1], ...newItems)
                         const deletedFrames = this.effectFramesArray!.splice(argv![0], argv![1], ...effectFrames)
@@ -331,7 +314,6 @@ export class RxList<T> extends Computed {
 
                         this.set(index, mapFn(source.at(index)!, source.atomIndexes?.[index]!, mapContext!))
                         const newFrame = getFrame() as ReactiveEffect[]
-                        debugger
                         this.effectFramesArray![index]?.forEach((effect) => {
                             this.destroyEffect(effect)
                         })
@@ -406,254 +388,168 @@ export class RxList<T> extends Computed {
     }
 
     find(matchFn:(item: T) => boolean): Atom<T> {
-        const source = this
-        let foundIndex = -1
-        return computed(
-            function computation(this: Computed) {
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-                return source.data.find((item, index) => {
-                    if (matchFn(item)) {
-                        foundIndex = index
-                        return true
-                    }
-                    return false
-                })
-            },
-            function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
-                triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key } = triggerInfo
-                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
+        const index = this.findIndex(matchFn)
 
-                    let startFindingIndex = -1
-
-                    if (method === 'splice') {
-                        const startIndex = argv![0] as number
-                        if (foundIndex >= startIndex) {
-                            startFindingIndex = startIndex
-                        }
-
-                    } else {
-                        // explicit key change
-                        if (foundIndex === key) {
-                            startFindingIndex = key as number
-                        }
-                    }
-
-                    if (startFindingIndex !== -1) {
-                        foundIndex = -1
-                        for (let i = startFindingIndex; i < source.data.length; i++) {
-                            if (matchFn(source.data[i]!)) {
-                                foundIndex = i
-                                data(source.data[i]!)
-                                return
-                            }
-                        }
-
-                        data(null)
-                    }
-                })
+        return computed(() => {
+            const indexValue = index()
+            return indexValue === -1 ? undefined : this.at(indexValue)
+        }, undefined, true, {
+            onDestroy() {
+                destroyComputed(index)
             }
-        )
+        })
     }
     findIndex(matchFn:(item: T) => boolean): Atom<number> {
         const source = this
-        let foundIndex = -1
+        // CAUTION 特别注意，这里不要对 autorunDisposes 做中间的部分的 splice，那样 autorun 里面的 index 就不对了。
+        //  始终只当成队列来使用。
+        let autorunDisposes: Array<()=>any> = []
+
+
+        function createAutorun(index:number, data?:Atom<number>) {
+            let found = false
+            const dispose = autorun(() => {
+                if (matchFn(source.data[index]!)) {
+                    found = true
+
+                    // 新的 index，肯定是更小的，因为我们只对前面的做了 autorun
+                    if (data?.raw !== index) {
+                        data?.(index)
+                        const disposes = autorunDisposes.splice(index+1, Infinity)
+                        disposes.forEach(dispose => dispose())
+                    }
+                } else {
+                    // 刚好是匹配的这个变化成不匹配了
+
+                    if (data && data.raw === index) {
+                        // 继续往后找吧
+                        data(searchAndRegisterDispose(index + 1, Infinity, data))
+                    }
+                }
+            })
+            return {
+                found,
+                dispose
+            }
+        }
+
+        function searchAndRegisterDispose(startIndex: number, limit=Infinity, data?:Atom<number>) {
+            const disposes = autorunDisposes.splice(startIndex, limit)
+            disposes.forEach(dispose => dispose())
+
+            for(let i = startIndex; i < Math.min(startIndex + limit, source.data.length); i++) {
+                const {found, dispose} = createAutorun(i, data)
+                autorunDisposes.push(dispose)
+                if (found) {
+                    return i
+                }
+            }
+
+            return -1
+        }
+
+        function checkOne(index: number, data:Atom<number>) {
+            autorunDisposes[index] = createAutorun(index, data).dispose
+        }
+
+
         return computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-                return source.data.findIndex((item, index) => {
-                    if (matchFn(item)) {
-                        foundIndex = index
-                        return true
-                    }
-                    return false
-                })
+                return searchAndRegisterDispose(0, Infinity)
             },
             function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
                 triggerInfos.forEach((triggerInfo) => {
                     const { method , argv  ,key } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
-                    let startFindingIndex = -1
+                    let startFindingIndex = Infinity
 
                     if (method === 'splice') {
                         const startIndex = argv![0] as number
-                        if (foundIndex >= startIndex) {
+                        // 可能新增了更小的能找到的，都从 startIndex 开始重新算。
+                        debugger
+                        if (this.data.raw == -1 || startIndex <= this.data.raw) {
                             startFindingIndex = startIndex
                         }
 
                     } else {
                         // explicit key change
-                        if (foundIndex === key) {
+                        if (this.data.raw === key) {
+                            // 刚好把找到的弄没了
                             startFindingIndex = key as number
+                        } else if((key as number) < this.data.raw) {
+                            // 快速验证 这一个是不是新的 match，如果是就替换，index 变小，如果不是就没影响。
+                            checkOne(key as number, this.data)
                         }
                     }
 
-                    if (startFindingIndex !== -1) {
-                        foundIndex = -1
-                        for (let i = startFindingIndex; i < source.data.length; i++) {
-                            if (matchFn(source.data[i]!)) {
-                                foundIndex = i
-                                data(foundIndex)
-                                return
-                            }
-                        }
-
-                        data(foundIndex)
+                    // 需要重找
+                    if (startFindingIndex !== Infinity) {
+                        data(searchAndRegisterDispose(startFindingIndex, Infinity, this.data))
                     }
-
                 })
+            },
+            true,
+            {
+                onDestroy() {
+                    autorunDisposes.forEach(dispose => dispose())
+                    autorunDisposes = []
+                }
             }
         )
     }
 
     filter(filterFn: (item:T) => boolean): RxList<T> {
-        const source = this
-        return new RxList(
-            function computation(this: RxList<T>) {
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-
-                // autoTrack filter 的过程，如果依赖了其他的 reactive 对象，后面在 applyPatch 的时候就要 return  false 走全量计算。
-                this.autoTrack()
-                const result = source.data.filter(filterFn)
-                this.resetAutoTrack()
-                return result
-            },
-            function applyPatch(this: RxList<T>, _data, triggerInfos) {
-                const shouldRecompute = triggerInfos.some((triggerInfo) => {
-                  return triggerInfo.source !== source || !(triggerInfo.type === TriggerOpTypes.METHOD || triggerInfo.type === TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-                })
-
-                // explicit return false 表示要重算
-                if (shouldRecompute) return false
-
-                triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key, oldValue, methodResult} = triggerInfo
-                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
-
-                    // TODO 在删除大量数据的时候，直接重新执行更快？
-                    if (method === 'splice') {
-                        const deleteItems = methodResult as T[] || []
-                        deleteItems.forEach((item) => {
-                            if (this.data.includes(item)) {
-                                this.splice(this.data.indexOf(item), 1)
-                            }
-                        })
-                        const newItemsInArgs = argv!.slice(2)
-                        newItemsInArgs.forEach((item) => {
-                            if(filterFn(item)) {
-                                this.push(item)
-                            }
-                        })
-                    } else {
-                        // explicit key change
-                        const index = key as number
-                        const item = source.data[index]
-                        if (filterFn(item)) {
-                            this.push(item)
-                        }
-                        if (this.data.includes(oldValue as T)) {
-                            this.splice(this.data.indexOf(oldValue as T), 1)
-                        }
-                    }
-                })
+        const filtered = new RxList<T>([])
+        const mapList = this.map((item, _, {onCleanup}) => {
+            const remove = () => {
+                const index =  filtered.data.indexOf(item)
+                if (index !== -1) {
+                    filtered.splice(index, 1)
+                }
             }
-        )
+
+            return computed(({lastValue} ) => {
+                const matched = filterFn(item)
+                if (matched) {
+                    if (!lastValue.raw) filtered.push(item)
+                } else {
+                    // 第一次没匹配上不需要执行 remove，节省一下性能。
+                    if (lastValue.raw === true) remove()
+                }
+                return matched
+            }, undefined, true, {
+                onDestroy() {
+                    remove()
+                }
+            })
+        }, { ignoreIndex: true})
+
+        filtered.on('destroy', () => mapList.destroy())
+
+        return filtered
     }
     every(fn: (item:T) => boolean): Atom<boolean> {
-        const source = this
-        let firstMismatchIndex = Infinity
-
-        return computed(
-            function computation(this: Computed){
-                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-
-                // autoTrack filter 的过程，如果依赖了其他的 reactive 对象，后面在 applyPatch 的时候就要 return  false 走全量计算。
-                this.autoTrack()
-                const result =  source.data.every((item, i) => {
-                    const matched = fn(item)
-                    if (!matched) {
-                        firstMismatchIndex = i
-                    }
-                    return matched
-                })
-                this.resetAutoTrack()
-                return result
-            },
-            function applyPatch(this:Computed, data: Atom<boolean>, triggerInfos: TriggerInfo[]) {
-                triggerInfos.forEach((triggerInfo) => {
-                    const { source: triggerSource, method , argv  ,key, newValue} = triggerInfo
-                    // 如果是 match fn 变化了，就直接重算
-                    if (triggerSource !== source) return false
-
-                    assert(!!(method === 'splice' || key), 'trigger info has no method and key')
-                    if (method === 'splice') {
-                        const [startIndex, length, ...newItems] = argv!
-                        if (startIndex > firstMismatchIndex) {
-                            // 在第一个匹配项之后的变化，对结果没有影响
-                            return
-                        } else {
-                            // 修改是在第一个 mismatch 的前面
-                            const lastDeletedIndex = length === 0 ? -1 : startIndex + length - 1
-                            if (lastDeletedIndex < firstMismatchIndex) {
-                                // 遍历所有的 newItems，如果有新的不匹配项，就更新 firstMismatchIndex
-                                for (let i = 0; i < newItems.length; i++) {
-                                    if (!fn(newItems[i])) {
-                                        firstMismatchIndex = startIndex + i
-                                        data(false)
-                                        return
-                                    }
-                                }
-                            } else {
-                                // 修改的部分涵盖了第一个 mismatch，从 startIndex 开始完后重新查找
-                                firstMismatchIndex = Infinity
-                                for (let i = startIndex; i < source.data.length; i++) {
-                                    if (!fn(source.data[i])) {
-                                        firstMismatchIndex = i
-                                    }
-                                }
-                                data(firstMismatchIndex === Infinity)
-
-                            }
-                        }
-                    } else {
-                        // explicit key change
-                        const index = key as number
-                        if (index > firstMismatchIndex) {
-                            // 在第一个匹配项之后的变化，对结果没有影响
-                            return
-                        } else if (index < firstMismatchIndex) {
-                            // 出现了新的更前面的 match
-                            if (!fn(newValue as T)) {
-                                firstMismatchIndex= index
-                                data(false)
-                                return
-                            }
-                        } else {
-                            // 修改的就是第一个不匹配的
-                            if (fn(newValue as T)) {
-                                // 变成匹配了，继续去寻找第一个不匹配的了。
-                                firstMismatchIndex = Infinity
-                                for(let i = index + 1; i < source.data.length; i++) {
-                                    if (!fn(source.data[i])) {
-                                        firstMismatchIndex = i
-                                        break
-                                    }
-                                }
-                            }
-                            data(firstMismatchIndex === Infinity)
-                        }
-                    }
-                })
+        const some = this.some((item) => !fn(item))
+        return computed(() => {
+            return !some()
+        }, undefined, true, {
+            onDestroy() {
+                destroyComputed(some)
             }
-        )
+        })
     }
-    any(fn: (item:T) => boolean) : Atom<boolean>{
-        return computed(() => !this.every((item:T) => !fn(item))())
+    some(fn: (item:T) => boolean) : Atom<boolean>{
+        const index = this.findIndex(fn)
+        return computed(() => {
+            return index() != -1
+        }, undefined, true, {
+            onDestroy() {
+                destroyComputed(index)
+            }
+        })
     }
     groupBy<K>(getKey: (item: T) => K) {
         const source = this
