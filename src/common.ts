@@ -9,14 +9,14 @@ export function autorun(fn: (context: GetterContext) => any, scheduleRerun?: Dir
     }
 }
 
-export function once(fn:() => any) {
+export function once(fn:() => any, scheduleRerun?: DirtyCallback) {
     let stopFn: () => any
     let instance:Computed|undefined = new Computed(() => {
         const shouldStop = fn()
         if (shouldStop) {
             stopFn!()
         }
-    }, undefined, true)
+    }, undefined, scheduleRerun || true)
 
     stopFn = () => {
         instance?.destroy()
