@@ -29,5 +29,5 @@ export {RxSet} from './RxSet'
 export * from './RxTime'
 export {AsyncRxSlice} from "./AsyncRxSlice.js";
 export {ManualCleanup} from "./manualCleanup.js";
-export {autorun} from "./common";
+export {autorun, once} from "./common";
 export * from './debug.js'
