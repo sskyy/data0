@@ -470,7 +470,6 @@ export class RxList<T> extends Computed {
                     if (method === 'splice') {
                         const startIndex = argv![0] as number
                         // 可能新增了更小的能找到的，都从 startIndex 开始重新算。
-                        debugger
                         if (this.data.raw == -1 || startIndex <= this.data.raw) {
                             startFindingIndex = startIndex
                         }
@@ -629,7 +628,6 @@ export class RxList<T> extends Computed {
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     if (method === 'splice') {
-                        debugger
                         const deleteItems = methodResult as T[] || []
                         deleteItems.forEach((item) => {
                             const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(item) : item[inputIndexKey]
@@ -736,11 +734,9 @@ export class RxList<T> extends Computed {
         this.length = computed(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
-                debugger
                 return source.data!.length
             },
             function applyPatch(this: Computed, data: Atom<number>){
-                debugger
                 data(source.data.length)
             }
         )

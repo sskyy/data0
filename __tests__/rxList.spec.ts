@@ -279,7 +279,6 @@ describe('RxList', () => {
         i2.score(4)
         expect(found()).toBe(0)
 
-        debugger
         i1.score(1)
         expect(found()).toBe(1)
     })
