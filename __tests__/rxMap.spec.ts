@@ -1,6 +1,7 @@
 import {describe, expect, test} from "vitest";
 import {RxMap} from "../src/RxMap.js";
 import {RxSet} from "../src/RxSet";
+import {computed, RxList} from "../src";
 
 
 describe('RxMap', () => {
@@ -53,6 +54,13 @@ describe('RxMap', () => {
         expect(values.toArray()).toMatchObject([])
     })
 
+    test('get values of lazy RxMap', () => {
+        const map = new RxMap({})
+        const values = map.values()
+        map.set('d', 4)
+        expect(values.toArray()).toMatchObject([4])
+    })
+
     test('chained computed', () => {
         const rawEdges = [
             {id: 1, from: '1', to: '2'},
@@ -83,6 +91,38 @@ describe('RxMap', () => {
         //
         selectedEdges.add(newEdge)
         expect(selectedValues.toArray().map(v => v())).toMatchObject([true, true, true])
+    })
+
+    test('derived from RxList.indexBy', () => {
+        const source = new RxList([{id:1, score:1}, {id:2, score:2}, {id:3, score:3}])
+        const indexById = source.indexBy('id')
+
+        const keys = indexById.keys()
+        expect(keys.toArray()).toMatchObject([1, 2, 3])
+        const values = indexById.values()
+        expect(values.toArray()).toMatchObject([{id:1, score:1}, {id:2, score:2}, {id:3, score:3}])
+    })
+
+    test('derived from RxList.indexBy with empty source', () => {
+        const source = new RxList<{id:number, score:number}>([])
+        const indexById = source.indexBy('id')
+        const keys = indexById.keys()
+        const values = indexById.values()
+        let recomputed = 0
+
+        computed(() => {
+            recomputed++
+            values.forEach(v => v)
+        })
+
+        expect(indexById.entries().toArray()).toMatchObject([])
+        expect(recomputed).toBe(1)
+
+        source.splice(0, 0, {id:1, score:1}, {id:2, score:2}, {id:3, score:3})
+        expect(keys.toArray()).toMatchObject([1, 2, 3])
+        expect(values.toArray()).toMatchObject([{id:1, score:1}, {id:2, score:2}, {id:3, score:3}])
+
+        expect(recomputed).toBe(2)
     })
 
 })

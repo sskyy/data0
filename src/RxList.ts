@@ -180,6 +180,8 @@ export class RxList<T> extends Computed {
 
     // reactive methods and attr
     map<U>(mapFn: (item: T, index: Atom<number>, context:MapContext) => U, options?: MapOptions<U>) : RxList<U>{
+        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
+
         const source = this
         const useIndex = mapFn.length>1 && !options?.ignoreIndex
         const useContext = mapFn.length>2

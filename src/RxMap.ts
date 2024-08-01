@@ -34,11 +34,10 @@ export class RxMap<K, V> extends Computed{
             this.data = new Map()
         }
 
-        this.createComputedMetas()
-
         if (this.getter) {
             this.run([], true)
         }
+        this.createComputedMetas()
     }
     replace = (source: EntryType|PlainObjectType|Map<K,V>) => {
         let entries: EntryType
