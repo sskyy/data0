@@ -98,8 +98,8 @@ describe('computed life cycle', () => {
             autorun(() => {
                 b()
                 innerRuns ++
-            })
-        })
+            },true)
+        }, true)
 
         expect(innerRuns).toBe(1)
         b(1)
@@ -137,7 +137,7 @@ describe('computed return object with internal side effect', () => {
                 valueWithSideEffect.destroy()
             })
             return valueWithSideEffect
-        })
+        },true)
 
         expect(destroyCalled).toBe(0)
         run(2)

@@ -111,7 +111,7 @@ export class RxTime {
                  }, timeoutTime)
 
              }
-        })
+        },true)
 
         this.data = result
 

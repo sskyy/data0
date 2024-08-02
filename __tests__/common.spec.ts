@@ -20,7 +20,7 @@ describe('common utils', () => {
         autorun(() => {
             history.push(computed1())
             // history.push(atom1())
-        })
+        },true)
 
         expect(history).toMatchObject([null])
         atom1(1)
@@ -33,7 +33,7 @@ describe('common utils', () => {
         const history: number[] = []
         autorun(() => {
             history.push(list.length())
-        })
+        },true)
 
         list.push(1)
         expect(history).toMatchObject([0, 1])
@@ -50,7 +50,7 @@ describe('common utils', () => {
             if(atom1() > 5) {
                 return true
             }
-        })
+        },true)
 
         expect(onceRunsWithValue).toMatchObject([0])
         atom1(1)

@@ -429,7 +429,7 @@ export class RxList<T> extends Computed {
                         data(searchAndRegisterDispose(index + 1, Infinity, data))
                     }
                 }
-            })
+            }, true)
             return {
                 found,
                 dispose

@@ -124,7 +124,15 @@ export class Computed extends ReactiveEffect {
     public isGeneratorGetter: boolean = false
     public isAsyncPatch: boolean = false
     public isGeneratorPatch: boolean = false
-    constructor(public getter?: GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback|true, public callbacks?: CallbacksType, public skipIndicator?: SkipIndicator, public dataType: ComputedDataType = 'atom') {
+    constructor(
+        public getter?: GetterType,
+        public applyPatch?: ApplyPatchType,
+        scheduleRecompute?: DirtyCallback|true,
+        public callbacks?: CallbacksType,
+        public skipIndicator?: SkipIndicator,
+        public dataType: ComputedDataType = 'atom',
+        public preventEffectSession = false
+    ) {
         super(getter)
         this.status = atom(typeof getter === 'function' ? STATUS_DIRTY : STATUS_CLEAN)
 
@@ -312,8 +320,8 @@ export class Computed extends ReactiveEffect {
 
         if (immediate || this.immediate || this.status.raw > STATUS_DIRTY) {
             if (this.status.raw > STATUS_DIRTY && !this.isAsync) {
-                throw new Error('')
-                console.warn('detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop')
+                throw new Error('detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop')
+                // console.warn('detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop')
             }
             this.recompute()
         } else {
@@ -367,8 +375,9 @@ export class Computed extends ReactiveEffect {
             return
         }
 
-
-        Notifier.instance.createEffectSession()
+        if (!this.preventEffectSession) {
+            Notifier.instance.createEffectSession()
+        }
 
         this.replaceData(result)
         this.status(STATUS_CLEAN)
@@ -376,7 +385,9 @@ export class Computed extends ReactiveEffect {
         if (this.applyPatch) {
             this.phase = PATCH_PHASE
         }
-        Notifier.instance.digestEffectSession()
+        if (!this.preventEffectSession) {
+            Notifier.instance.digestEffectSession()
+        }
         this.resolveCleanPromise?.()
         this.dispatch('clean')
 

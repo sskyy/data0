@@ -386,7 +386,7 @@ describe('RxList', () => {
             forEachRuns++
             list.forEach((item) => {
             })
-        })
+        }, true)
         expect(forEachRuns).toBe(1)
 
         list.push(4)
@@ -781,7 +781,7 @@ describe('RxList chained computed', () => {
             tasksWithSelection.forEach((i) => {
                 selectedList.push(i.selected())
             })
-        })
+        }, true)
 
         expect(selectedList).toMatchObject([])
         await new Promise(resolve => setTimeout(resolve, 400))
@@ -806,12 +806,12 @@ describe('RxList chained computed', () => {
         let isAllSelected = false
         autorun(() => {
             isAllSelected = allSelected()
-        })
+        },true)
 
         let isAllSelected2 = false
         autorun(function(){
             isAllSelected2 = allSelected()
-        })
+        },true)
 
         expect(isAllSelected).toBe(false)
         expect(isAllSelected2).toBe(false)
