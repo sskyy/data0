@@ -13,7 +13,7 @@ export default defineConfig({
             // the proper extensions will be added
             fileName: 'data0',
         },
-        sourcemap: 'inline',
+        sourcemap: true,
     },
     plugins: [dts({
         tsconfigPath: resolve(__dirname, 'tsconfig.production.json'),
