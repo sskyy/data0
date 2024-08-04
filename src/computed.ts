@@ -105,6 +105,7 @@ export class Computed extends ReactiveEffect {
     runtEffectId?: string
     asyncStatus?: Atom<null | boolean | string>
     status: Atom<StatusType>
+
     // status: Atom<StatusType> = atom(STATUS_CLEAN)
     triggerInfos: TriggerInfo[] = []
     scheduleRecompute?: DirtyCallback
@@ -124,6 +125,7 @@ export class Computed extends ReactiveEffect {
     public isGeneratorGetter: boolean = false
     public isAsyncPatch: boolean = false
     public isGeneratorPatch: boolean = false
+    public updatedAt: Atom<number|undefined> = atom(undefined)
     constructor(
         public getter?: GetterType,
         public applyPatch?: ApplyPatchType,
@@ -389,6 +391,7 @@ export class Computed extends ReactiveEffect {
 
         this.replaceData(result)
         this.status(STATUS_CLEAN)
+        this.updatedAt(new Date().getTime())
 
         if (this.applyPatch) {
             this.phase = PATCH_PHASE
@@ -440,6 +443,7 @@ export class Computed extends ReactiveEffect {
 
         this.inPatch = false
         this.status(STATUS_CLEAN)
+        this.updatedAt(new Date().getTime())
         this.sendTriggerInfos()
         this.dispatch('clean')
         this.resolveCleanPromise?.()
