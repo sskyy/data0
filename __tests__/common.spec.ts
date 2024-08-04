@@ -65,7 +65,7 @@ describe('common utils', () => {
         expect(onceRunsWithValue).toMatchObject([0, 1, 2, 6])
     })
 
-    test('once with scheduler', async () => {
+    test('once has default scheduler', async () => {
         const list = new RxList<{id:number, status:Atom<string>}>([])
         const pendingList = list.filter(item => item.status() === 'pending')
         const processingList = list.filter(item => item.status() === 'processing')
@@ -77,20 +77,18 @@ describe('common utils', () => {
         let stopped = false
         once(() => {
             if (pendingList.length() > 0) {
-                Promise.resolve().then(() => pendingList.at(0)!.status('processing'))
+                // 下一个 task 中触发变化。一定可以
+                // Promise.resolve().then(() => pendingList.at(0)!.status('processing'))
+                pendingList.at(0)!.status('processing')
             } else {
                 if (processingList.length() ==0) {
                     stopped = true
                     return true
                 }
             }
-        }, (rerun) => {
-            setTimeout(() => {
-                rerun()
-            }, 100)
         })
 
-        expect(pendingList.length.raw).toBe(1)
+        // expect(pendingList.length.raw).toBe(1)
         await wait(1)
         expect(pendingList.length.raw).toBe(0)
         expect(processingList.length.raw).toBe(1)
@@ -101,9 +99,8 @@ describe('common utils', () => {
         expect(processingList.length.raw).toBe(0)
         expect(stopped).toBe(false)
 
-        await new Promise(resolve => setTimeout(resolve, 200))
+        await wait(100)
         expect(stopped).toBe(true)
-
     })
 })
 

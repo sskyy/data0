@@ -1,7 +1,7 @@
 import {createDebug, createDebugWithName, getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, toRawObject, UnwrapReactive} from './reactive'
-import {isAsync, isGenerator, nextTick, replace, uuid, warn} from "./util";
+import {assert, isAsync, isGenerator, nextTick, replace, uuid, warn} from "./util";
 import {Atom, atom, isAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
@@ -312,20 +312,28 @@ export class Computed extends ReactiveEffect {
         }
 
 
+        // 循环检测，是 sync computed 已经在重算中了又立刻重算，说明重算中又有触发依赖变更的代码。
+        // 要么把依赖变更代码移出去，要么把 computed 用 schedule 延迟一下。
+        assert(
+            !((immediate || this.immediate) && this.status.raw > STATUS_DIRTY && !this.isAsync),
+            'detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop'
+        )
+
         // 哪些情况可能出现 recomputing 过程中又触发了 run :
         // 1. 在 lazy recompute 模式下，可能出现依赖是一个 atomComputed，
         //  触发它的重算时会使得 atom trigger 重新触发 run，这个时候我们已经在 recomputing 了，
         //  只需要获取 info 就行了，不需要再次触发 recompute/schedule 了。
         // 2. 在 async 模式下，任何依赖都可以再触发 recompute。
-
-        if (immediate || this.immediate || this.status.raw > STATUS_DIRTY) {
-            if (this.status.raw > STATUS_DIRTY && !this.isAsync) {
-                throw new Error('detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop')
-                // console.warn('detect recompute triggerred in sync recompute, move trigger code to next tick or it may lead to infinite loop')
-            }
+        // (强制)立刻执行 或者 已经在 recompute 中的 async, 会立刻重算。
+        if (immediate || this.immediate || (this.status.raw > STATUS_DIRTY && this.isAsync)) {
             this.recompute()
         } else {
-            this.scheduleRecompute!(this.recompute, this.recursiveMarkDirty)
+            // CAUTION 如果是在 sync 的 recompute 阶段触发的。
+            //  例如在 autorun/once 里面可能会既依赖 computed, 产生了 computed 变化，用户自己系统通过这种方式达到一个平衡状态。
+            //   例如 不断将一个 pending list 中的数据取出来变成 processing。
+            //   这时候的第一次 run 会变成 clean，所以 schedule 的 recompute 一定要是 forceRecompute 才能继续执行。
+            const recompute = (this.status.raw > STATUS_DIRTY && !this.isAsync) ? () => this.recompute(true) : this.recompute
+            this.scheduleRecompute!(recompute, this.recursiveMarkDirty)
         }
 
         // 如果不是已经开始重算或者立刻开始计算，那么从标记为脏也要创建 cleanPromise
