@@ -1,6 +1,6 @@
-import {Atom, atom, autorun, computed, RxList} from "../src";
+import {Atom, atom, autorun, computed, RxList, STATUS_CLEAN, STATUS_RECOMPUTING} from "../src";
 import {describe, expect, test} from "vitest";
-import {once} from "../src/common";
+import {once, oncePromise} from "../src/common";
 
 function wait(time: number) {
     return new Promise(resolve => {
@@ -101,6 +101,24 @@ describe('common utils', () => {
 
         await wait(100)
         expect(stopped).toBe(true)
+    })
+
+    test('oncePromise', async () => {
+        const list = new RxList(async () => {
+            await wait(100)
+            return [1, 2, 3]
+        })
+
+        expect(list.status()).toBe(STATUS_RECOMPUTING)
+
+        let onceRuns = 0
+        await oncePromise(() => {
+            onceRuns++
+            return list.status() === STATUS_CLEAN
+        })
+
+        expect(onceRuns).toBe(2)
+        expect(list.status()).toBe(STATUS_CLEAN)
     })
 })
 

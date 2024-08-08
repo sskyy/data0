@@ -35,3 +35,16 @@ export function once(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) 
     // 也支持外部手动 stop
     return stopFn
 }
+
+export function oncePromise(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) {
+    return new Promise((resolve, reject) => {
+        // TODO 出错？
+        once(() => {
+            const result = fn()
+            if (result) {
+                resolve(result)
+            }
+            return result
+        }, scheduleRerun)
+    })
+}
