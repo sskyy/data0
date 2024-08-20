@@ -428,7 +428,7 @@ export class RxList<T> extends Computed {
 
                     if (data && data.raw === index) {
                         // 继续往后找吧
-                        data(searchAndRegisterDispose(index + 1, Infinity, data))
+                        data(searchAndRegisterDispose(index + 1, Infinity))
                     }
                 }
             }, true)

@@ -538,7 +538,6 @@ describe('RxList', () => {
         const notEmpty = collections.some(c => c.length() > 0)
         expect(notEmpty()).toBe(false)
 
-        debugger
         collections.at(0)!.push(1)
         expect(notEmpty()).toBe(true)
 
