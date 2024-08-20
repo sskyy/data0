@@ -407,11 +407,13 @@ export class RxList<T> extends Computed {
         // CAUTION 特别注意，这里不要对 autorunDisposes 做中间的部分的 splice，那样 autorun 里面的 index 就不对了。
         //  始终只当成队列来使用。
         let autorunDisposes: Array<()=>any> = []
+        let result: Atom<number>|undefined
 
-
-        function createAutorun(index:number, data?:Atom<number>) {
+        function createAutorun(index:number) {
             let found = false
             const dispose = autorun(() => {
+                // CAUTION 第一次在 computation 调用的时候 result 还没有 initialize，所以只能在这里要用的时候才读。
+                const data = result
                 if (matchFn(source.data[index]!)) {
                     found = true
 
@@ -436,12 +438,12 @@ export class RxList<T> extends Computed {
             }
         }
 
-        function searchAndRegisterDispose(startIndex: number, limit=Infinity, data?:Atom<number>) {
+        function searchAndRegisterDispose(startIndex: number, limit=Infinity) {
             const disposes = autorunDisposes.splice(startIndex, limit)
             disposes.forEach(dispose => dispose())
 
             for(let i = startIndex; i < Math.min(startIndex + limit, source.data.length); i++) {
-                const {found, dispose} = createAutorun(i, data)
+                const {found, dispose} = createAutorun(i)
                 autorunDisposes.push(dispose)
                 if (found) {
                     return i
@@ -451,24 +453,25 @@ export class RxList<T> extends Computed {
             return -1
         }
 
-        function checkOne(index: number, data:Atom<number>) {
-            autorunDisposes[index] = createAutorun(index, data).dispose
+        function checkOne(index: number) {
+            autorunDisposes[index] = createAutorun(index).dispose
         }
 
 
-        return computed(
+        result = computed<number>(
             function computation(this: Computed) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
                 return searchAndRegisterDispose(0, Infinity)
             },
             function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
+                debugger
+
                 triggerInfos.forEach((triggerInfo) => {
                     const { method , argv  ,key } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     let startFindingIndex = Infinity
-
                     if (method === 'splice') {
                         const startIndex = argv![0] as number
                         // 可能新增了更小的能找到的，都从 startIndex 开始重新算。
@@ -483,13 +486,13 @@ export class RxList<T> extends Computed {
                             startFindingIndex = key as number
                         } else if((key as number) < this.data.raw) {
                             // 快速验证 这一个是不是新的 match，如果是就替换，index 变小，如果不是就没影响。
-                            checkOne(key as number, this.data)
+                            checkOne(key as number)
                         }
                     }
 
                     // 需要重找
                     if (startFindingIndex !== Infinity) {
-                        data(searchAndRegisterDispose(startFindingIndex, Infinity, this.data))
+                        data(searchAndRegisterDispose(startFindingIndex, Infinity))
                     }
                 })
             },
@@ -501,6 +504,8 @@ export class RxList<T> extends Computed {
                 }
             }
         )
+
+        return result!
     }
 
     filter(filterFn: (item:T) => boolean): RxList<T> {

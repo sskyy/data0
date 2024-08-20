@@ -529,6 +529,23 @@ describe('RxList', () => {
         expect(anyGT5()).toBe(false)
     })
 
+    test('some with complex internal computed', () => {
+        const collections = new RxList([
+            new RxList<any>([]),
+            new RxList<any>([]),
+        ])
+
+        const notEmpty = collections.some(c => c.length() > 0)
+        expect(notEmpty()).toBe(false)
+
+        debugger
+        collections.at(0)!.push(1)
+        expect(notEmpty()).toBe(true)
+
+        collections.at(0)!.splice(0,1)
+        expect(notEmpty()).toBe(false)
+    })
+
 
     test('groupBy with non-exist key', () => {
         const list = new RxList<{id:number, score: number}>([
