@@ -597,7 +597,12 @@ export class RxList<T> extends Computed {
                             if (!this.data.has(groupKey)) {
                                 this.set(groupKey, new RxList([]))
                             }
-                            this.data.get(groupKey)!.push(item)
+                            // CAUTION 这里并不能真正保证 group 里面的顺序和原来的一致。只能尽量处理首位情况。
+                            if (argv![0] === 0) {
+                                this.data.get(groupKey)!.unshift(item)
+                            } else {
+                                this.data.get(groupKey)!.push(item)
+                            }
                         })
                     } else {
                         // explicit key change
