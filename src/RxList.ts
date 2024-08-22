@@ -31,6 +31,7 @@ type MapContext = {
 }
 
 export class RxList<T> extends Computed {
+    get raw() { return this.data }
     data!: T[]
     trackClassInstance = true
     indexKeyDeps = new Map<number, Dep>()
@@ -52,7 +53,8 @@ export class RxList<T> extends Computed {
         }
         this.createComputedMetas()
     }
-    replaceData(newData: T[]) {
+    // 这里的 newData type 为 any[]，是为了让子类能覆写，实现 replaceData 的时候才进行数据转换。
+    replaceData(newData: any[]) {
         this.splice(0, this.data.length, ...newData)
     }
 
