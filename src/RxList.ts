@@ -182,7 +182,8 @@ export class RxList<T> extends Computed {
 
     // reactive methods and attr
     map<U>(mapFn: (item: T, index: Atom<number>, context:MapContext) => U, options?: MapOptions<U>) : RxList<U>{
-        Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
+        // CAUTION 生成数据结构的方法应该都不 track Iterable_Key。不然可能导致在 computed 里面的 map 方法被反复执行，这算是一种泄露了。
+        // Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
 
         const source = this
         const useIndex = mapFn.length>1 && !options?.ignoreIndex
