@@ -564,8 +564,30 @@ describe('RxList', () => {
         expect(Array.from(grouped.keys().toArray())).toMatchObject(['low', 'high'])
         expect(grouped.get('high')!.toArray()).toMatchObject([{id: 5, score: 5}])
         expect(highList()).toMatchObject([{id: 5, score: 5}])
+    })
 
+    test('groupBy grouped list order align with source', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
 
+        const grouped = list.groupBy(item => item.score > 4 ? 'high' : 'low')
+        expect(Array.from(grouped.keys().toArray())).toMatchObject(['low'])
+
+        list.push({id: 5, score: 5})
+        expect(grouped.get('high')!.toArray()).toMatchObject([{id: 5, score: 5}])
+
+        list.push({id:6, score: 4})
+        expect(grouped.get('low')!.toArray().at(-1)).toMatchObject({id: 6, score: 4})
+
+        list.unshift({id:7, score: 4})
+        expect(grouped.get('low')!.toArray().at(0)).toMatchObject({id: 7, score: 4})
+
+        list.unshift({id:8, score: 5})
+        expect(grouped.get('high')!.toArray().at(0)).toMatchObject({id: 8, score: 5})
     })
 
     // indexBy
