@@ -864,3 +864,110 @@ describe('RxList chained computed', () => {
 
     })
 })
+
+describe('RxList reorder', () => {
+
+    test('reposition', () => {
+        const raw = [1,2,3,4,5]
+        const origin = new RxList([...raw])
+        // 从前往后移动
+        origin.reposition(1, 3)
+        expect(origin.toArray()).toMatchObject([1,3,4,2,5])
+
+        // 往前移动
+        const origin2 = new RxList([...raw])
+        origin2.reposition(3, 1)
+        expect(origin2.toArray()).toMatchObject([1,4,2,3,5])
+
+        // 一次移动多个往后
+        const raw2 = [1,2,3,4,5, 6,7,8,9,10]
+        const origin3 = new RxList([...raw2])
+        origin3.reposition(1, 3, 5)
+        expect(origin3.toArray()).toMatchObject([1,7,8,2,3,4,5,6,9,10])
+
+        // 一次往前移动多个
+        const origin4 = new RxList([...raw2])
+        origin4.reposition(3, 1, 5)
+        expect(origin4.toArray()).toMatchObject([1,4,5,6,7,8,2,3,9,10])
+    })
+
+    test('swap', () => {
+        const raw = [1,2,3,4,5]
+        const origin = new RxList([...raw])
+        origin.swap(1, 3)
+        expect(origin.toArray()).toMatchObject([1,4,3,2,5])
+
+        const origin2 = new RxList([...raw])
+        origin2.swap(3, 1)
+        expect(origin2.toArray()).toMatchObject([1,4,3,2,5])
+    })
+
+    test('sortSelf', () => {
+        const raw = [1,2,3,4,5]
+        const origin = new RxList([...raw])
+        origin.sortSelf((a, b) => a - b)
+        expect(origin.toArray()).toMatchObject([1,2,3,4,5])
+
+        const origin2 = new RxList([...raw])
+        origin2.sortSelf((a, b) => b - a)
+        expect(origin2.toArray()).toMatchObject([5,4,3,2,1])
+
+        // 乱序的情况
+        const origin3 = new RxList([3,1,5,2,4])
+        origin3.sortSelf((a, b) => a - b)
+        expect(origin3.toArray()).toMatchObject([1,2,3,4,5])
+    })
+
+    test('list to map with index atom', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const mapWithIndex = list.map((item, index) => [item, index]).toMap()
+        const entries = mapWithIndex.entries()
+        let mapRuns = 0
+        const mappedEntries = entries.map(([item, index]) => {
+            mapRuns++
+            return [item, index()]
+        })
+        expect(mappedEntries.toArray()).toMatchObject([
+            [1, 0],
+            [2, 1],
+            [3, 2],
+            [4, 3],
+            [5, 4]
+        ])
+        expect(mapRuns).toBe(5)
+
+        list.sortSelf((a, b) => b - a)
+        expect(mappedEntries.toArray()).toMatchObject([
+            [1, 4],
+            [2, 3],
+            [3, 2],
+            [4, 1],
+            [5, 0]
+        ])
+        //中间 3 没变，所有只有 4 个重新计算
+        expect(mapRuns).toBe(9)
+
+        debugger
+        list.swap(1, 3)
+        expect(mapRuns).toBe(11)
+        expect(mappedEntries.toArray()).toMatchObject([
+            [1, 4],
+            [2, 1],
+            [3, 2],
+            [4, 3],
+            [5, 0]
+        ])
+
+        expect(list.toArray()).toMatchObject([5,2,3,4,1])
+        list.reposition(1, 3)
+        expect(list.toArray()).toMatchObject([5,3,4,2,1])
+        expect(mapRuns).toBe(14)
+        expect(mappedEntries.toArray()).toMatchObject([
+            [1, 4],
+            [2, 3],
+            [3, 1],
+            [4, 2],
+            [5, 0]
+        ])
+    })
+})

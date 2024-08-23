@@ -30,6 +30,8 @@ type MapContext = {
     onCleanup: (fn: MapCleanupFn) => void
 }
 
+type Order = [number, number]
+
 export class RxList<T> extends Computed {
     get raw() { return this.data }
     data!: T[]
@@ -131,7 +133,72 @@ export class RxList<T> extends Computed {
 
         return oldValue
     }
+    reorder(newOrder: Order[]) {
+        const originIndexes = newOrder.map(item => item[0])
+        const newIndexes = newOrder.map(item => item[1])
+        const oldIndexAtoms = this.atomIndexes ? originIndexes.map(index => this.atomIndexes![index]) : null
+        // 要不要触发 set 语义呢？理论上是需要的
+        const originItems = originIndexes.map(index => this.data[index])
+        const originItemsInNewIndexes = newIndexes.map(index => this.data[index])
+        newIndexes.forEach((newIndex, i) => {
+            this.data[newIndex]= originItems[i]
+            if (this.indexKeyDeps?.size) {
+                this.trigger(this, TriggerOpTypes.SET, { key: newIndex, newValue: originItems[i], oldValue: originItemsInNewIndexes[i]})
+            }
+            if (oldIndexAtoms) {
+                oldIndexAtoms[i]?.(newIndex)
+                this.atomIndexes![newIndex] = oldIndexAtoms[i]!
+            }
+        })
 
+        this.trigger(this, TriggerOpTypes.METHOD, { method:'reorder', key: ITERATE_KEY, argv: [newOrder] })
+    }
+    reposition(start:number, newStart:number, limit:number = 1 ) {
+        assert(start >= 0 && start+limit < this.data.length, 'start index out of range')
+        assert(newStart >= 0 && newStart+limit < this.data.length, 'newStart index out of range')
+        // 1. 如果是往前移动，新位置到原来为止中间的元素都要往后移动
+        // 2. 如果是往后移动，原来位置到新位置为止中间的元素都要往前移动
+        if (start === newStart) return
+        const newOrder:Order[] = []
+        for (let i = 0; i < limit; i++) {
+            newOrder.push([start + i, newStart + i])
+        }
+
+        // 往前
+        if (newStart < start) {
+            for(let i = newStart; i < start; i++) {
+                newOrder.push([i, i + limit])
+            }
+        } else {
+            // 往后
+            for(let i = start + limit; i < newStart+limit; i++) {
+                newOrder.push([i, i - limit])
+            }
+        }
+        return this.reorder(newOrder)
+    }
+    swap(start: number, newStart:number, limit:number = 1) {
+        assert(start >= 0 && start+limit < this.data.length, 'start index out of range')
+        assert(newStart >= 0 && newStart+limit < this.data.length, 'newStart index out of range')
+        const newOrder:Order[] = []
+        for (let i = 0; i < limit; i++) {
+            newOrder.push([start + i, newStart + i])
+            newOrder.push([newStart + i, start + i])
+        }
+        return this.reorder(newOrder)
+    }
+    sortSelf(compare: (a: T, b:T)=> number) {
+        const wrappedItems = this.data.map(value => ({value}))
+        const itemToIndex = new Map(wrappedItems.map((item, index) => [item, index]))
+        const newItems = wrappedItems.sort((a, b) => compare(a.value, b.value))
+        const itemToNewIndex = new Map(newItems.map((item, index) => [item, index]))
+        const newOrder: Order[] = newItems.map(item => [itemToIndex.get(item)!, itemToNewIndex.get(item)!])
+        return this.reorder(newOrder)
+    }
+    // TODO 返回一个新的已排好序的元素，对于新增元素的情况，可以使用二分快速插入。
+    // sort() {
+    //
+    // }
     // CAUTION 这里手动 track index dep 的变化，是为了在 splice 的时候能手动去根据订阅的 index dep 触发，而不是直接触发所有的 index key。
     at(index: number): T|undefined{
         const dep = Notifier.instance.track(this, TrackOpTypes.GET, index)
@@ -468,8 +535,6 @@ export class RxList<T> extends Computed {
                 return searchAndRegisterDispose(0, Infinity)
             },
             function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
-                debugger
-
                 triggerInfos.forEach((triggerInfo) => {
                     const { method , argv  ,key } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
@@ -591,19 +656,40 @@ export class RxList<T> extends Computed {
                                 this.data.get(groupKey)!.splice(this.data.get(groupKey)!.data.indexOf(item), 1)
                             }
                         })
+
+                        // 如果是从头插入，要逆序遍历 unshift 才能保持正确顺序
                         const newItemsInArgs = argv!.slice(2)
+                        if (argv![0] === 0) {
+                            newItemsInArgs.reverse()
+                        }
+
+                        // 先分好组，再一次性操作，可以合并 info，还能间接提高 dom 操作性能。
+                        const newGroupedItems = new Map<any, T[]>()
                         newItemsInArgs.forEach((item) => {
                             const groupKey = getKey(item)
-                            if (!this.data.has(groupKey)) {
-                                this.set(groupKey, new RxList([]))
+                            if (!newGroupedItems.has(groupKey)) {
+                                newGroupedItems.set(groupKey,[])
                             }
                             // CAUTION 这里并不能真正保证 group 里面的顺序和原来的一致。只能尽量处理首位情况。
                             if (argv![0] === 0) {
-                                this.data.get(groupKey)!.unshift(item)
+                                newGroupedItems.get(groupKey)!.unshift(item)
                             } else {
-                                this.data.get(groupKey)!.push(item)
+                                newGroupedItems.get(groupKey)!.push(item)
                             }
                         })
+
+                        newGroupedItems.forEach((group, key) => {
+                            if (!this.data.has(key)) {
+                                this.set(key, new RxList(group))
+                            } else {
+                                if (argv![0] === 0) {
+                                    this.data.get(key)!.unshift(...group)
+                                } else {
+                                    this.data.get(key)!.push(...group)
+                                }
+                            }
+                        })
+
                     } else {
                         // explicit key change
                         if (oldValue) {
