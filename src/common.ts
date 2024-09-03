@@ -19,12 +19,19 @@ export function autorun(fn: (context: GetterContext) => any, scheduleRerun: Dirt
 
 export function once(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) {
     let stopFn: () => any
+    let stopped = false
     let instance:Computed|undefined = new Computed(() => {
+        // 双重保险。防止在 nextJob 真正 destroy 之前又触发了。
+        if(stopped) return
         const shouldStop = fn()
         if (shouldStop) {
-            stopFn!()
+            stopped = true
+            // CAUTION 一定不能立刻 stop，因为立刻 stop 会删除自己身上的 deps 等数据.
+            //  不能正确完成 completeTracking。这会使得 dep 上的 n/w 计数无法正确清清除。
+            nextJob(() => stopFn!())
         }
     }, undefined, scheduleRerun, undefined, undefined, undefined, true)
+    // }, undefined, true, undefined, undefined, undefined, true)
 
     stopFn = () => {
         instance?.destroy()

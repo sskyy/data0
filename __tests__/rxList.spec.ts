@@ -1,6 +1,6 @@
 import {createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {Atom, computed} from "../src/index.js";
+import {Atom, computed, once} from "../src/index.js";
 import {autorun} from "../src/common";
 import {atom} from "../src/atom.js";
 import {RxSet} from "../src/RxSet";
@@ -947,7 +947,6 @@ describe('RxList reorder', () => {
         //中间 3 没变，所有只有 4 个重新计算
         expect(mapRuns).toBe(9)
 
-        debugger
         list.swap(1, 3)
         expect(mapRuns).toBe(11)
         expect(mappedEntries.toArray()).toMatchObject([
@@ -969,5 +968,34 @@ describe('RxList reorder', () => {
             [4, 2],
             [5, 0]
         ])
+    })
+})
+
+describe('rxList metas', () => {
+    test('run once on length', async () => {
+        const list = new RxList<number>([1,2,3,4,5])
+
+        let stop:any = once(() => {
+            if (list.length() !== 5) {
+                stop = undefined
+                return true
+            }
+        })
+        list.pop()
+        expect(stop).toBeDefined()
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(stop).toBe(undefined)
+
+        stop = once(() => {
+            if (list.length() !== 4) {
+                stop = undefined
+                return true
+            }
+        })
+        list.pop()
+        expect(stop).toBeDefined()
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(list.length()).toBe(3)
+        expect(stop).toBe(undefined)
     })
 })

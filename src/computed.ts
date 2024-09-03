@@ -572,6 +572,7 @@ export class Computed extends ReactiveEffect {
         Notifier.instance.resetTracking()
     }
     destroy(ignoreChildren = false) {
+        assert(ReactiveEffect.activeScopes.at(-1)!== this, 'cannot destroy an active effect inside self')
         this.lastCleanupFn?.()
         delete this.lastCleanupFn
         super.destroy( ignoreChildren)
