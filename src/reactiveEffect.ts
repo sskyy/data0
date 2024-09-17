@@ -81,8 +81,8 @@ export class ReactiveEffect extends ManualCleanup {
 
     }
 
-    prepareTracking(isFirst = false) {
-        if (!this.isAsync) {
+    prepareTracking(isFirst = false, isAsync = this.isAsync) {
+        if (!isAsync) {
             Notifier.trackOpBit = 1 << ++Notifier.instance.effectTrackDepth
             ReactiveEffect.activeScopes.push(this)
 
@@ -107,8 +107,8 @@ export class ReactiveEffect extends ManualCleanup {
         }
     }
 
-    completeTracking(isLast = false) {
-        if (!this.isAsync) {
+    completeTracking(isLast = false, isAsync = this.isAsync) {
+        if (!isAsync) {
             if (Notifier.instance.effectTrackDepth <= maxMarkerBits) {
                 finalizeDepMarkers(this)
             }

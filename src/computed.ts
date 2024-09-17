@@ -501,14 +501,17 @@ export class Computed extends ReactiveEffect {
         }
     }
     runSimplePatch() {
+        this.prepareTracking(false, true)
         this.pauseAutoTrack()
         const patchResult = (this.applyPatch as SimpleApplyPatchType).call(this, this.data, this.triggerInfos)
         this.resetAutoTrack()
+        this.completeTracking(false, true)
         this.triggerInfos.length = 0
         return patchResult
     }
     async runAsyncPatch() {
         let patchResult
+        this.prepareTracking(false,true)
         while(this.triggerInfos.length) {
             const waitingTriggerInfos = [...this.triggerInfos]
             this.triggerInfos.length = 0
@@ -520,6 +523,7 @@ export class Computed extends ReactiveEffect {
                 break
             }
         }
+        this.completeTracking(false, true)
         return patchResult
     }
     async runGeneratorPatch() {
@@ -533,10 +537,12 @@ export class Computed extends ReactiveEffect {
             this.asyncStatus!(true)
             patchResult = await this.runGenerator(generator,
                 (isFirst) => {
+                    this.prepareTracking(false, true)
                     this.pauseAutoTrack()
                 },
                 (isLast) => {
                     this.resetAutoTrack()
+                    this.completeTracking(false, true)
                 }
             )
             this.asyncStatus!(false)
