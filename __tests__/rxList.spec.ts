@@ -87,6 +87,43 @@ describe('RxList', () => {
         expect(mapRuns).toBe(8)
     })
 
+    test('map to another list with inner computed each', () => {
+        const list = new RxList<any>([{
+            record: atom({name:'a'})
+        }, {
+            record: atom({name:'b'}),
+        }])
+        let mapRuns = 0
+
+        const list2 = list.map((item) => {
+            mapRuns++
+            const record = item.record()
+            return record.name
+        })
+
+        expect(list2.toArray()).toMatchObject(['a', 'b'])
+        expect(mapRuns).toBe(2)
+
+        list.at(0).record({name: 'c'})
+        expect(list2.toArray()).toMatchObject(['c', 'b'])
+        expect(mapRuns).toBe(3)
+
+        list.at(1).record({name: 'd'})
+        expect(list2.toArray()).toMatchObject(['c', 'd'])
+        expect(mapRuns).toBe(4)
+
+        // 新加入的元素也要能响应
+        list.unshift({record: atom({name: 'e'})})
+        list.unshift({record: atom({name: 'f'})})
+
+        expect(list2.toArray()).toMatchObject(['f', 'e', 'c', 'd'])
+        expect(mapRuns).toBe(6)
+        list.at(0).record({name: 'g'})
+        list.at(1).record({name: 'h'})
+        expect(list2.toArray()).toMatchObject(['g', 'h', 'c', 'd'])
+        expect(mapRuns).toBe(8)
+    })
+
     test('map to another list with outer reactive', () => {
         const list = new RxList<number>([1,2,3])
         let mapRuns = 0

@@ -235,9 +235,7 @@ export class RxList<T> extends Computed {
         };
     }
     addAtomIndexesDep() {
-        if (this.atomIndexesDepCount === 0) {
-            this.atomIndexes = this.data.map((_, index) => atom(index))
-        }
+        if (!this.atomIndexes) this.atomIndexes = this.data.map((_, index) => atom(index))
         this.atomIndexesDepCount++
     }
     removeAtomIndexesDep() {
@@ -273,18 +271,19 @@ export class RxList<T> extends Computed {
 
                 const result: U[] = []
                 source.data.forEach((_, i) => {
-                    // const getFrame = ReactiveEffect.collectEffect!()
                     const mapContext: MapContext|undefined = useContext ? {
                         onCleanup(fn: MapCleanupFn) {
                             cleanupFns![i] = fn
                         }
                     } : undefined
 
+                    // 注意这里逻辑有点复杂。如果内部有依赖，会发生重新计算，那么重计算时就要用 itemIndex 去更新。因为 index 是可能变化的。
                     let newItemIndex: Atom<number>|undefined
                     const newItemRun = new Computed(() => {
+                        //有依赖并且是冲计算，就一定有 newItemIndex。
                         // CAUTION 特别注意这里面的变量，我们只希望  track 用户 mapFn 里面用到的外部  reactive 对象，不希望 track 到自己的 key/index。
                         if(newItemIndex) {
-                            this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw], newItemIndex!, mapContext!))
+                            this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw], newItemIndex, mapContext!))
                         } else {
                             result[i] = mapFn(source.data[i], source.atomIndexes?.[i]!, mapContext!)
                         }
@@ -332,9 +331,9 @@ export class RxList<T> extends Computed {
                             const newItemRun = new Computed(() => {
                                 // 说明是内部有依赖变换发生的更新。
                                 if (newItemIndex) {
-                                    this.set(newItemIndex.raw, mapFn(source.data[index+ argv![0]]!, newItemIndex, mapContext!))
+                                    this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw]!, newItemIndex, mapContext!))
                                 } else {
-                                    newItem = mapFn(source.data[index+ argv![0]]!, source.atomIndexes?.[newIndex]!, mapContext!)
+                                    newItem = mapFn(source.data[newIndex]!, source.atomIndexes?.[newIndex]!, mapContext!)
                                 }
                             }, undefined, true)
                             newItemRun.run()
@@ -438,6 +437,7 @@ export class RxList<T> extends Computed {
                 return this.data
             },
             function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
+                // 只有纯粹的新增在末尾新增，是可以使用增量计算的
                 const shouldRecompute = triggerInfos.some((triggerInfo) => {
                     const { method , argv   } = triggerInfo
                     return !(method === 'splice' && argv![0] === source.data.length - argv!.slice(2).length && argv![1] === 0)
@@ -850,6 +850,11 @@ export class RxList<T> extends Computed {
     }
     destroy() {
         super.destroy()
+        this.effectFramesArray?.forEach((frames) => {
+          frames.forEach((frame) => {
+            this.destroyEffect(frame)
+          })
+        })
         this.indexKeyDeps.clear()
         this.atomIndexes = undefined
     }
