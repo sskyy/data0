@@ -1,6 +1,6 @@
 import {createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {Atom, computed, once} from "../src/index.js";
+import {Atom, AtomComputed, computed, once} from "../src/index.js";
 import {autorun} from "../src/common";
 import {atom} from "../src/atom.js";
 import {RxSet} from "../src/RxSet";
@@ -184,7 +184,7 @@ describe('RxList', () => {
         expect(optionCleanupResult).toMatchObject([4,2,4])
     })
 
-    test('reduce', () => {
+    test('reduce to a atom', () => {
         const list = new RxList<{id:number, score: number}>([
             {id:1, score: 1},
             {id:2, score: 2},
@@ -192,41 +192,18 @@ describe('RxList', () => {
             {id:4, score: 4}
         ])
 
-        const reducedList = list.reduce<{id:number, score: number}>((newList, item) => {
-            const findIndex = newList.data.findIndex(i => i.id === item.id)
-            if (findIndex !== -1) {
-                newList.splice(findIndex, 1)
-            }
-            newList.push(item)
-        })
+        const total = list.reduce<AtomComputed>((result, item) => {
+            result.data((result.data.raw||0) + item.score)
+        }, AtomComputed).data
 
-        expect(reducedList.toArray()).toMatchObject([
-            {id:1, score: 1},
-            {id:2, score: 2},
-            {id:3, score: 3},
-            {id:4, score: 4}
-        ])
+        expect(total()).toBe(10)
 
         list.push({id:5, score: 5})
-        expect(reducedList.toArray()).toMatchObject([
-            {id:1, score: 1},
-            {id:2, score: 2},
-            {id:3, score: 3},
-            {id:4, score: 4},
-            {id:5, score: 5},
-        ])
+        expect(total()).toBe(15)
 
-        list.push({id:1, score: 6})
-        expect(reducedList.toArray()).toMatchObject([
-            {id:2, score: 2},
-            {id:3, score: 3},
-            {id:4, score: 4},
-            {id:5, score: 5},
-            {id:1, score: 6},
-        ])
-
+        list.unshift({id:1, score: 6})
+        expect(total()).toBe(21)
     })
-
 
     test('find', () => {
         const list = new RxList<{id:number, score: number}>([

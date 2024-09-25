@@ -600,8 +600,8 @@ export class Computed extends ReactiveEffect {
 
 // export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
 export type ComputedDataType = 'atom'|'array'|'object'|'map'|'set'
-function internalComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T
-function internalComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T {
+function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T
+function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T {
     const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, dataType)
 
     internal.replaceData = function(newData: any) {
@@ -622,24 +622,39 @@ function internalComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, di
 
 
 export function computed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return internalComputed<Atom<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'atom')
+    return (new AtomComputed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)).data as Atom<T>
 }
 
 export function arrayComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return internalComputed<UnwrapReactive<T[]>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'array')
+    return legacyComputed<UnwrapReactive<T[]>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'array')
 }
 export function objectComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return internalComputed<UnwrapReactive<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'object')
+    return legacyComputed<UnwrapReactive<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'object')
 }
 export function mapComputed<K, V>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return internalComputed<UnwrapReactive<Map<K, V>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'map')
+    return legacyComputed<UnwrapReactive<Map<K, V>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'map')
 }
 export function setComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return internalComputed<UnwrapReactive<Set<T>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'set')
+    return legacyComputed<UnwrapReactive<Set<T>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'set')
 }
 
-internalComputed.as = createDebugWithName(internalComputed)
-internalComputed.debug = createDebug(internalComputed)
+export class AtomComputed extends Computed{
+    constructor(getter?: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+        super(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'atom')
+        this.data = atom(null)
+        this.run([], true)
+    }
+    replaceData(newData: any) {
+        if(isAtom(newData)) {
+            this.data(newData.raw)
+        } else {
+            this.data(newData)
+        }
+    }
+}
+
+legacyComputed.as = createDebugWithName(legacyComputed)
+legacyComputed.debug = createDebug(legacyComputed)
 
 // 强制重算
 export function recompute(computedItem: ComputedData, force = false) {

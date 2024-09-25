@@ -8,7 +8,7 @@ export class RxSet<T> extends Computed {
     data!: Set<T>
     trackClassInstance = true
 
-    constructor(sourceOrGetter: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
+    constructor(sourceOrGetter?: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
         const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter : undefined
         const source = typeof sourceOrGetter !== 'function' ? sourceOrGetter : undefined
 

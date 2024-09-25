@@ -6,6 +6,7 @@ export {
     objectComputed,
     mapComputed,
     setComputed,
+    AtomComputed,
     type ComputedData,
     destroyComputed,
     recompute,

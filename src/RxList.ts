@@ -40,7 +40,7 @@ export class RxList<T> extends Computed {
     atomIndexes? :Atom<number>[]
     atomIndexesDepCount = 0
 
-    constructor(sourceOrGetter: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
+    constructor(sourceOrGetter?: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
         const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter : undefined
         const source = typeof sourceOrGetter !== 'function' ? sourceOrGetter : undefined
 
@@ -421,22 +421,26 @@ export class RxList<T> extends Computed {
             },
         )
     }
-    // 另一种 map
-    reduce<U>(reduceFn: (last: RxList<U>, item: T, index: number) => any): RxList<U> {
+    reduce<U extends Computed = RxList<T>>(reduceFn: (last:U, item: T, index: number) => any, ResultComputed: new (...args:any[])=>U = RxList as any): U {
         const source = this
-        return new RxList(
-            function computation(this: RxList<U>) {
+        return new ResultComputed(
+            function computation(this: U) {
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
-                this.data =[]
+                // 用 placeholder 生成一个新的 data。
+                const placeholder = new ResultComputed()
                 for(let i = 0; i < source.data.length; i++) {
                     const getFrame = ReactiveEffect.collectEffect!()
-                    reduceFn(this, source.data[i], i)
+                    reduceFn(placeholder, source.data[i], i)
                     this.effectFramesArray![i] = getFrame() as ReactiveEffect[]
                 }
-                return this.data
+
+                const result = placeholder.data
+                placeholder.destroy()
+                delete placeholder.data
+                return result
             },
-            function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
+            function applyMapArrayPatch(this: U, _data:any, triggerInfos: TriggerInfo[]) {
                 // 只有纯粹的新增在末尾新增，是可以使用增量计算的
                 const shouldRecompute = triggerInfos.some((triggerInfo) => {
                     const { method , argv   } = triggerInfo
@@ -447,7 +451,7 @@ export class RxList<T> extends Computed {
 
                 triggerInfos.forEach((triggerInfo) => {
                     const { argv   } = triggerInfo
-                    const originLength = this.data.length
+                    const originLength = source.data.length
                     // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
                     const newItemsInArgs = argv!.slice(2)
                     for(let i = 0; i < newItemsInArgs.length; i++) {
