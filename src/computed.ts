@@ -622,7 +622,9 @@ function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirt
 
 
 export function computed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return (new AtomComputed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)).data as Atom<T>
+    const internal = new AtomComputed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)
+    computedToInternal.set(internal.data, internal)
+    return internal.data as Atom<T>
 }
 
 export function arrayComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
