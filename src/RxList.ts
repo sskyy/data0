@@ -463,6 +463,35 @@ export class RxList<T> extends Computed {
             }
         )
     }
+    reduceToAtom<U extends any>(reduceFn: (last:U, item: T, index: number) => any, initialValue: U): Atom<U> {
+        const source = this
+        return computed(
+            function computation(this: Computed) {
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD);
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE);
+                return source.data.reduce(reduceFn, initialValue)
+            },
+            function applyMapArrayPatch(this: Computed, data:any, triggerInfos: TriggerInfo[]) {
+                // 只有纯粹的新增在末尾新增，是可以使用增量计算的
+                const shouldRecompute = triggerInfos.some((triggerInfo) => {
+                    const { method , argv   } = triggerInfo
+                    return !(method === 'splice' && argv![0] === source.data.length - argv!.slice(2).length && argv![1] === 0)
+                })
+
+                if(shouldRecompute) return false
+
+                triggerInfos.forEach((triggerInfo) => {
+                    const { argv } = triggerInfo
+                    const originLength = source.data.length
+                    // CAUTION 这里重新从已经改变的  source 去读，才能重新被 reactive proxy 处理，和全量计算时收到的参数一样
+                    const newItemsInArgs = argv!.slice(2)
+                    for(let i = 0; i < newItemsInArgs.length; i++) {
+                        data(reduceFn(data.raw, newItemsInArgs[i], i + originLength))
+                    }
+                })
+            }
+        )
+    }
 
     find(matchFn:(item: T) => boolean): Atom<T> {
         const index = this.findIndex(matchFn)

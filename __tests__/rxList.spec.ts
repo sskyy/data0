@@ -205,6 +205,33 @@ describe('RxList', () => {
         expect(total()).toBe(21)
     })
 
+    test('reduce to a atom with reduceToAtom', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        const total = list.reduceToAtom<number>((result, item) => {
+            return result + item.score
+        }, 0)
+
+        expect(total()).toBe(10)
+
+        list.push({id:5, score: 5})
+        expect(total()).toBe(15)
+
+        list.unshift({id:0, score: 6})
+        expect(total()).toBe(21)
+
+        list.splice(1, 1)
+        expect(total()).toBe(20)
+
+        list.splice(1, 0, {id:99,score:99})
+        expect(total()).toBe(119)
+    })
+
     test('find', () => {
         const list = new RxList<{id:number, score: number}>([
             {id:1, score: 1},
