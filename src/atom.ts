@@ -55,6 +55,9 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
             if (key === 'raw'||key ===ReactiveFlags.RAW) return value
 
             if (key === ReactiveFlags.IS_ATOM) return true
+            if (key === 'call') return function(_this:any, newValue?: typeof initValue) {
+                return arguments.length > 1 ? finalUpdater.call(_this, newValue): finalUpdater.call(_this)
+            }
 
             // TODO 是不是也要像 reactive 一样层层包装才行？？？，不然当把这个值传给 dom 元素的时候，它就已经不能被识别出来，也就不能 reactive 了。
             if (isPlainObject(value)) {

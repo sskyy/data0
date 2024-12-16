@@ -1,5 +1,6 @@
 import {atom, Atom} from "../src/atom";
-import {reactive} from "../src/reactive";
+import {reactive } from "../src/reactive";
+import { computed} from "../src/computed";
 import {describe, expect, test} from "vitest";
 
 
@@ -14,6 +15,21 @@ describe('atom basic', () => {
 
         num(3)
         expect(num).toShallowEqual(3)
+    })
+
+    test('use call to get atom value', () => {
+        const num = atom(1)
+        expect(num.call(num)).toBe(1)
+
+        const add1 = computed(() => {
+            return num.call(num) + 1
+        })
+
+        expect(add1()).toBe(2)
+
+        num.call(num, 2)
+        expect(add1()).toBe(3)
+
     })
 })
 
