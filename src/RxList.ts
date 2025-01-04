@@ -909,7 +909,8 @@ type SelectionInner = {
     createNewIndicator:any,
     updateIndicatorsFromCurrentValueChange:any,
     stopAutoResetValue:any,
-    deleteIndicator:any
+    deleteIndicator:any,
+    currentValues:any
 }
 export function createSelectionInner<T>(source: RxList<T>, currentValues: RxSet<T|number>|Atom<T|null|number>, autoResetValue = false): SelectionInner {
     function trackCurrentValues(list: Computed) {
@@ -1005,7 +1006,8 @@ export function createSelectionInner<T>(source: RxList<T>, currentValues: RxSet<
         createNewIndicator,
         updateIndicatorsFromCurrentValueChange,
         stopAutoResetValue,
-        deleteIndicator
+        deleteIndicator,
+        currentValues
     }
 }
 
@@ -1046,7 +1048,12 @@ function createRxListWithSelectionInners<T>(source:RxList<T>, ...inners: Selecti
                     updateIndicatorsFromSourceChange(this, triggerInfo)
                 } else {
                     // 来自 currentValues 的变化，需要同步 indicators
-                    inners.forEach(inner => inner.updateIndicatorsFromCurrentValueChange(triggerInfo))
+                    
+                    inners.forEach(inner => {
+                        if (triggerInfo.source === inner.currentValues) {
+                            inner.updateIndicatorsFromCurrentValueChange(triggerInfo)
+                        }
+                    })
                 }
             })
         },

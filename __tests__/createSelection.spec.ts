@@ -186,6 +186,9 @@ describe('RxList multiple match', () => {
         selectedItems.add(list.at(1)!)
         expect(selectedList.toArray().map(value => value())).toMatchObject([[false, false], [false, true], [false,false]])
 
+        selectedItem(list.at(2)!)
+        expect(selectedList.toArray().map(value => value())).toMatchObject([[false, false], [false, true], [true,false]])
+
     })
 })
 
