@@ -157,6 +157,36 @@ describe('RxList multiple match', () => {
         list.set(1, 'a')
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
     })
+
+    test('create multiple selection at once', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4}
+        ])
+
+        let innerRuns = 0
+
+        const selectedItem = atom(list.at(0)!)
+        const selectedItems = new RxSet<{id:number, score: number}>()
+        const uniqueMatch = list.createSelections([selectedItem, false], [selectedItems, false])
+        const selectedList = uniqueMatch.map(([_, selected1, selected2]) => {
+            return computed(() => {
+                innerRuns++
+                return [selected1(), selected2()]
+            })
+        })
+        expect(selectedList.toArray().map(value => value())).toMatchObject([[true, false], [false, false], [false, false], [false,false]])
+
+        // 删掉第一个
+        list.splice(0, 1)
+        expect(selectedList.toArray().map(value => value())).toMatchObject([[false, false], [false, false], [false,false]])
+
+        selectedItems.add(list.at(1)!)
+        expect(selectedList.toArray().map(value => value())).toMatchObject([[false, false], [false, true], [false,false]])
+
+    })
 })
 
 describe('createSelection use index as key', () => {

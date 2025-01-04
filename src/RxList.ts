@@ -895,13 +895,23 @@ export class RxList<T> extends Computed {
     createSelection(currentValues: RxSet<T|number>|Atom<T|null|number>, autoResetValue?: boolean) {
         return createSelection(this, currentValues, autoResetValue)
     }
+    createSelections(...args: [RxSet<T|number>|Atom<T|null|number>, boolean?][]) {
+        return createSelections<T>(this, ...args)
+    }
     createIndexKeySelection(currentValues: RxSet<number>|Atom<null|number>, autoResetValue?:boolean) {
         return createIndexKeySelection(this, currentValues, autoResetValue)
     }
 }
 
-
-export function createSelection<T>(source: RxList<T>, currentValues: RxSet<T|number>|Atom<T|null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
+type SelectionInner = {
+    trackIndicators:any,
+    trackCurrentValues:any,
+    createNewIndicator:any,
+    updateIndicatorsFromCurrentValueChange:any,
+    stopAutoResetValue:any,
+    deleteIndicator:any
+}
+export function createSelectionInner<T>(source: RxList<T>, currentValues: RxSet<T|number>|Atom<T|null|number>, autoResetValue = false): SelectionInner {
     function trackCurrentValues(list: Computed) {
         if (isAtom(currentValues)) {
             list.manualTrack(currentValues, TrackOpTypes.ATOM, 'value');
@@ -935,20 +945,8 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxSet<T|num
         }
     }
 
-    function updateIndicatorsFromSourceChange(list: RxList<[T, Atom<boolean>]>, triggerInfo: TriggerInfo) {
-        if (triggerInfo.method === 'splice') {
-            const { methodResult , argv } = triggerInfo
-            const newItemsInArgs = argv!.slice(2)
-            const deleteItems: T[] = methodResult || []
-            list.splice(argv![0], argv![1], ...newItemsInArgs.map((item) => [item, createNewIndicator(item)] as [T, Atom<boolean>]))
-            deleteItems.forEach((item) => {
-                itemToIndicator.delete(item)
-            })
-        } else {
-            //explicit key change
-            const {  newValue, key } = triggerInfo
-            list.set(key as number, [newValue as T, createNewIndicator(newValue as T)] as [T, Atom<boolean>])
-        }
+    function deleteIndicator(item:T) {
+        itemToIndicator.delete(item)
     }
 
 
@@ -1001,14 +999,45 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxSet<T|num
 
     stopAutoResetValue?.run()
 
+    return {
+        trackIndicators,
+        trackCurrentValues,
+        createNewIndicator,
+        updateIndicatorsFromCurrentValueChange,
+        stopAutoResetValue,
+        deleteIndicator
+    }
+}
+
+
+
+
+function createRxListWithSelectionInners<T>(source:RxList<T>, ...inners: SelectionInner[]) : RxList<[T, ...Atom<boolean>[]]>{
+
+    function updateIndicatorsFromSourceChange(list: RxList<[T, ...Atom<boolean>[]]>, triggerInfo: TriggerInfo) {
+        if (triggerInfo.method === 'splice') {
+            const { methodResult , argv } = triggerInfo
+            const newItemsInArgs = argv!.slice(2)
+            const deleteItems: T[] = methodResult || []
+            list.splice(argv![0], argv![1], ...newItemsInArgs.map((item) => [item, ...inners.map(inner => inner.createNewIndicator(item))] as [T, ...Atom<boolean>[]]))
+            deleteItems.forEach((item) => {
+                inners.forEach(inner => inner.deleteIndicator(item))
+            })
+        } else {
+            //explicit key change
+            const {  newValue, key } = triggerInfo
+            list.set(key as number, [newValue as T, ...inners.map(inner => inner.createNewIndicator(newValue as T))] as [T, Atom<boolean>])
+        }
+    }
+
     return new RxList(
         function computation(this:Computed ) {
-            // 监听 source 的变化，需要动态增加 indicators
-            trackIndicators(this)
-            // track currentValues 的变化
-            trackCurrentValues(this)
+            inners.forEach(inner => {
+                inner.trackIndicators(this)
+                inner.trackCurrentValues(this)
+            })
 
-            return source.data.map((item) => [item, createNewIndicator(item)])
+            return source.data.map((item) => [item, ...inners.map(inner => inner.createNewIndicator(item))])
         },
         function applyPatch(this: RxList<[T, Atom<boolean>]>, _data, triggerInfos: TriggerInfo[]) {
             triggerInfos.forEach((triggerInfo) => {
@@ -1017,21 +1046,31 @@ export function createSelection<T>(source: RxList<T>, currentValues: RxSet<T|num
                     updateIndicatorsFromSourceChange(this, triggerInfo)
                 } else {
                     // 来自 currentValues 的变化，需要同步 indicators
-                    updateIndicatorsFromCurrentValueChange(triggerInfo)
+                    inners.forEach(inner => inner.updateIndicatorsFromCurrentValueChange(triggerInfo))
                 }
             })
         },
         undefined,
         {
             onDestroy() {
-                stopAutoResetValue?.destroy()
+                inners.forEach(inner => {
+                    inner.stopAutoResetValue?.destroy()
+                })
             }
         }
     )
-
 }
 
+type SelectionArgs<T> = [RxSet<T|number>|Atom<T|null|number>, boolean?]
+export function createSelection<T>(source: RxList<T>, currentValues: SelectionArgs<T>[0], autoResetValue : SelectionArgs<T>[1] = false): RxList<[T, Atom<boolean>]> {
+    return createRxListWithSelectionInners(source, createSelectionInner(source, currentValues, autoResetValue)) as  RxList<[T, Atom<boolean>]>
+}
 
+export function createSelections<T>(source: RxList<T>, ...args: SelectionArgs<T>[]): RxList<[T, ...Atom<boolean>[]]> {
+    return createRxListWithSelectionInners(source, ...args.map(arg => createSelectionInner(source, ...arg)))
+}
+
+// TODO multiple
 export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxSet<number>|Atom<null|number>, autoResetValue = false): RxList<[T, Atom<boolean>]> {
 
     function trackCurrentValues(list: Computed) {
