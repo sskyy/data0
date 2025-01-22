@@ -419,6 +419,20 @@ describe('RxList', () => {
         expect(filtered.toArray().map(f => f.id)).toMatchObject([1,2])
     })
 
+    test('filter with unshift new item', () => {
+        const list = new RxList<{id:number, score: number}>([
+            {id:1, score: 1},
+            {id:2, score: 2},
+            {id:3, score: 3},
+            {id:4, score: 4},
+            {id:5, score: 5},
+        ])
+        const filtered = list.filter(item => item.score > 3)
+        expect(filtered.toArray().map(i => i.id)).toMatchObject([4,5])
+        list.unshift({id:6, score: 6})
+        expect(filtered.toArray().map(i => i.id)).toMatchObject([6,4,5,])
+    })
+
     // should track iterator key
     test('forEach', () => {
         const list = new RxList<number>([1,2,3])

@@ -622,7 +622,13 @@ export class RxList<T> extends Computed {
             return computed(({lastValue} ) => {
                 const matched = filterFn(item)
                 if (matched) {
-                    if (!lastValue.raw) filtered.push(item)
+                    if (!lastValue.raw) {
+                        if (item === this.data[0]) {
+                            filtered.unshift(item)
+                        } else {
+                            filtered.push(item)
+                        }
+                    }
                 } else {
                     // 第一次没匹配上不需要执行 remove，节省一下性能。
                     if (lastValue.raw === true) remove()
