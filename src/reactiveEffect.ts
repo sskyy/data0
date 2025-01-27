@@ -37,6 +37,8 @@ export class ReactiveEffect extends ManualCleanup {
     }
 
     deps: Dep[] = []
+    // 有增量计算的情况会 manual track dep，这时不要做 dep marker，因为不需要 finalize 自动对比的计算的过程。
+    useDepMarker = true
     parent?: ReactiveEffect
     children: ReactiveEffect[] = []
     index = 0
@@ -86,7 +88,7 @@ export class ReactiveEffect extends ManualCleanup {
             Notifier.trackOpBit = 1 << ++Notifier.instance.effectTrackDepth
             ReactiveEffect.activeScopes.push(this)
 
-            if (Notifier.instance.effectTrackDepth <= maxMarkerBits) {
+            if (this.useDepMarker && Notifier.instance.effectTrackDepth <= maxMarkerBits) {
                 initDepMarkers(this)
             } else {
                 this.cleanup()
@@ -109,7 +111,7 @@ export class ReactiveEffect extends ManualCleanup {
 
     completeTracking(isLast = false, isAsync = this.isAsync) {
         if (!isAsync) {
-            if (Notifier.instance.effectTrackDepth <= maxMarkerBits) {
+            if (this.useDepMarker && Notifier.instance.effectTrackDepth <= maxMarkerBits) {
                 finalizeDepMarkers(this)
             }
 

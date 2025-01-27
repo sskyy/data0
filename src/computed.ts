@@ -159,6 +159,8 @@ export class Computed extends ReactiveEffect {
 
         this.manualTracking = !!applyPatch
         if (this.applyPatch) {
+            // 有 patch 时，dep 的增量 track 也是自己完成的。
+            this.useDepMarker = false
             this.isAsyncPatch = isAsync(this.applyPatch)
             this.isGeneratorPatch = isGenerator(this.applyPatch)
             this.isPatchAsync = this.isAsyncPatch|| this.isGeneratorPatch

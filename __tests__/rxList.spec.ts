@@ -285,43 +285,92 @@ describe('RxList', () => {
             {id:4, score: 4}
         ])
 
-        const found = list.findIndex(item => item.score > 2)
+        let runs = 0
+        const found = list.findIndex(item => {
+            runs++
+            return item.score > 2
+        })
         expect(found()).toBe(2)
+        expect(runs).toBe(3)
 
-        // explicit key change
+        // explicit key change。如果刚好影响了，应该重算。如果不匹配，要继续往后找。
         list.set(2, {id: 3, score: 1})
         expect(found()).toBe(3)
+        expect(runs).toBe(5)
+
 
         // splice 在后面，没有影响
         list.splice(4, 0, {id: 0, score: 3})
         expect(found()).toBe(3)
-        // splice 在前面，有影响
+        expect(runs).toBe(5)
+
+        // splice 在前面，有影响。
         list.splice(3, 0, {id: 5, score: 3})
         expect(found()).toBe(3)
+        expect(runs).toBe(6)
+
 
         list.splice(2, Infinity)
         expect(found()).toBe(-1)
+        expect(runs).toBe(6)
+
     })
 
-    test('findIndex with reactive in find condition', () => {
+    test('findIndex with inner reactive in find condition', () => {
         const list = new RxList<{id:number, score: Atom<number>}>([])
-        const found = list.findIndex(item => item.score() > 2)
+        let runs = 0
+        const found = list.findIndex(item => {
+            runs++
+            return item.score() > 2
+        })
         expect(found()).toBe(-1)
 
         const i1 = {id:1, score: atom(1)}
-        const i2 = {id:1, score: atom(1)}
-        const i3 = {id:1, score: atom(1)}
+        const i2 = {id:2, score: atom(1)}
+        const i3 = {id:3, score: atom(1)}
         list.splice(0, 0, i1,i2,i3)
 
+        expect(runs).toBe(3)
         expect(found()).toBe(-1)
+
         i1.score(3)
         expect(found()).toBe(0)
+        expect(runs).toBe(4)
+
 
         i2.score(4)
         expect(found()).toBe(0)
+        expect(runs).toBe(4)
 
         i1.score(1)
         expect(found()).toBe(1)
+        expect(runs).toBe(6)
+    })
+
+
+    test('findIndex with RxList and outer reactive', () => {
+        const list = new RxList<{id:number}>([
+            {id:1},
+            {id:2},
+            {id:3},
+        ])
+
+        const selected = atom<any>(list.raw[0])
+        let runs = 0
+        const foundIndex = list.findIndex(item => {
+            runs++
+            return item === selected()
+        })
+
+        expect(runs).toBe(1)
+
+        selected(list.raw[2])
+        expect(foundIndex()).toBe(2)
+        expect(runs).toBe(4)
+
+        selected(list.raw[1])
+        expect(foundIndex()).toBe(1)
+        expect(runs).toBe(6)
     })
 
     test('filter', () => {

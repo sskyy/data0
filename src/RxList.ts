@@ -15,7 +15,6 @@ import {assert} from "./util.js";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {RxMap} from "./RxMap.js";
 import {RxSet} from "./RxSet";
-import {autorun} from "./common";
 
 type MapOptions<U> = {
     beforePatch?: (triggerInfo: InputTriggerInfo) => any,
@@ -507,102 +506,154 @@ export class RxList<T> extends Computed {
     }
     findIndex(matchFn:(item: T) => boolean): Atom<number> {
         const source = this
-        // CAUTION 特别注意，这里不要对 autorunDisposes 做中间的部分的 splice，那样 autorun 里面的 index 就不对了。
-        //  始终只当成队列来使用。
-        let autorunDisposes: Array<()=>any> = []
-        let result: Atom<number>|undefined
+        const searchedItemAndIndexes: { item:T, index:number, deleted:boolean }[] = []
 
-        function createAutorun(index:number) {
-            let found = false
-            const dispose = autorun(() => {
-                // CAUTION 第一次在 computation 调用的时候 result 还没有 initialize，所以只能在这里要用的时候才读。
-                const data = result
-                if (matchFn(source.data[index]!)) {
-                    found = true
+        let trackTargetToSearchItem: WeakMap<any, Set<{ item:T, index:number, deleted:boolean }>> = new WeakMap()
 
-                    // 新的 index，肯定是更小的，因为我们只对前面的做了 autorun
-                    if (data?.raw !== index) {
-                        data?.(index)
-                        const disposes = autorunDisposes.splice(index+1, Infinity)
-                        disposes.forEach(dispose => dispose())
-                    }
-                } else {
-                    // 刚好是匹配的这个变化成不匹配了
-
-                    if (data && data.raw === index) {
-                        // 继续往后找吧
-                        data(searchAndRegisterDispose(index + 1, Infinity))
-                    }
-                }
-            }, true)
-            return {
-                found,
-                dispose
-            }
+        const disposeAll = () => {
+            searchedItemAndIndexes.length = 0
+            trackTargetToSearchItem = new WeakMap()
         }
 
-        function searchAndRegisterDispose(startIndex: number, limit=Infinity) {
-            const disposes = autorunDisposes.splice(startIndex, limit)
-            disposes.forEach(dispose => dispose())
-
-            for(let i = startIndex; i < Math.min(startIndex + limit, source.data.length); i++) {
-                const {found, dispose} = createAutorun(i)
-                autorunDisposes.push(dispose)
-                if (found) {
-                    return i
+        function searchAndRemember(start:number, end: number, resultComputed: Computed) {
+            for(let current=start; current < Math.min(end, source.data.length);current++) {
+                const matchResult = matchAndRemember(current, resultComputed)
+                if (matchResult) {
+                    // 删掉后面的
+                    // FIXME 似乎没有处理 trackTargetToSearchItem 中的 cache
+                    const deletedItems = searchedItemAndIndexes.splice(current+1)
+                    deletedItems.forEach(item => item.deleted = true)
+                    return current
                 }
-            }
 
+            }
             return -1
         }
 
-        function checkOne(index: number) {
-            autorunDisposes[index] = createAutorun(index).dispose
+        function matchAndRemember(current:number, resultComputed: Computed) {
+            const currentItem =  {
+                item: source.data[current],
+                index:current,
+                deleted:false
+            }
+            searchedItemAndIndexes[current] =currentItem
+            resultComputed.autoTrack()
+            const getFrame = Notifier.instance.collectTrackTarget()
+            const matchResult = matchFn(source.data[current])
+            const trackTargets = getFrame()
+            resultComputed.resetAutoTrack()
+
+            trackTargets.forEach((target) => {
+                let items = trackTargetToSearchItem.get(target)
+                if (!items) {
+                    trackTargetToSearchItem.set(target, items = new Set())
+                }
+                items.add(currentItem)
+            })
+            return matchResult
         }
 
+        function checkOne(index: number) {
+            if (matchFn(source.data[index])) {
+                result(index)
+                searchedItemAndIndexes.splice(index+1)
+            }
+        }
 
-        result = computed<number>(
+        const result = computed<number>(
             function computation(this: Computed) {
+                disposeAll()
                 this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
                 this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
-                return searchAndRegisterDispose(0, Infinity)
+                return searchAndRemember(0, Infinity, this)
             },
-            function applyPatch(this: Computed, data: Atom<T>, triggerInfos){
-                triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key } = triggerInfo
+            function applyPatch(this: Computed, data: Atom<number>, triggerInfos){
+                let patchSuccess = undefined
+                // 每次 patch 都需要重新注册所有依赖。
+                this.cleanup()
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+
+                triggerInfos.every((triggerInfo) => {
+                    const { method , argv  ,key, source: triggerSource } = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     let startFindingIndex = Infinity
-                    if (method === 'splice') {
-                        const startIndex = argv![0] as number
-                        // 可能新增了更小的能找到的，都从 startIndex 开始重新算。
-                        if (this.data.raw == -1 || startIndex <= this.data.raw) {
-                            startFindingIndex = startIndex
+                    if (triggerSource === source ) {
+                        if (method === 'splice') {
+                            const startIndex = argv![0] as number
+                            // 可能新增了更小的能找到的，都从 startIndex 开始重新算。
+                            if (this.data.raw == -1 || startIndex <= this.data.raw) {
+                                startFindingIndex = startIndex
+                            }
+
+                        } else {
+                            // explicit key change
+                            if (this.data.raw === key) {
+                                // 刚好把找到的弄没了
+                                startFindingIndex = key as number
+                            } else if((key as number) < this.data.raw) {
+                                // 快速验证 这一个是不是新的 match，如果是就替换，index 变小，如果不是就没影响。
+                                checkOne(key as number)
+                            }
                         }
 
+                        // 需要从 startFindingIndex 开始重找，startFindingIndex 前面不需要
+                        if (startFindingIndex !== Infinity) {
+                            data(searchAndRemember(startFindingIndex, Infinity, this))
+                        }
                     } else {
-                        // explicit key change
-                        if (this.data.raw === key) {
-                            // 刚好把找到的弄没了
-                            startFindingIndex = key as number
-                        } else if((key as number) < this.data.raw) {
-                            // 快速验证 这一个是不是新的 match，如果是就替换，index 变小，如果不是就没影响。
-                            checkOne(key as number)
-                        }
-                    }
+                        // 任何其他变化都完全重算
+                        // 元素计算的内部变化。找到受影响的 items，从小的开始计算。一旦找到就停下。
+                        //  一直到所有响应完还有没有找到的话，就继续 search。
+                        // CAUTION 一定要切片，否则后面 matchAndRemember 会死循环
+                        const itemCandidateSet = trackTargetToSearchItem.get(triggerSource)
+                        const itemCandidates = Array.from(itemCandidateSet??[])
+                        if (itemCandidates) {
 
-                    // 需要重找
-                    if (startFindingIndex !== Infinity) {
-                        data(searchAndRegisterDispose(startFindingIndex, Infinity))
+                            let newIndex = -1
+                            let lastMatchedChanged = false
+                            for(const item of itemCandidates) {
+                                if (!item.deleted) {
+                                    // 重算的时候就要把上次的删掉，因为 matchAndRemember 中会重新生成个新对象。
+                                    itemCandidateSet!.delete(item)
+                                    const matchResult = matchAndRemember(item.index, this)
+                                    if (!lastMatchedChanged && item.index ===data.raw) lastMatchedChanged = true
+                                    if (matchResult) {
+                                        // 删掉后面的
+                                        // FIXME 更好地处理 trackTargetToSearchItem 中的 cache
+                                        const deletedItems = searchedItemAndIndexes.splice(item.index+1)
+                                        deletedItems.forEach(item => item.deleted = true)
+                                        newIndex = item.index
+                                        break
+                                    }
+                                } else {
+                                    // FIXME 顺便删除一下，应该有更好的方式
+                                    trackTargetToSearchItem.get(triggerSource)!.delete(item)
+                                }
+                            }
+                            // 只要找到了，index 肯定更小，应为我们是往前面建立的观察
+                            if (newIndex!==-1) {
+                                data(newIndex)
+                            } else {
+                                // TODO 上一次的值如果也受影响了变成不匹配的了，并且受影的也没有匹配的，就要从上一次继续往后搜索
+                                if (lastMatchedChanged) {
+                                    data(searchAndRemember(data.raw+1, Infinity, this))
+                                }
+                            }
+                        } else {
+                            patchSuccess = false
+                            // 提前结束
+                            return false
+                        }
                     }
                 })
+                // 显式 return false 触发重算
+                return patchSuccess
             },
             true,
             {
-                onDestroy() {
-                    autorunDisposes.forEach(dispose => dispose())
-                    autorunDisposes = []
-                }
+                onDestroy:disposeAll
             }
         )
 

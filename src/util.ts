@@ -4,7 +4,6 @@ export function makeMap(
     str: string,
     expectsLowerCase?: boolean
 ): (key: string) => boolean {
-    // @ts-ignore
     const map: Record<string, boolean> = Object.create(null)
     const list: Array<string> = str.split(',')
     for (let i = 0; i < list.length; i++) {

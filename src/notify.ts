@@ -67,6 +67,7 @@ export class Notifier {
   static get instance() {
     return Notifier._instance || (Notifier._instance = new Notifier())
   }
+  trackTargetFrames: any[][] = []
   // 被 track 的对象 {target -> key -> dep}
   targetMap= new WeakMap<any, KeyToDepMap>()
   arrayExplicitKeyDepCount = new WeakMap<any, number>()
@@ -115,10 +116,17 @@ export class Notifier {
     this.inEffectSession = false
     this.isDigesting = false
   }
+  collectTrackTarget() {
+    const frame:any[] = []
+    this.trackTargetFrames.push(frame)
+    return () => {
+      assert(frame === this.trackTargetFrames.at(-1), 'track target frame error.')
+      return frame
+    }
+  }
   track = (target: object, type: TrackOpTypes, key: unknown) => {
     // 为了触发 dirty computed 的 recompute
     const computedInternal = target instanceof Computed ? target: getComputedInternal(target)
-
     const activeEffect = ReactiveEffect.activeScopes.at(-1)
     if (computedInternal &&  computedInternal!== activeEffect) {
       // CAUTION 这里即使没有 activeEffect 也要执行，因为 onTrack 要触发 computed 计算。
@@ -154,6 +162,8 @@ export class Notifier {
         let count = this.arrayExplicitKeyDepCount.get(target) || 0
         this.arrayExplicitKeyDepCount.set(target, ++count)
     }
+    // 手动收集的场景。
+    this.trackTargetFrames.at(-1)?.push(target)
 
     this.trackEffects(dep, eventInfo)
     return dep
@@ -162,11 +172,11 @@ export class Notifier {
       dep: Dep,
       debuggerEventExtraInfo?: DebuggerEventExtraInfo
   ) {
-    const  activeEffect = ReactiveEffect.activeScopes.at(-1)
+    const activeEffect = ReactiveEffect.activeScopes.at(-1)
     if (!activeEffect) return
     let shouldTrack = false
     if (!activeEffect.isAsync) {
-      if (this.effectTrackDepth <= maxMarkerBits) {
+      if (activeEffect.useDepMarker && this.effectTrackDepth <= maxMarkerBits) {
         if (!newTracked(dep)) {
           dep.n |= Notifier.trackOpBit // set newly tracked
           shouldTrack = !wasTracked(dep)
