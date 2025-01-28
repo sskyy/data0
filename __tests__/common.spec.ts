@@ -32,12 +32,13 @@ describe('common utils', () => {
         const history: any[] = []
 
         const outerAtom = atom(0)
+        const innerStop: any[] = []
         autorun(({pauseCollectChild, resumeCollectChild}) => {
             outerAtom()
             pauseCollectChild()
-            autorun(function computed1({onCleanup})  {
+            innerStop.push(autorun(function computed1({onCleanup})  {
                 history.push(atom1())
-            }, true)
+            }, true))
             resumeCollectChild()
         },true)
 
@@ -51,6 +52,10 @@ describe('common utils', () => {
 
         outerAtom(3)
         atom1(2)
+        expect(history).toMatchObject([null, null, 1, 1, 1, 2,2,2])
+        // 全部 stop
+        innerStop.forEach(stop => stop())
+        atom1(3)
         expect(history).toMatchObject([null, null, 1, 1, 1, 2,2,2])
     })
 

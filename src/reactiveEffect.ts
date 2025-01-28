@@ -51,8 +51,9 @@ export class ReactiveEffect extends ManualCleanup {
         this.isAsync = this.getter && (isAsync(this.getter!) || isGenerator(this.getter!))
 
         if (ReactiveEffect.activeScopes.length) {
-            this.parent = ReactiveEffect.activeScopes.at(-1)
-            if (this.parent?.shouldCollectChild) {
+            const parent = ReactiveEffect.activeScopes.at(-1)
+            if (parent?.shouldCollectChild) {
+                this.parent = parent
                 this.parent!.children.push(this)
                 this.index = this.parent!.children.length - 1
             }
