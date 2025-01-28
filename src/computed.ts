@@ -31,6 +31,8 @@ export type ApplyPatchType = SimpleApplyPatchType | GeneratorApplyPatchType
 export type GetterContext = {
     lastValue: ComputedData,
     onCleanup: (fn: () => any) => void,
+    pauseCollectChild: () => void,
+    resumeCollectChild: () => void,
     asyncStatus: Atom<null | boolean | string>,
 }
 
@@ -250,6 +252,8 @@ export class Computed extends ReactiveEffect {
             lastValue: this.data,
             onCleanup: (fn: () => any) => this.lastCleanupFn = fn,
             asyncStatus: this.asyncStatus!,
+            pauseCollectChild: this.pauseCollectChild,
+            resumeCollectChild: this.resumeCollectChild,
         } : undefined
     }
 

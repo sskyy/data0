@@ -43,6 +43,7 @@ export class ReactiveEffect extends ManualCleanup {
     children: ReactiveEffect[] = []
     index = 0
     isAsync?:boolean
+    shouldCollectChild = true
     constructor(public getter?: (...args: any[]) => any) {
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         super();
@@ -51,9 +52,17 @@ export class ReactiveEffect extends ManualCleanup {
 
         if (ReactiveEffect.activeScopes.length) {
             this.parent = ReactiveEffect.activeScopes.at(-1)
-            this.parent!.children.push(this)
-            this.index = this.parent!.children.length - 1
+            if (this.parent?.shouldCollectChild) {
+                this.parent!.children.push(this)
+                this.index = this.parent!.children.length - 1
+            }
         }
+    }
+    pauseCollectChild = () => {
+        this.shouldCollectChild = false
+    }
+    resumeCollectChild = () => {
+        this.shouldCollectChild = true
     }
 
     on(event: string, callback: Function) {

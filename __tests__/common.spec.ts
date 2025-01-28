@@ -25,7 +25,33 @@ describe('common utils', () => {
         expect(history).toMatchObject([null])
         atom1(1)
         expect(history).toMatchObject([null, 1])
+    })
 
+    test('autorun with uncontrolled child', () => {
+        const atom1 = atom<any>(null)
+        const history: any[] = []
+
+        const outerAtom = atom(0)
+        autorun(({pauseCollectChild, resumeCollectChild}) => {
+            outerAtom()
+            pauseCollectChild()
+            autorun(function computed1({onCleanup})  {
+                history.push(atom1())
+            }, true)
+            resumeCollectChild()
+        },true)
+
+        expect(history).toMatchObject([null])
+        // 上一次的 inner autorun 不会被销毁，现在生成了2个了
+        outerAtom(2)
+        expect(history).toMatchObject([null, null])
+
+        atom1(1)
+        expect(history).toMatchObject([null, null, 1, 1])
+
+        outerAtom(3)
+        atom1(2)
+        expect(history).toMatchObject([null, null, 1, 1, 1, 2,2,2])
     })
 
     test('autorun should not destroy length', () => {
