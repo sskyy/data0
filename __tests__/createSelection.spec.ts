@@ -144,18 +144,62 @@ describe('RxList multiple match', () => {
             })
         })
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false, false])
+        expect(innerRuns).toBe(4)
 
         selected('a')
         expect(selectedList.toArray().map(value => value())).toMatchObject([true, false, false, false])
+        expect(innerRuns).toBe(6)
 
         // 删掉第一个
         list.splice(0, 1)
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, false, false])
+        expect(innerRuns).toBe(6)
+
         // 还存在
         expect(selected.raw).not.toBeNull()
         // explicit key set
         list.set(1, 'a')
         expect(selectedList.toArray().map(value => value())).toMatchObject([false, true, false])
+        expect(innerRuns).toBe(7)
+    })
+
+    // TODO
+    test('create unique selection using object value as key with value not reset', () => {
+        const origin = [{
+            name:'a'
+        }, {
+            name:'b'
+        }, {
+            name:'c'
+        }, {
+            name:'d'
+        }]
+        const list = new RxList<{name:string}>(origin.slice(0, 3))
+
+        let innerRuns = 0
+
+        const selected = atom<{name:string}>(origin[1])
+        const uniqueMatch = list.createSelection(selected)
+        const selectedList = uniqueMatch.map(([_, selected]) => {
+            return computed(() => {
+                innerRuns++
+                return selected()
+            })
+        })
+
+        selected(origin[1])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([ false, true, false])
+        expect(innerRuns).toBe(3)
+
+        list.splice(0, Infinity, ...origin.slice(1))
+        expect(selectedList.toArray().map(value => value())).toMatchObject([ true, false, false])
+        expect(innerRuns).toBe(6)
+
+        selected(origin[3])
+        expect(selectedList.toArray().map(value => value())).toMatchObject([ false, false, true])
+        expect(innerRuns).toBe(8)
+
+
     })
 
     test('create multiple selection at once', () => {

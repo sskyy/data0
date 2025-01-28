@@ -1078,10 +1078,10 @@ function createRxListWithSelectionInners<T>(source:RxList<T>, ...inners: Selecti
             const { methodResult , argv } = triggerInfo
             const newItemsInArgs = argv!.slice(2)
             const deleteItems: T[] = methodResult || []
-            list.splice(argv![0], argv![1], ...newItemsInArgs.map((item) => [item, ...inners.map(inner => inner.createNewIndicator(item))] as [T, ...Atom<boolean>[]]))
             deleteItems.forEach((item) => {
                 inners.forEach(inner => inner.deleteIndicator(item))
             })
+            list.splice(argv![0], argv![1], ...newItemsInArgs.map((item) => [item, ...inners.map(inner => inner.createNewIndicator(item))] as [T, ...Atom<boolean>[]]))
         } else {
             //explicit key change
             const {  newValue, key } = triggerInfo
@@ -1105,7 +1105,6 @@ function createRxListWithSelectionInners<T>(source:RxList<T>, ...inners: Selecti
                     updateIndicatorsFromSourceChange(this, triggerInfo)
                 } else {
                     // 来自 currentValues 的变化，需要同步 indicators
-                    
                     inners.forEach(inner => {
                         if (triggerInfo.source === inner.currentValues) {
                             inner.updateIndicatorsFromCurrentValueChange(triggerInfo)
