@@ -5,6 +5,7 @@ import {assert, isAsync, isGenerator, nextTick, replace, uuid, warn} from "./uti
 import {Atom, atom, isAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
+import {CleanupFrame} from "./manualCleanup";
 
 
 export const computedToInternal = new WeakMap<any, Computed>()
@@ -591,7 +592,7 @@ export class Computed extends ReactiveEffect {
         delete this.lastCleanupFn
         super.destroy( ignoreChildren)
     }
-    collectEffect = ReactiveEffect.collectEffect
+    collectEffect: () => () => CleanupFrame = ReactiveEffect.collectEffect
     destroyEffect = (effect: ReactiveEffect) => {
         // 因为可能是 computed，destroy 和 ReactiveEffect 不一样，所以要调用它自己身的
         effect.destroy()
