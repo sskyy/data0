@@ -3,7 +3,9 @@ import {Atom} from "./atom.js";
 import {ITERATE_KEY, Notifier, TriggerInfo} from "./notify.js";
 import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import {RxList} from "./RxList";
-
+/**
+ * @category Basic
+ */
 export class RxSet<T> extends Computed {
     data!: Set<T>
     trackClassInstance = true

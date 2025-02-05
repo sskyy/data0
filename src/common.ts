@@ -7,7 +7,9 @@ import {DirtyCallback, Computed, GetterContext} from "./computed.js";
 const nextJob = (run:(...args:[]) => any) => Promise.resolve().then(() => {
     run()
 })
-
+/**
+ * @category Miscellaneous
+ */
 export function autorun(fn: (context: GetterContext) => any, scheduleRerun: DirtyCallback|true = nextJob) {
     const instance = new Computed(fn, undefined, scheduleRerun, undefined, undefined, undefined, true)
     instance.run([], true)
@@ -16,7 +18,9 @@ export function autorun(fn: (context: GetterContext) => any, scheduleRerun: Dirt
         instance.destroy()
     }
 }
-
+/**
+ * @category Miscellaneous
+ */
 export function once(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) {
     let stopFn: () => any
     let stopped = false
@@ -42,7 +46,9 @@ export function once(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) 
     // 也支持外部手动 stop
     return stopFn
 }
-
+/**
+ * @category Miscellaneous
+ */
 export function oncePromise(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) {
     return new Promise((resolve, reject) => {
         // TODO 出错？

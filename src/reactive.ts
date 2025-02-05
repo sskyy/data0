@@ -111,12 +111,17 @@ export function isReactive(value: unknown): boolean {
 }
 
 
-
+/**
+ * @category Basic
+ */
 export function toRaw<T>(observed: T): T {
   const raw = observed && (observed as Target)[ReactiveFlags.RAW]
   return raw ? toRaw(raw) : observed
 }
 
+/**
+ * @category Basic
+ */
 export function toRawObject<T>(observed: T): T {
   return isAtom(observed) ? observed : toRaw<T>(observed)
 }

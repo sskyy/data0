@@ -17,7 +17,9 @@ type EntryType = [any, any][]
 type PlainObjectType = {
     [key: string]: any
 }
-
+/**
+ * @category Basic
+ */
 export class RxMap<K, V> extends Computed{
     data!: Map<K, V>
     trackClassInstance = true

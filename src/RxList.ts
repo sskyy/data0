@@ -31,12 +31,29 @@ type MapContext = {
 
 type Order = [number, number]
 
+/**
+ * @category Basic
+ *
+ * @noInheritDoc
+ */
 export class RxList<T> extends Computed {
     get raw() { return this.data }
     data!: T[]
+    /**
+     * @internal
+     */
     trackClassInstance = true
+    /**
+     * @internal
+     */
     indexKeyDeps = new Map<number, Dep>()
+    /**
+     * @internal
+     */
     atomIndexes? :Atom<number>[]
+    /**
+     * @internal
+     */
     atomIndexesDepCount = 0
 
     constructor(sourceOrGetter?: T[]|null|GetterType, public applyPatch?: ApplyPatchType, scheduleRecompute?: DirtyCallback, public callbacks? : CallbacksType) {
@@ -54,8 +71,11 @@ export class RxList<T> extends Computed {
         }
         this.createComputedMetas()
     }
-    // 这里的 newData type 为 any[]，是为了让子类能覆写，实现 replaceData 的时候才进行数据转换。
+    /**
+     * @internal
+     */
     replaceData(newData: any[]) {
+        // 这里的 newData type 为 any[]，是为了让子类能覆写，实现 replaceData 的时候才进行数据转换。
         this.splice(0, this.data.length, ...newData)
     }
 
@@ -216,6 +236,9 @@ export class RxList<T> extends Computed {
         // track length
         Notifier.instance.track(this, TrackOpTypes.ITERATE, ITERATE_KEY)
     }
+    /**
+     * @internal
+     */
     [Symbol.iterator]() {
         let index = 0;
         let data = this.data;
@@ -233,10 +256,16 @@ export class RxList<T> extends Computed {
             }
         };
     }
+    /**
+     * @internal
+     */
     addAtomIndexesDep() {
         if (!this.atomIndexes) this.atomIndexes = this.data.map((_, index) => atom(index))
         this.atomIndexesDepCount++
     }
+    /**
+     * @internal
+     */
     removeAtomIndexesDep() {
         this.atomIndexesDepCount--
         if (this.atomIndexesDepCount === 0) {
@@ -933,8 +962,10 @@ export class RxList<T> extends Computed {
         )
     }
 
-
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
+    /**
+     * @internal
+     */
     onUntrack(_effect: ReactiveEffect) {
 
     }

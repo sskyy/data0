@@ -24,6 +24,9 @@ type ConvertFromInitialValue<T>  = T extends true ? boolean :
     T extends false ? boolean :
         T
 
+/**
+ * @category Basic
+ */
 export function atom<T>(initValue: T, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<ConvertFromInitialValue<T>>
 export function atom<T>(initValue: null, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<T|null>
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
@@ -133,7 +136,9 @@ atom.as = new Proxy({}, {
     }
 })
 
-
+/**
+ * @category Basic
+ */
 export function isAtom<T>(r: Atom<T> | unknown): r is Atom<T>
 export function isAtom(r: any): r is Atom<any> {
     return !!(r && r[ReactiveFlags.IS_ATOM])

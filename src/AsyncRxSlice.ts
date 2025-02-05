@@ -7,6 +7,9 @@ type GetRemoteData<T> = (cursor?: number, length?: number, stop?: number, fetchB
 type GetCursor = (item: any) => number
 
 // 应该继承 RxList, 这样基于 AsyncRxSlice 的其他数据后面可以继续保持 reactive
+/**
+ * @internal
+ */
 export class AsyncRxSlice<T> extends RxList<T>{
     isLoading: Atom<boolean> = atom(false)
     loadError: Atom<any>= atom(null)

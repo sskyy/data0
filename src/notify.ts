@@ -57,6 +57,7 @@ export const ITERATE_KEY_KEY_ONLY = Symbol('Map key iterate' )
  * The bitwise track markers support at most 30 levels of recursion.
  * This value is chosen to enable modern JS engines to use a SMI on all platforms.
  * When recursion depth is greater, fall back to using a full cleanup.
+ * @internal
  */
 export const maxMarkerBits = 30
 

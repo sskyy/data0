@@ -6,7 +6,9 @@ type Operation = {
     type: | 'add' | 'sub' | 'mul' | 'div'
     value: number | Atom<number> | Operation[] | RxTime
 }
-
+/**
+ * @category Basic
+ */
 export class RxTime {
     public operations: Operation[] = []
     public interval?: number

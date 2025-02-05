@@ -94,6 +94,8 @@ type Phase = typeof FULL_RECOMPUTE_PHASE | typeof PATCH_PHASE
  *   2.1 第一次 callManualTrackGetter
  *   2.2 重算 recompute -> applyPatch
  *   2.3 强制重算 recompute(true) -> callManualTrackGetter
+ *
+ * @internal
  */
 export class Computed extends ReactiveEffect {
     data: ComputedData
@@ -626,7 +628,9 @@ function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirt
     return internal.data
 }
 
-
+/**
+ * @category Basic
+ */
 export function computed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     const internal = new AtomComputed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)
     computedToInternal.set(internal.data, internal)
@@ -636,12 +640,15 @@ export function computed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dir
 export function arrayComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     return legacyComputed<UnwrapReactive<T[]>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'array')
 }
+
 export function objectComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     return legacyComputed<UnwrapReactive<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'object')
 }
+
 export function mapComputed<K, V>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     return legacyComputed<UnwrapReactive<Map<K, V>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'map')
 }
+
 export function setComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     return legacyComputed<UnwrapReactive<Set<T>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'set')
 }
