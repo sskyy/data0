@@ -96,7 +96,7 @@ type Phase = typeof FULL_RECOMPUTE_PHASE | typeof PATCH_PHASE
  *   2.2 重算 recompute -> applyPatch
  *   2.3 强制重算 recompute(true) -> callManualTrackGetter
  *
- * @internal
+ * @category Basic
  */
 export class Computed extends ReactiveEffect {
     data: ComputedData
