@@ -1056,6 +1056,78 @@ export class RxList<T> extends Computed {
     createIndexKeySelection(currentValues: RxSet<number>|Atom<null|number>, autoResetValue?:boolean) {
         return createIndexKeySelection(this, currentValues, autoResetValue)
     }
+
+    public concat(...others: RxList<T>[]): RxList<T> {
+        const sources = [this, ...others]
+        return new RxList<T>(
+            function computation(this: RxList<T>) {
+                // Track each source for incremental updates
+                sources.forEach(src => {
+                    this.manualTrack(src, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                    this.manualTrack(src, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+                })
+
+                // Full initial merge
+                const merged: T[] = []
+                sources.forEach(src => {
+                    merged.push(...src.data)
+                })
+                return merged
+            },
+            function applyPatch(this: RxList<T>, _data, triggerInfos) {
+                // Figure out which source changed, then incrementally update
+                triggerInfos.forEach(info => {
+                    const sourceIndex = sources.indexOf(info.source as RxList<T>)
+                    if (sourceIndex === -1) {
+                        // Some unexpected source
+                        return
+                    }
+
+                    // Calculate offset of that source in the final array
+                    let offset = 0
+                    for (let i = 0; i < sourceIndex; i++) {
+                        offset += sources[i].data.length
+                    }
+
+                    const { method, argv, oldValue, newValue, methodResult } = info
+                    if (method === 'splice') {
+                        // old items to remove
+                        const deletedItems = (methodResult as T[]) || []
+                        deletedItems.forEach(d => {
+                            const idx = this.data.indexOf(d)
+                            if (idx !== -1) {
+                                this.splice(idx, 1)
+                            }
+                        })
+
+                        // new items to insert
+                        const newItems = argv!.slice(2) as T[]
+                        // insertion index = offset + argv![0]
+                        let insertPos = offset + (argv![0] as number)
+                        // clamp insertPos if user spliced out-of-bounds
+                        insertPos = Math.min(Math.max(insertPos, 0), this.data.length)
+                        this.splice(insertPos, 0, ...newItems)
+                    } else {
+                        // explicit key change
+                        if (oldValue !== undefined) {
+                            const idx = this.data.indexOf(oldValue as T)
+                            if (idx !== -1) {
+                                this.splice(idx, 1)
+                            }
+                        }
+                        if (newValue !== undefined) {
+                            // For an in-place "set" or other change, we insert at correct offset
+                            // That offset + (some approximate index). The simplest is to do a push,
+                            // or correct offset if available. We'll pick an offset that places it
+                            // near original. Without the old index, we approximate by pushing:
+                            // (For a better approach, you'd track the original item's index.)
+                            this.splice(offset + sources[sourceIndex].data.indexOf(newValue as T), 0, newValue as T)
+                        }
+                    }
+                })
+            }
+        )
+    }
 }
 
 type SelectionInner = {

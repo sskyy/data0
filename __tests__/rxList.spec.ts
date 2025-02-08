@@ -1138,3 +1138,37 @@ describe('RxList toSorted incremental changes', () => {
     })
 
 })
+
+describe('RxList concat incremental changes', () => {
+    test('concat with multiple lists', () => {
+        const listA = new RxList<number>([1,2])
+        const listB = new RxList<number>([3])
+        const listC = new RxList<number>([4,5])
+        const combined = listA.concat(listB, listC)
+
+        // initial
+        expect(combined.toArray()).toEqual([1,2,3,4,5])
+
+        // push to second
+        listB.push(30)
+        expect(combined.toArray()).toEqual([1,2,3,30,4,5])
+
+        // splice in third
+        listC.splice(1,1, 40,50)
+        expect(combined.toArray()).toEqual([1,2,3,30,4,40,50])
+
+        // set in first
+        listA.set(0, 10)
+        expect(combined.toArray()).toEqual([10,2,3,30,4,40,50])
+    })
+
+    test('concat with an empty list', () => {
+        const list1 = new RxList<string>(['a','b'])
+        const list2 = new RxList<string>([])
+        const concated = list1.concat(list2)
+        expect(concated.toArray()).toEqual(['a','b'])
+
+        list2.push('c')
+        expect(concated.toArray()).toEqual(['a','b','c'])
+    })
+})
