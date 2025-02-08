@@ -214,10 +214,77 @@ export class RxList<T> extends Computed {
         const newOrder: Order[] = newItems.map(item => [itemToIndex.get(item)!, itemToNewIndex.get(item)!])
         return this.reorder(newOrder)
     }
-    // TODO 返回一个新的已排好序的元素，对于新增元素的情况，可以使用二分快速插入。
-    // sort() {
-    //
-    // }
+    private static binarySearchInsert<S>(arr: S[], item: S, compare: (a: S, b: S) => number): number {
+        // A simple binary search to find the insertion index
+        let low = 0
+        let high = arr.length
+        while (low < high) {
+            const mid = (low + high) >>> 1
+            if (compare(arr[mid], item) <= 0) {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        return low
+    }
+
+    public toSorted(compare?: (a: T, b: T) => number): RxList<T> {
+        const source = this
+        // default compare if not provided
+        compare = compare ?? ((a, b) => {
+            if (a < b) return -1
+            if (a > b) return 1
+            return 0
+        })
+
+        return new RxList<T>(
+            function computation(this: RxList<T>) {
+                // Full recompute: track source changes
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+                // Make a clone of source.data and sort it
+                const cloned = source.data.slice()
+                cloned.sort(compare!)
+                return cloned
+            },
+            function applyPatch(this: RxList<T>, _data, triggerInfos) {
+                // Incremental updates
+                triggerInfos.forEach((info) => {
+                    const { method, argv, oldValue, newValue, methodResult } = info
+                    // method could be 'splice' (array insertion/removal) or an explicit key change
+                    if (method === 'splice') {
+                        // 1) remove items
+                        const deletedItems = (methodResult as T[]) || []
+                        deletedItems.forEach((item) => {
+                            const idx = this.data.indexOf(item)
+                            if (idx !== -1) {
+                                this.splice(idx, 1)
+                            }
+                        })
+                        // 2) insert new items in sorted order
+                        const newItems = argv!.slice(2) as T[]
+                        newItems.forEach((item) => {
+                            const insertIndex = RxList.binarySearchInsert(this.data, item, compare!)
+                            this.splice(insertIndex, 0, item)
+                        })
+                    } else {
+                        // explicit key change: remove old, insert new
+                        if (oldValue !== undefined) {
+                            const idx = this.data.indexOf(oldValue as T)
+                            if (idx !== -1) {
+                                this.splice(idx, 1)
+                            }
+                        }
+                        if (newValue !== undefined) {
+                            const insertIndex = RxList.binarySearchInsert(this.data, newValue as T, compare!)
+                            this.splice(insertIndex, 0, newValue as T)
+                        }
+                    }
+                })
+            }
+        )
+    }
     // CAUTION 这里手动 track index dep 的变化，是为了在 splice 的时候能手动去根据订阅的 index dep 触发，而不是直接触发所有的 index key。
     at(index: number): T|undefined{
         const dep = Notifier.instance.track(this, TrackOpTypes.GET, index)

@@ -1103,3 +1103,38 @@ describe('rxList metas', () => {
         expect(stop).toBe(undefined)
     })
 })
+
+describe('RxList toSorted incremental changes', () => {
+
+    test('basic toSorted usage with incremental updates', () => {
+        const list = new RxList<number>([3,1,4,2])
+        const sortedList = list.toSorted()
+        // Initial sort
+        expect(sortedList.toArray()).toEqual([1,2,3,4])
+
+        // Insert new items
+        list.push(0)
+        expect(sortedList.toArray()).toEqual([0,1,2,3,4])
+
+        // Splice in a bigger number
+        list.splice(2, 1, 9) 
+        // That removes '4' at index=2 (since after pushing 0, the array is [3,1,4,2,0] ?),
+        // Actually let's do simpler: if it's [3,1,4,2,0] initially, sorting was [0,1,2,3,4].
+        // We'll trust that the incremental update moves them carefully:
+        expect(sortedList.toArray()).toEqual([0,1,2,3,9])
+
+        // Replacing an existing index explicitly
+        list.set(0, 7) 
+        // That replaces the first element (which was 3), removing 3 from sorted, then adding 7
+        expect(sortedList.toArray()).toEqual([0,1,2,7,9])
+    })
+
+    test('toSorted usage with custom compare', () => {
+        const list = new RxList<string>(['Kiwi','apple','banana'])
+        const sortedList = list.toSorted((a,b)=> a.localeCompare(b))
+        expect(sortedList.toArray()).toEqual(['Kiwi','apple','banana'].sort((a,b)=> a.localeCompare(b)))
+        list.push('Apricot')
+        expect(sortedList.toArray()).toEqual(['Apricot','Kiwi','apple','banana'].sort((a,b)=> a.localeCompare(b)))
+    })
+
+})

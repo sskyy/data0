@@ -39,7 +39,7 @@ export type GetterContext = {
 
 export type GetterType = (context: GetterContext) => any
 export type GeneratorGetterType = (context: GetterContext) => Generator<any, string, boolean>
-export type DirtyCallback = (recompute: (force?: boolean) => void, markDirty: () => any) => void
+export type DirtyCallback = (recompute: (force?: boolean) => void, markDirty: () => any, infos?: any[]) => void
 export type SkipIndicator = { skip: boolean }
 
 
@@ -344,7 +344,7 @@ export class Computed extends ReactiveEffect {
             //   例如 不断将一个 pending list 中的数据取出来变成 processing。
             //   这时候的第一次 run 会变成 clean，所以 schedule 的 recompute 一定要是 forceRecompute 才能继续执行。
             const recompute = (this.status.raw > STATUS_DIRTY && !this.isAsync) ? () => this.recompute(true) : this.recompute
-            this.scheduleRecompute!(recompute, this.recursiveMarkDirty)
+            this.scheduleRecompute!(recompute, this.recursiveMarkDirty, [...this.triggerInfos])
         }
 
         // 如果不是已经开始重算或者立刻开始计算，那么从标记为脏也要创建 cleanPromise
