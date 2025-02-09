@@ -1172,3 +1172,181 @@ describe('RxList concat incremental changes', () => {
         expect(concated.toArray()).toEqual(['a','b','c'])
     })
 })
+
+describe('RxList slice incremental changes', () => {
+    test('Array slice basic behavior', () => {
+        const list = [1,2,3,4,5]
+        // 第一个参数大于数组长度
+        expect(list.slice(10)).toEqual([])
+        // 第二个参数为正数，大于数组长度
+        expect(list.slice(2, 10)).toEqual([3,4,5])
+        // 两个正数，第二个比第一个大
+        expect(list.slice(3, 2)).toEqual([])
+        // 第一个负数，第二个正数
+        expect(list.slice(-2, 1)).toEqual([])
+
+        // 第一个参数为负数，绝对值大于数组长度，第一参数被当做 0
+        expect(list.slice(-10, -1)).toEqual([1,2,3,4])
+        // 两个参数都为负数，且大于数组长度
+        expect(list.slice(-20, -10)).toEqual([])
+        // 两个参数都为负数，只有第二个参数且大于数组长度
+        expect(list.slice(-1, -10)).toEqual([])
+        // 第二个参数为负数，大于数组长度
+        expect(list.slice(1, -10)).toEqual([])
+
+    })
+
+    test('simple slice from start index', () => {
+        const list = new RxList<number>([10,20,30,40,50])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([20,30,40])
+
+        // splice old array
+        list.splice(2, 1, 999)
+        // original is now [10,20,999,40,50]
+        // slice(1,4) => [20,999,40]
+        expect(sliced.toArray()).toEqual([20,999,40])
+
+        // set in old array
+        list.set(1, 123)
+        // original => [10,123,999,40,50]
+        // slice => [123,999,40]
+        expect(sliced.toArray()).toEqual([123,999,40])
+    })
+
+
+
+    test('slice partial overlap changes', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 3) // [2,3]
+        expect(sliced.toArray()).toEqual([2,3])
+
+        // splice removing the overlap region
+        list.splice(2, 1) // remove item 3
+        // original => [1,2,4,5], slice(1,3) => [2,4]
+        expect(sliced.toArray()).toEqual([2,4])
+
+        // splice that inserts a new item in overlapped region
+        list.splice(2, 0, 99) // [1,2,99,4,5]
+        // slice => [2,99]
+        expect(sliced.toArray()).toEqual([2,99])
+
+        // explicit set outside the slice range
+        list.set(4, 1000) // [1,2,99,4,1000]
+        // slice => [2,99]
+        expect(sliced.toArray()).toEqual([2,99])
+
+        // explicit set inside the slice range
+        list.set(2, 1234)
+        // [1,2,1234,4,1000], slice => [2,1234]
+        expect(sliced.toArray()).toEqual([2,1234])
+    })
+
+    test('empty slice from out-of-range', () => {
+        const list = new RxList<number>([10,20])
+        const sliced = list.slice(5, 10)
+        expect(sliced.toArray()).toEqual([])
+
+        list.push(30)
+        expect(list.toArray()).toEqual([10,20,30])
+        // slice is still empty because index 5..10 had no overlap
+        expect(sliced.toArray()).toEqual([])
+    })
+
+    test('slice with negative indices', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        // effectively slice(3,5)
+        const sliced = list.slice(-2)
+        expect(sliced.toArray()).toEqual([4,5])
+
+        // push original array
+        list.push(6)
+        // original => [...,6], slice => [4,5,6]
+        expect(sliced.toArray()).toEqual([5,6])
+    })
+
+    test('slice from some point to Infinite', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(2)
+        expect(sliced.toArray()).toEqual([3,4,5])
+
+        list.push(6)
+        expect(sliced.toArray()).toEqual([3,4,5,6])
+
+        list.splice(2, 1, 999)
+        expect(sliced.toArray()).toEqual([999,4,5, 6])
+    })
+
+    test('change one item in slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.set(2, 999)
+        expect(sliced.toArray()).toEqual([2,999,4])
+    })
+
+    test('push after sliced array should not affect slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.push(6)
+        expect(sliced.toArray()).toEqual([2,3,4])
+    })
+
+    test('unshift before sliced array with negative index should not affect slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(-4, -1)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.unshift(0)
+        expect(sliced.toArray()).toEqual([2,3,4])
+    })
+
+    test('insert in the middle of sliced array should affect slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.splice(2, 0, 999)
+        // now [1,2,999,3,4,5]
+        expect(sliced.toArray()).toEqual([2,999, 3])
+
+        // insert multiple in middle
+        list.splice(3, 0, 1000, 1001)
+        // now [1,2,999,1000,1001,3,4,5]
+        expect(sliced.toArray()).toEqual([2,999,1000])
+    })
+
+    test('replace half of sliced array should affect slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.splice(2, 2, 999, 1000)
+        // now [1,2,999,1000,5]
+        expect(sliced.toArray()).toEqual([2,999,1000])
+    })
+
+    test('replace second half of sliced array should affect slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.splice(3, 2, 999, 1000)
+        // now [1,2,3,999,1000]
+        expect(sliced.toArray()).toEqual([2,3,999])
+    })
+
+    test('replace all of sliced array should affect slice', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        const sliced = list.slice(1, 4)
+        expect(sliced.toArray()).toEqual([2,3,4])
+
+        list.splice(1, 3, 999, 1000, 1001)
+        // now [1,999,1000,1001,5]
+        expect(sliced.toArray()).toEqual([999,1000,1001])
+    })
+
+})

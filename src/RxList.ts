@@ -1128,6 +1128,115 @@ export class RxList<T> extends Computed {
             }
         )
     }
+
+    public slice(start?: number, end?: number): RxList<T> {
+        const source = this
+        // handle negative or undefined arguments
+        start = start ?? 0
+        end = end ?? Infinity
+        
+        /** Utility: clamp the user-provided slice range. */
+        const clampIndexes = (length: number) : [number,number]|undefined =>  {
+            if (start >= length) return undefined
+            if (end < -(length)) return undefined
+            // mimic standard JS slice behavior
+            const s = start! < 0 ? Math.max(0, length + start!) : Math.min(start!, length)
+            const e = end! < 0 ? Math.max(0, length + end!) : Math.min(end!, length)
+            return s >= e ? undefined : [s, e]
+        }
+
+        let lastIndexes: [number, number]|undefined = undefined
+        return new RxList<T>(
+            /** 1) Full Recompute: just slice right now. */
+            function computation(this: RxList<T>) {
+                // track changes from source
+                this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+                this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+
+                const idxs = clampIndexes(source.data.length)
+                lastIndexes = idxs
+                return idxs ? source.data.slice(idxs[0], idxs[1]) : []
+            },
+
+            /** 2) Incremental Patch: interpret splices/sets to update our slice accordingly. */
+            function applyPatch(this: RxList<T>, _data, triggerInfos) {
+                for(const info of triggerInfos) {
+                    // ensure it's from this source
+                    if (info.source !== source) return false
+                    debugger
+                    const idxs = clampIndexes(source.data.length)
+                    // 现在不合法了，清空
+                    if (!idxs || !lastIndexes) {
+                        return false
+                    }
+
+                    // 原来和现在都合法
+                    const { method, argv, newValue, methodResult: deletedItems, key } = info
+
+                    if (method === 'splice') {
+                        const insertedItems = argv!.slice(2) as T[]
+                        if (deletedItems.length === 0 && insertedItems.length === 0) return
+
+                        const startArgv = argv![0]  as number
+                        const lastSourceLength = source.data.length - deletedItems.length + insertedItems.length
+                        // 如果 start 参数为负数且绝对值大于原始数组长度，会被修正为 0 开始，效果等价与修正成 lastSourceLength。我们这里这样写是为了计算方便。
+                        const spliceStart = startArgv! < 0 ? Math.max(0, lastSourceLength + end!) : Math.min(startArgv!, lastSourceLength)
+                        const spliceEffectEnd = spliceStart + deletedItems.length
+                        const lengthChange = insertedItems.length  - deletedItems.length
+
+
+                        const ucHead = lastIndexes[0] < spliceStart ? [lastIndexes[0], Math.min(spliceStart, lastIndexes[1])] : undefined
+                        const ucTail = lastIndexes[1] > spliceEffectEnd ? [Math.max(spliceEffectEnd, lastIndexes[0])+lengthChange, lastIndexes[1]+lengthChange] : undefined
+                        const ucTailOldIndex = ucTail ? Math.max(spliceEffectEnd, lastIndexes[0]) - lastIndexes[0]: undefined
+
+                        if (!ucHead && !ucTail) {
+                            return false
+                        }
+                        // 如果影响了原序列，并且影响范围在有效范围内，就要先处理原序列
+                        // 已经找到了老的序列的新 index，如何进行更新策略？
+                        if ((ucHead || ucTail) && !(spliceStart > idxs[1] || spliceEffectEnd < idxs[0])) {
+                            // 1.如果 splice 影响的是中间，先把中间处理了，并且仍然在有效范围内。才有处理的必要
+                            if (ucHead && ucTail) {
+                                this.splice(ucHead[1]-ucHead[0], ucTailOldIndex! - (ucHead[1]-ucHead[0]), ...source.data.slice(ucHead[1], ucTail[0]))
+                            } else if (ucHead) {
+                                this.splice(ucHead[1]-ucHead[0], Infinity)
+                            } else {
+                                this.splice(0, ucTailOldIndex!)
+                            }
+                        }
+
+                        const oldStart = ucHead ? ucHead[0] : (ucTail ? ucTail[0] : undefined)
+                        const oldEnd = ucTail ? ucTail[1] : (ucHead ? ucHead[1] : undefined)
+                        if (oldStart! > idxs[1] || oldEnd! < idxs[0]) {
+                            return false
+                        }
+
+                        if(oldStart! > idxs[0]) {
+                            this.unshift(...source.data.slice(idxs[0], oldStart))
+                        } else if(oldStart! < idxs[0]) {
+                            this.splice(0, idxs[0]-oldStart!)
+                        }
+
+                        if (oldEnd! < idxs[1]) {
+                            this.push(...source.data.slice(oldEnd, idxs[1]))
+                        } else if(oldEnd! > idxs[1]) {
+                            this.splice(idxs[1] - idxs[0], Infinity)
+                        }
+
+                        lastIndexes = idxs
+                    } else {
+                        // explicit key change or "set"
+                        // remove oldValue if it was in our slice
+                        const index = key as number
+                        if ( !(index < lastIndexes[0]||index >= lastIndexes[1])) {
+                            this.splice(index - lastIndexes[0], 1, newValue as T)
+                        }
+
+                    }
+                }
+            }
+        )
+    }
 }
 
 type SelectionInner = {
