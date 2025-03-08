@@ -1,6 +1,6 @@
 import { Atom, isAtom } from "./atom.js";
 import {DirtyCallback, Computed, GetterContext} from "./computed.js";
-import { ITERATE_KEY, TriggerInfo } from "./notify.js";
+import { TriggerInfo } from "./notify.js";
 import { TrackOpTypes, TriggerOpTypes } from "./operations.js";
 import { RxList } from "./RxList.js";
 import { RxMap } from "./RxMap.js";
