@@ -1,4 +1,10 @@
+import { Atom, isAtom } from "./atom.js";
 import {DirtyCallback, Computed, GetterContext} from "./computed.js";
+import { ITERATE_KEY, TriggerInfo } from "./notify.js";
+import { TrackOpTypes, TriggerOpTypes } from "./operations.js";
+import { RxList } from "./RxList.js";
+import { RxMap } from "./RxMap.js";
+import { RxSet } from "./RxSet.js";
 
 // CAUTION  autorun/once 是用来执行用户代码的。
 //  一定自己不能有 digest session 或者在其他的 digest session 中，
@@ -60,4 +66,31 @@ export function oncePromise(fn:() => any, scheduleRerun: DirtyCallback|true = ne
             return result
         }, scheduleRerun)
     })
+}
+
+/**
+ * @category Miscellaneous
+ */
+export function onChange(source:Atom|RxList<any>|RxSet<any>|RxMap<any, any>, handler: (...args:any[]) => any) {
+    const instance = new Computed(function(this: Computed){
+        if (isAtom(source)) {
+            this.manualTrack(source, TrackOpTypes.ATOM, 'value')
+        } else if (source instanceof RxList) {
+            this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+            this.manualTrack(source, TrackOpTypes.EXPLICIT_KEY_CHANGE, TriggerOpTypes.EXPLICIT_KEY_CHANGE)
+        } else if (source instanceof RxSet) {
+            this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+        } else if (source instanceof RxMap) {
+            this.manualTrack(source, TrackOpTypes.METHOD, TriggerOpTypes.METHOD)
+        }
+        
+    }, function applyPatch(this:Computed, data:any, triggerInfos:TriggerInfo[]) {
+        handler([...triggerInfos])
+    })
+
+    instance.run([], true)
+    
+    return function destroy() {
+        instance.destroy()
+    }
 }
