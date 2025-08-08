@@ -400,10 +400,6 @@ export class RxList<T> extends Computed {
                 return result
             },
             function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
-                // filter 可能同时产生多个 triggerInfos。导致在增量方法里去获取 source.data 上真实的值的时候计算太复杂。
-                // 目前没有很好的方法解决，先全量计算。
-                if(triggerInfos.length > 1) return false
-
                 triggerInfos.forEach((triggerInfo) => {
 
                     const { method , argv  ,key } = triggerInfo
@@ -417,7 +413,7 @@ export class RxList<T> extends Computed {
                         const newItemsInArgs = argv!.slice(2)
                         const effectFrames: ReactiveEffect[][] = []
                         const newCleanups: MapCleanupFn[] = []
-                        const newItems = newItemsInArgs.map((_, index) => {
+                        const newItems = newItemsInArgs.map((newItemsInArg, index) => {
                             const mapContext: MapContext|undefined = useContext ? {
                                 onCleanup(fn: MapCleanupFn) {
                                     newCleanups![index] = fn
@@ -428,11 +424,13 @@ export class RxList<T> extends Computed {
                             let newItemIndex: Atom<number>|undefined
 
                             const newItemRun = new Computed(() => {
-                                // 说明是内部有依赖变换发生的更新。
+                                // newItemIndex 是后面为每一个元素生成的，一开始是没有的。这里如果有，说明是内部有依赖变换发生的更新，已经不是第一次计算了。
                                 if (newItemIndex) {
                                     this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw]!, newItemIndex, mapContext!))
                                 } else {
-                                    newItem = mapFn(source.data[newIndex]!, source.atomIndexes?.[newIndex]!, mapContext!)
+                                    // 第一次计算，一定要使用 newItemsInArg 作为参数。
+                                    // 因为有可能第一次计算就有多个 triggerInfo，里面多次元素位置变化，导致 source.data 很难知道元素的新位置。
+                                    newItem = mapFn(newItemsInArg, source.atomIndexes?.[newIndex]!, mapContext!)
                                 }
                             }, undefined, true)
                             newItemRun.run()
