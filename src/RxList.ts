@@ -400,6 +400,10 @@ export class RxList<T> extends Computed {
                 return result
             },
             function applyMapArrayPatch(this: RxList<U>, _data, triggerInfos) {
+                // filter 可能同时产生多个 triggerInfos。导致在增量方法里去获取 source.data 上真实的值的时候计算太复杂。
+                // 目前没有很好的方法解决，先全量计算。
+                if(triggerInfos.length > 1) return false
+
                 triggerInfos.forEach((triggerInfo) => {
 
                     const { method , argv  ,key } = triggerInfo

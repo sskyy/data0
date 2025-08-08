@@ -1,4 +1,4 @@
-import {atom, incUnique, reactive} from "../src";
+import {atom, incUnique, reactive, RxList} from "../src";
 import {describe, expect, test} from "vitest";
 import {arrayComputed, mapComputed} from "../src/computed";
 
@@ -58,5 +58,20 @@ describe('computed on computed', () => {
         atom1(1)
         expect(Array.from(uniqueSet)).toShallowMatchObject([1,2])
     })
+
+    test('chained computed, filter,map, then re-compute, then filter,map', async () => {
+        const data = atom([1, 2, 3, 4])
+        const list = new RxList<number>(() => data())
+        const even = list.filter(x => x % 2 === 0)
+        const doubled = even.map(x => {
+            return x * 2
+        })
+        expect(even.toArray()).toEqual([2, 4])
+        expect(doubled.toArray()).toEqual([4, 8])
+  
+        data([1,2,3,4,5,6])
+        expect(even.toArray()).toEqual([2, 4, 6])
+        expect(doubled.toArray()).toEqual([4, 8, 12])
+      })
 
 })
