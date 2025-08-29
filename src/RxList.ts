@@ -171,6 +171,7 @@ export class RxList<T> extends Computed {
         })
 
         this.trigger(this, TriggerOpTypes.METHOD, { method:'reorder', key: ITERATE_KEY, argv: [newOrder] })
+        this.sendTriggerInfos()
     }
     reposition(start:number, newStart:number, limit:number = 1 ) {
         assert(start >= 0 && start+limit < this.data.length, 'start index out of range')
@@ -467,6 +468,9 @@ export class RxList<T> extends Computed {
                                 options.onCleanup!(item)
                             })
                         }
+                    } else if(method === 'reorder') {
+                        // 排序会触发所有 map 出来的元素同样计算
+                        this.reorder(argv![0]! as Order[])
                     } else {
                         // explicit key change
                         // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。

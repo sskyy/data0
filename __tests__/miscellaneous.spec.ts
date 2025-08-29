@@ -74,4 +74,21 @@ describe('computed on computed', () => {
         expect(doubled.toArray()).toEqual([4, 8, 12])
       })
 
+      test('list sort self, should trigger mapped list re-compute', () => {
+        const list = new RxList<number>(() => [3, 1, 2, 4, 5])
+        const doubled = list.map(x => x * 2)
+        list.sortSelf((a, b) => a - b)
+        expect(list.toArray()).toEqual([1, 2, 3, 4, 5])
+        expect(doubled.toArray()).toEqual([2, 4, 6, 8, 10])
+      })
+
+
+      test('RxList#map, then #sortSelf(), then #splice()', () => {
+        const list = new RxList([3, 1, 5, 2, 4]);
+        const doubled = list.map((v) => v * 2)
+        list.sortSelf((a, b) => a - b);
+        list.splice(0, 1)
+        expect(list.toArray()).toMatchObject([2, 3, 4, 5]);
+        expect(doubled.toArray()).toMatchObject([4, 6, 8, 10])
+      });
 })
