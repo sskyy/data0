@@ -837,7 +837,7 @@ export class RxList<T> extends Computed {
             },
             function applyPatch(this: RxMap<any, RxList<T>>, _data, triggerInfos) {
                 triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    const { method , argv  ,key, oldValue, newValue, methodResult, type} = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     if (method === 'splice') {
@@ -882,7 +882,7 @@ export class RxList<T> extends Computed {
                             }
                         })
 
-                    } else {
+                    } else if (type === TriggerOpTypes.EXPLICIT_KEY_CHANGE) {
                         // explicit key change
                         if (oldValue) {
                             const oldGroupKey = getKey(oldValue as T)
@@ -917,7 +917,7 @@ export class RxList<T> extends Computed {
             },
             function applyPatch(this: RxMap<any, T>, _data, triggerInfos) {
                 triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    const { method , argv  ,key, oldValue, newValue, methodResult, type} = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     if (method === 'splice') {
@@ -933,13 +933,14 @@ export class RxList<T> extends Computed {
                             assert(!this.data.has(indexKey), 'indexBy key is already exist')
                             this.set(indexKey, item)
                         })
-                    } else {
+                    } else if (type === TriggerOpTypes.EXPLICIT_KEY_CHANGE) {
                         // explicit key change
                         const indexKey = typeof inputIndexKey === 'function' ? inputIndexKey(oldValue as T) : (oldValue as T)[inputIndexKey]
                         this.delete(indexKey)
                         const newKey = typeof inputIndexKey === 'function' ? inputIndexKey(newValue as T) : (newValue as T)[inputIndexKey]
                         this.set(newKey, newValue as T)
                     }
+                    // 还有可能是 reorder, reorder 对 map 来说没有影响。
                 })
             }
         )
@@ -964,7 +965,7 @@ export class RxList<T> extends Computed {
             },
             function applyPatch(this: RxMap<any, T>, _data, triggerInfos) {
                 triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    const { method , argv  ,key, oldValue, newValue, methodResult, type} = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     if (method === 'splice') {
@@ -976,13 +977,14 @@ export class RxList<T> extends Computed {
                         newItemsInArgs.forEach(([indexKey, value]) => {
                             this.set(indexKey, value)
                         })
-                    } else {
+                    } else if (type === TriggerOpTypes.EXPLICIT_KEY_CHANGE) {
                         // explicit key change
                         const indexKey = (oldValue as [any, any])[0]
                         this.delete(indexKey)
                         const [newKey, newItem] = newValue as [any, any]
                         this.set(newKey, newItem)
                     }
+                    // 还有可能是 reorder, reorder 对 map 来说没有影响。
                 })
             }
         )
@@ -997,7 +999,7 @@ export class RxList<T> extends Computed {
             },
             function applyPatch(this: RxSet<T>, _data, triggerInfos) {
                 triggerInfos.forEach((triggerInfo) => {
-                    const { method , argv  ,key, oldValue, newValue, methodResult} = triggerInfo
+                    const { method , argv  ,key, oldValue, newValue, methodResult, type} = triggerInfo
                     assert(!!(method === 'splice' || key), 'trigger info has no method and key')
 
                     if (method === 'splice') {
@@ -1009,11 +1011,12 @@ export class RxList<T> extends Computed {
                         newItemsInArgs.forEach((item) => {
                             this.add(item)
                         })
-                    } else {
+                    } else if (type === TriggerOpTypes.EXPLICIT_KEY_CHANGE) {
                         // explicit key change
                         this.delete(oldValue as T)
                         this.add(newValue as T)
                     }
+                    // 还有可能是 reorder, reorder 对 set 来说没有影响。
                 })
             }
         )
