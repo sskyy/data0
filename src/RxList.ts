@@ -199,7 +199,7 @@ export class RxList<T> extends Computed {
     }
     swap(start: number, newStart:number, limit:number = 1) {
         assert(start >= 0 && start+limit < this.data.length, 'start index out of range')
-        assert(newStart >= 0 && newStart+limit < this.data.length, 'newStart index out of range')
+        assert(newStart >= 0 && newStart+limit <= this.data.length, 'newStart index out of range')
         const newOrder:Order[] = []
         for (let i = 0; i < limit; i++) {
             newOrder.push([start + i, newStart + i])
