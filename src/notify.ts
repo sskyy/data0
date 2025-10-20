@@ -19,20 +19,20 @@ export type TriggerResult = {
 type KeyToDepMap = Map<any, Dep>
 
 export type TriggerStack = {type?: string, debugTarget: any, opType?: TriggerOpTypes, key?:unknown, oldValue?: unknown, newValue?: unknown, targetLoc: [string, string][]}[]
-export type InputTriggerInfo = {
+export type InputTriggerInfo<T = unknown> = {
   method?: string,
   argv?: any[]
   result? : TriggerResult,
   methodResult? :any
   key?: unknown,
-  newValue?: unknown,
-  oldValue?: unknown,
+  newValue?: T,
+  oldValue?: T,
 }
 
-export type TriggerInfo = {
+export type TriggerInfo<T = unknown> = {
   type: TriggerOpTypes,
   source: any
-} & InputTriggerInfo
+} & InputTriggerInfo<T>
 
 export type DebuggerEventExtraInfo = {
   target: object
