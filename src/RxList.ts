@@ -594,7 +594,7 @@ export class RxList<T> extends Computed {
         )
     }
 
-    find(matchFn:(item: T) => boolean): Atom<T> {
+    find(matchFn:(item: T) => boolean): Atom<T | undefined> {
         const index = this.findIndex(matchFn)
 
         return computed(() => {

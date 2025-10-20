@@ -7,7 +7,6 @@ import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
 import {CleanupFrame} from "./manualCleanup";
 
-
 export const computedToInternal = new WeakMap<any, Computed>()
 
 export type CallbacksType = {
@@ -21,24 +20,23 @@ export type CallbacksType = {
 
 export type ComputedResult<T extends GetterType> = ReturnType<T> extends object ? UnwrapReactive<ReturnType<T>> : Atom<ReturnType<T>>
 
-export type ComputedData = Atom | UnwrapReactive<any>
-export type SimpleApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => any
-export type AsyncApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => Promise<any>
-export type GeneratorApplyPatchType = (computedData: ComputedData, info: TriggerInfo[]) => Generator<any, string, boolean>
-export type ApplyPatchType = SimpleApplyPatchType | GeneratorApplyPatchType
+export type ComputedData<T = any> = Atom<T> | UnwrapReactive<T>
+export type SimpleApplyPatchType<T> = (computedData: ComputedData, info: TriggerInfo[]) => any
+export type AsyncApplyPatchType<T> = (computedData: ComputedData, info: TriggerInfo[]) => Promise<any>
+export type GeneratorApplyPatchType<T> = (computedData: ComputedData, info: TriggerInfo[]) => Generator<any, string, boolean>
+export type ApplyPatchType<T = any> = SimpleApplyPatchType<T> | AsyncApplyPatchType<T> | GeneratorApplyPatchType<T>
 
 
 
-export type GetterContext = {
-    lastValue: ComputedData,
+export type GetterContext<T = any> = {
+    lastValue: ComputedData<T>,
     onCleanup: (fn: () => any) => void,
     pauseCollectChild: () => void,
     resumeCollectChild: () => void,
     asyncStatus: Atom<null | boolean | string>,
 }
 
-export type GetterType = (context: GetterContext) => any
-export type GeneratorGetterType = (context: GetterContext) => Generator<any, string, boolean>
+export type GetterType<T = any> = (context: GetterContext) => T | Generator<T | Promise<T>, T | Promise<T>, boolean>
 export type DirtyCallback = (recompute: (force?: boolean) => void, markDirty: () => any, infos?: any[]) => void
 export type SkipIndicator = { skip: boolean }
 
@@ -512,7 +510,7 @@ export class Computed extends ReactiveEffect {
     runSimplePatch() {
         this.prepareTracking(false, true)
         this.pauseAutoTrack()
-        const patchResult = (this.applyPatch as SimpleApplyPatchType).call(this, this.data, this.triggerInfos)
+        const patchResult = (this.applyPatch as SimpleApplyPatchType<any>).call(this, this.data, this.triggerInfos)
         this.resetAutoTrack()
         this.completeTracking(false, true)
         this.triggerInfos.length = 0
@@ -525,7 +523,7 @@ export class Computed extends ReactiveEffect {
             const waitingTriggerInfos = [...this.triggerInfos]
             this.triggerInfos.length = 0
             this.pauseAutoTrack()
-            const patchPromise = (this.applyPatch as AsyncApplyPatchType).call(this, this.data, waitingTriggerInfos)
+            const patchPromise = (this.applyPatch as AsyncApplyPatchType<any>).call(this, this.data, waitingTriggerInfos)
             this.resetAutoTrack()
             patchResult = await patchPromise
             if (patchResult === false) {
@@ -541,7 +539,7 @@ export class Computed extends ReactiveEffect {
         while(this.triggerInfos.length) {
             const waitingTriggerInfos = [...this.triggerInfos]
             this.triggerInfos.length =0
-            const generator = (this.applyPatch! as GeneratorApplyPatchType).call(this, this.data, waitingTriggerInfos)
+            const generator = (this.applyPatch! as GeneratorApplyPatchType<any>).call(this, this.data, waitingTriggerInfos)
 
             this.asyncStatus!(true)
             patchResult = await this.runGenerator(generator,
@@ -632,7 +630,7 @@ function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirt
 /**
  * @category Basic
  */
-export function computed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
+export function computed<T>(getter: GetterType<T>, applyPatch?: ApplyPatchType<T>, dirtyCallback?: DirtyCallback | true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
     const internal = new AtomComputed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)
     computedToInternal.set(internal.data, internal)
     return internal.data as Atom<T>
