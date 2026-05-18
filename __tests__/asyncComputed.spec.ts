@@ -9,9 +9,6 @@ import {
     TrackOpTypes
 } from "../src/index.js";
 
-
-
-
 describe('async computed', () => {
     const fetchData = (offset:number, legnth:number): Promise<number[]> => {
         const data = Array(100).fill(0).map((_, index) => index)
@@ -23,8 +20,8 @@ describe('async computed', () => {
     }
 
     const wait = (time: number) => {
-        return new Promise(resolve => {
-            setTimeout(resolve, time)
+        return new Promise<number>(resolve => {
+            setTimeout(() => resolve(time), time)
         })
     }
 

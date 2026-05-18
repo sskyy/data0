@@ -1,5 +1,5 @@
 export {reactive, isReactive, rawStructureClone, toRaw, type UnwrapReactive} from './reactive'
-export {atom, isAtom, type Atom} from './atom'
+export {atom, isAtom, type AtomBase, type Atom} from './atom'
 export {
     computed,
     arrayComputed,
