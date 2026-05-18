@@ -31,17 +31,17 @@ describe("atom types test", () => {
 
     test('atom base types', () => {
         const num = atom(1)
-        expectTypeOf(num).toExtend<Atom<number>>()
+        expectTypeOf(num).toMatchTypeOf<Atom<number>>()
         expectTypeOf(num()).toEqualTypeOf<number>()
         expectTypeOf(num.raw).toEqualTypeOf<number>()
 
         const str = atom('str')
-        expectTypeOf(str).toExtend<Atom<string>>()
+        expectTypeOf(str).toMatchTypeOf<Atom<string>>()
         expectTypeOf(str()).toEqualTypeOf<string>()
         expectTypeOf(str.raw).toEqualTypeOf<string>()
 
         const bool = atom(true)
-        expectTypeOf(bool).toExtend<Atom<boolean>>()
+        expectTypeOf(bool).toMatchTypeOf<Atom<boolean>>()
         expectTypeOf(bool()).toEqualTypeOf<boolean>()
         expectTypeOf(bool.raw).toEqualTypeOf<boolean>()
 
@@ -178,15 +178,15 @@ describe("atom types test", () => {
 describe('computed types test', () => {
     test('infer computed type from getter returns', () => {
         const num = computed(() => 1)
-        expectTypeOf(num).toExtend<Atom<number>>()
+        expectTypeOf(num).toMatchTypeOf<Atom<number>>()
         expectTypeOf(num()).toEqualTypeOf<number>()
 
         const str = computed(() => 'str')
-        expectTypeOf(str).toExtend<Atom<string>>()
+        expectTypeOf(str).toMatchTypeOf<Atom<string>>()
         expectTypeOf(str()).toEqualTypeOf<string>()
 
         const bool = computed(() => true)
-        expectTypeOf(bool).toExtend<Atom<boolean>>()
+        expectTypeOf(bool).toMatchTypeOf<Atom<boolean>>()
         expectTypeOf(bool()).toEqualTypeOf<boolean>()
     })
 })
