@@ -386,3 +386,18 @@ export class Notifier {
     this.shouldTrack = last === undefined ? true : last
   }
 }
+
+/**
+ * Batch reactive writes so dependent effects run once after the callback exits.
+ *
+ * Nested batches share the same effect session and flush only at the outermost
+ * boundary.
+ */
+export function batch<T>(fn: () => T): T {
+  Notifier.instance.createEffectSession()
+  try {
+    return fn()
+  } finally {
+    Notifier.instance.digestEffectSession()
+  }
+}

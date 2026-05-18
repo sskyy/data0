@@ -2,7 +2,7 @@ import {arrayComputed, computed, objectComputed, scheduleNextMicroTask} from "..
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
-import {autorun} from "../src";
+import {autorun, batch} from "../src";
 
 
 describe('computed basic', () => {
@@ -177,6 +177,73 @@ describe('computed with scheduler', () => {
 
         await wait(1)
         expect(num3()).toBe(5)
+        expect(computedRuns).toBe(2)
+    })
+})
+
+describe('batch', () => {
+    test('coalesces multiple atom updates into one recompute', () => {
+        const num1 = atom(1)
+        const num2 = atom(2)
+        let computedRuns = 0
+
+        const sum = computed(() => {
+            computedRuns++
+            return num1() + num2()
+        })
+
+        expect(sum()).toBe(3)
+        expect(computedRuns).toBe(1)
+
+        batch(() => {
+            num1(2)
+            num2(3)
+        })
+
+        expect(sum()).toBe(5)
+        expect(computedRuns).toBe(2)
+    })
+
+    test('nested batches flush only at the outer boundary', () => {
+        const num1 = atom(1)
+        const num2 = atom(2)
+        let computedRuns = 0
+
+        const sum = computed(() => {
+            computedRuns++
+            return num1() + num2()
+        })
+
+        batch(() => {
+            num1(2)
+            batch(() => {
+                num2(3)
+            })
+            expect(sum()).toBe(3)
+            expect(computedRuns).toBe(1)
+        })
+
+        expect(sum()).toBe(5)
+        expect(computedRuns).toBe(2)
+    })
+
+    test('flushes pending effects when callback throws', () => {
+        const num = atom(1)
+        let computedRuns = 0
+
+        const doubled = computed(() => {
+            computedRuns++
+            return num() * 2
+        })
+
+        expect(() => {
+            batch(() => {
+                num(2)
+                throw new Error('boom')
+            })
+        }).toThrow('boom')
+
+        expect(doubled()).toBe(4)
         expect(computedRuns).toBe(2)
     })
 })
