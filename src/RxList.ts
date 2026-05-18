@@ -29,7 +29,30 @@ type MapContext = {
     onCleanup: (fn: MapCleanupFn) => void
 }
 
-type Order = [number, number]
+export type Order = [number, number]
+export type ReorderKind = 'swap' | 'move' | 'sort' | 'reorder'
+export type ReorderPatchInfo = {
+    kind: ReorderKind,
+    affectedRange: [number, number] | null,
+    movedCount: number,
+    oldIndexToNewIndex: Map<number, number>,
+    start?: number,
+    newStart?: number,
+    limit?: number,
+}
+
+function createReorderPatchInfo(kind: ReorderKind, newOrder: Order[], details: Partial<ReorderPatchInfo> = {}): ReorderPatchInfo {
+    const movedIndexes = newOrder.flatMap(([oldIndex, newIndex]) => oldIndex === newIndex ? [] : [oldIndex, newIndex])
+    return {
+        kind,
+        affectedRange: movedIndexes.length
+            ? [Math.min(...movedIndexes), Math.max(...movedIndexes)]
+            : null,
+        movedCount: newOrder.filter(([oldIndex, newIndex]) => oldIndex !== newIndex).length,
+        oldIndexToNewIndex: new Map(newOrder),
+        ...details,
+    }
+}
 
 /**
  * @category Basic
@@ -152,7 +175,7 @@ export class RxList<T> extends Computed {
 
         return oldValue
     }
-    reorder(newOrder: Order[]) {
+    reorder(newOrder: Order[], reorderInfo = createReorderPatchInfo('reorder', newOrder)) {
         const originIndexes = newOrder.map(item => item[0])
         const newIndexes = newOrder.map(item => item[1])
         const oldIndexAtoms = this.atomIndexes ? originIndexes.map(index => this.atomIndexes![index]) : null
@@ -170,12 +193,12 @@ export class RxList<T> extends Computed {
             }
         })
 
-        this.trigger(this, TriggerOpTypes.METHOD, { method:'reorder', key: ITERATE_KEY, argv: [newOrder] })
+        this.trigger(this, TriggerOpTypes.METHOD, { method:'reorder', key: ITERATE_KEY, argv: [newOrder], reorderInfo })
         this.sendTriggerInfos()
     }
     reposition(start:number, newStart:number, limit:number = 1 ) {
-        assert(start >= 0 && start+limit < this.data.length, 'start index out of range')
-        assert(newStart >= 0 && newStart+limit < this.data.length, 'newStart index out of range')
+        assert(start >= 0 && limit > 0 && start+limit <= this.data.length, 'start index out of range')
+        assert(newStart >= 0 && newStart+limit <= this.data.length, 'newStart index out of range')
         // 1. 如果是往前移动，新位置到原来为止中间的元素都要往后移动
         // 2. 如果是往后移动，原来位置到新位置为止中间的元素都要往前移动
         if (start === newStart) return
@@ -195,17 +218,17 @@ export class RxList<T> extends Computed {
                 newOrder.push([i, i - limit])
             }
         }
-        return this.reorder(newOrder)
+        return this.reorder(newOrder, createReorderPatchInfo('move', newOrder, { start, newStart, limit }))
     }
     swap(start: number, newStart:number, limit:number = 1) {
-        assert(start >= 0 && start+limit < this.data.length, 'start index out of range')
+        assert(start >= 0 && limit > 0 && start+limit <= this.data.length, 'start index out of range')
         assert(newStart >= 0 && newStart+limit <= this.data.length, 'newStart index out of range')
         const newOrder:Order[] = []
         for (let i = 0; i < limit; i++) {
             newOrder.push([start + i, newStart + i])
             newOrder.push([newStart + i, start + i])
         }
-        return this.reorder(newOrder)
+        return this.reorder(newOrder, createReorderPatchInfo('swap', newOrder, { start, newStart, limit }))
     }
     sortSelf(compare: (a: T, b:T)=> number) {
         const wrappedItems = this.data.map(value => ({value}))
@@ -213,7 +236,7 @@ export class RxList<T> extends Computed {
         const newItems = wrappedItems.sort((a, b) => compare(a.value, b.value))
         const itemToNewIndex = new Map(newItems.map((item, index) => [item, index]))
         const newOrder: Order[] = newItems.map(item => [itemToIndex.get(item)!, itemToNewIndex.get(item)!])
-        return this.reorder(newOrder)
+        return this.reorder(newOrder, createReorderPatchInfo('sort', newOrder))
     }
     private static binarySearchInsert<S>(arr: S[], item: S, compare: (a: S, b: S) => number): number {
         // A simple binary search to find the insertion index
@@ -470,7 +493,7 @@ export class RxList<T> extends Computed {
                         }
                     } else if(method === 'reorder') {
                         // 排序会触发所有 map 出来的元素同样计算
-                        this.reorder(argv![0]! as Order[])
+                        this.reorder(argv![0]! as Order[], triggerInfo.reorderInfo as ReorderPatchInfo | undefined)
                     } else {
                         // explicit key change
                         // CAUTION add/update 一定都要全部重新从 source 里面取，因为这样才能得到正确的 proxy。newValue 是 raw data，和 mapFn 里面预期拿到的不一致。

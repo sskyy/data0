@@ -24,6 +24,7 @@ export type InputTriggerInfo = {
   argv?: any[]
   result? : TriggerResult,
   methodResult? :any
+  reorderInfo?: unknown,
   key?: unknown,
   newValue?: unknown,
   oldValue?: unknown,

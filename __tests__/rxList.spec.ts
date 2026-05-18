@@ -1073,6 +1073,89 @@ describe('RxList reorder', () => {
             [5, 0]
         ])
     })
+
+    test('reorder trigger includes operation metadata', () => {
+        const list = new RxList<number>([1,2,3,4,5])
+        let receivedInfo: any
+        list.map(item => item, {
+            beforePatch(triggerInfo) {
+                receivedInfo = triggerInfo.reorderInfo
+            }
+        })
+
+        list.swap(1, 3)
+        expect(receivedInfo.kind).toBe('swap')
+        expect(receivedInfo.affectedRange).toEqual([1, 3])
+        expect(receivedInfo.movedCount).toBe(2)
+        expect(receivedInfo.start).toBe(1)
+        expect(receivedInfo.newStart).toBe(3)
+        expect(receivedInfo.limit).toBe(1)
+        expect(receivedInfo.oldIndexToNewIndex.get(1)).toBe(3)
+        expect(receivedInfo.oldIndexToNewIndex.get(3)).toBe(1)
+
+        list.reposition(1, 3)
+        expect(receivedInfo.kind).toBe('move')
+        expect(receivedInfo.affectedRange).toEqual([1, 3])
+        expect(receivedInfo.movedCount).toBe(3)
+        expect(receivedInfo.start).toBe(1)
+        expect(receivedInfo.newStart).toBe(3)
+        expect(receivedInfo.limit).toBe(1)
+
+        list.sortSelf((a, b) => a - b)
+        expect(receivedInfo.kind).toBe('sort')
+        expect(receivedInfo.oldIndexToNewIndex).toBeInstanceOf(Map)
+    })
+
+    test('mapped reorder preserves metadata for downstream consumers', () => {
+        const list = new RxList<number>([1,2,3,4])
+        const mapped = list.map(item => item * 10)
+        let receivedInfo: any
+        mapped.map(item => item, {
+            beforePatch(triggerInfo) {
+                receivedInfo = triggerInfo.reorderInfo
+            }
+        })
+
+        list.reposition(0, 2)
+        expect(mapped.toArray()).toEqual([20,30,10,40])
+        expect(receivedInfo.kind).toBe('move')
+        expect(receivedInfo.start).toBe(0)
+        expect(receivedInfo.newStart).toBe(2)
+        expect(receivedInfo.oldIndexToNewIndex.get(0)).toBe(2)
+    })
+
+    test('reposition supports head tail and multi-item boundary moves', () => {
+        const moveHeadToTail = new RxList<number>([1,2,3,4,5])
+        moveHeadToTail.reposition(0, 4)
+        expect(moveHeadToTail.toArray()).toEqual([2,3,4,5,1])
+
+        const moveTailToHead = new RxList<number>([1,2,3,4,5])
+        moveTailToHead.reposition(4, 0)
+        expect(moveTailToHead.toArray()).toEqual([5,1,2,3,4])
+
+        const moveBlockToTail = new RxList<number>([1,2,3,4,5,6])
+        moveBlockToTail.reposition(1, 4, 2)
+        expect(moveBlockToTail.toArray()).toEqual([1,4,5,6,2,3])
+
+        const moveTailBlockToHead = new RxList<number>([1,2,3,4,5,6])
+        moveTailBlockToHead.reposition(4, 0, 2)
+        expect(moveTailBlockToHead.toArray()).toEqual([5,6,1,2,3,4])
+    })
+
+    test('swap supports tail boundary moves and rejects invalid ranges', () => {
+        const swapTailAsStart = new RxList<number>([1,2,3,4,5])
+        swapTailAsStart.swap(4, 0)
+        expect(swapTailAsStart.toArray()).toEqual([5,2,3,4,1])
+
+        const swapHeadWithTail = new RxList<number>([1,2,3,4,5])
+        swapHeadWithTail.swap(0, 4)
+        expect(swapHeadWithTail.toArray()).toEqual([5,2,3,4,1])
+
+        expect(() => new RxList<number>([1,2,3]).reposition(-1, 0)).toThrow('start index out of range')
+        expect(() => new RxList<number>([1,2,3]).reposition(0, 3)).toThrow('newStart index out of range')
+        expect(() => new RxList<number>([1,2,3]).swap(3, 0)).toThrow('start index out of range')
+        expect(() => new RxList<number>([1,2,3]).swap(0, 3)).toThrow('newStart index out of range')
+    })
 })
 
 describe('rxList metas', () => {

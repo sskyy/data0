@@ -24,7 +24,7 @@ export * from './incremental'
 export {isReactivableType, replace} from './util'
 export {LinkedList} from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";
-export {RxList, createSelection} from './RxList'
+export {RxList, createSelection, type Order, type ReorderPatchInfo, type ReorderKind} from './RxList'
 export {RxMap} from './RxMap'
 export {RxSet} from './RxSet'
 export * from './RxTime'
