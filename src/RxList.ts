@@ -20,13 +20,18 @@ type MapOptions<U> = {
     beforePatch?: (triggerInfo: InputTriggerInfo) => any,
     scheduleRecompute?: DirtyCallback,
     ignoreIndex?: boolean,
-    onCleanup?: (item: U) => any
+    onCleanup?: (item: U) => any,
+    skipItemEffect?: boolean
 }
 
 type MapCleanupFn = () => any
 
 type MapContext = {
     onCleanup: (fn: MapCleanupFn) => void
+}
+
+function shouldKeepMapItemEffect(effect: ReactiveEffect) {
+    return effect.deps.length > 0 || effect.children.length > 0
 }
 
 export type Order = [number, number]
@@ -372,6 +377,7 @@ export class RxList<T> extends Computed {
         const source = this
         const useIndex = mapFn.length>1 && !options?.ignoreIndex
         const useContext = mapFn.length>2
+        assert(!options?.skipItemEffect || !useIndex, 'skipItemEffect can not be used with index')
         if(useIndex) {
             source.addAtomIndexesDep()
         }
@@ -398,26 +404,36 @@ export class RxList<T> extends Computed {
 
                     // 注意这里逻辑有点复杂。如果内部有依赖，会发生重新计算，那么重计算时就要用 itemIndex 去更新。因为 index 是可能变化的。
                     let newItemIndex: Atom<number>|undefined
-                    const newItemRun = new Computed(() => {
-                        //有依赖并且是冲计算，就一定有 newItemIndex。
-                        // CAUTION 特别注意这里面的变量，我们只希望  track 用户 mapFn 里面用到的外部  reactive 对象，不希望 track 到自己的 key/index。
-                        if(newItemIndex) {
-                            this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw], newItemIndex, mapContext!))
+                    if (options?.skipItemEffect) {
+                        result[i] = mapFn(source.data[i], source.atomIndexes?.[i]!, mapContext!)
+                        this.effectFramesArray![i] = []
+                    } else {
+                        const newItemRun = new Computed(() => {
+                            //有依赖并且是冲计算，就一定有 newItemIndex。
+                            // CAUTION 特别注意这里面的变量，我们只希望  track 用户 mapFn 里面用到的外部  reactive 对象，不希望 track 到自己的 key/index。
+                            if(newItemIndex) {
+                                this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw], newItemIndex, mapContext!))
+                            } else {
+                                result[i] = mapFn(source.data[i], source.atomIndexes?.[i]!, mapContext!)
+                            }
+                        }, undefined, true)
+
+                        newItemRun.run()
+
+                        if (newItemRun.hasDeps()) {
+                            if (!addedAtomIndexesDep) {
+                                source.addAtomIndexesDep()
+                                addedAtomIndexesDep = true
+                            }
+                            newItemIndex = source.atomIndexes![i]!
+                        }
+                        if (shouldKeepMapItemEffect(newItemRun)) {
+                            this.effectFramesArray![i] = [newItemRun] as ReactiveEffect[]
                         } else {
-                            result[i] = mapFn(source.data[i], source.atomIndexes?.[i]!, mapContext!)
+                            newItemRun.destroy()
+                            this.effectFramesArray![i] = []
                         }
-                    }, undefined, true)
-
-                    newItemRun.run()
-
-                    if (newItemRun.hasDeps()) {
-                        if (!addedAtomIndexesDep) {
-                            source.addAtomIndexesDep()
-                            addedAtomIndexesDep = true
-                        }
-                        newItemIndex = source.atomIndexes![i]!
                     }
-                    this.effectFramesArray![i] = [newItemRun] as ReactiveEffect[]
 
                 })
 
@@ -446,27 +462,36 @@ export class RxList<T> extends Computed {
                             let newItem: U
                             const newIndex = index + argv![0]!
                             let newItemIndex: Atom<number>|undefined
+                            if (options?.skipItemEffect) {
+                                newItem = mapFn(newItemsInArg, source.atomIndexes?.[newIndex]!, mapContext!)
+                                effectFrames![index] = []
+                            } else {
+                                const newItemRun = new Computed(() => {
+                                    // newItemIndex 是后面为每一个元素生成的，一开始是没有的。这里如果有，说明是内部有依赖变换发生的更新，已经不是第一次计算了。
+                                    if (newItemIndex) {
+                                        this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw]!, newItemIndex, mapContext!))
+                                    } else {
+                                        // 第一次计算，一定要使用 newItemsInArg 作为参数。
+                                        // 因为有可能第一次计算就有多个 triggerInfo，里面多次元素位置变化，导致 source.data 很难知道元素的新位置。
+                                        newItem = mapFn(newItemsInArg, source.atomIndexes?.[newIndex]!, mapContext!)
+                                    }
+                                }, undefined, true)
+                                newItemRun.run()
 
-                            const newItemRun = new Computed(() => {
-                                // newItemIndex 是后面为每一个元素生成的，一开始是没有的。这里如果有，说明是内部有依赖变换发生的更新，已经不是第一次计算了。
-                                if (newItemIndex) {
-                                    this.set(newItemIndex.raw, mapFn(source.data[newItemIndex.raw]!, newItemIndex, mapContext!))
+                                if (newItemRun.hasDeps()) {
+                                    if (!addedAtomIndexesDep) {
+                                        source.addAtomIndexesDep()
+                                        addedAtomIndexesDep = true
+                                    }
+                                    newItemIndex = source.atomIndexes![newIndex]!
+                                }
+                                if (shouldKeepMapItemEffect(newItemRun)) {
+                                    effectFrames![index] = [newItemRun] as ReactiveEffect[]
                                 } else {
-                                    // 第一次计算，一定要使用 newItemsInArg 作为参数。
-                                    // 因为有可能第一次计算就有多个 triggerInfo，里面多次元素位置变化，导致 source.data 很难知道元素的新位置。
-                                    newItem = mapFn(newItemsInArg, source.atomIndexes?.[newIndex]!, mapContext!)
+                                    newItemRun.destroy()
+                                    effectFrames![index] = []
                                 }
-                            }, undefined, true)
-                            newItemRun.run()
-
-                            if (newItemRun.hasDeps()) {
-                                if (!addedAtomIndexesDep) {
-                                    source.addAtomIndexesDep()
-                                    addedAtomIndexesDep = true
-                                }
-                                newItemIndex = source.atomIndexes![newIndex]!
                             }
-                            effectFrames![index] = [newItemRun] as ReactiveEffect[]
                             return newItem!
                         })
                         const deletedItems = this.splice(argv![0], argv![1], ...newItems)

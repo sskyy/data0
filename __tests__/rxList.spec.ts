@@ -33,6 +33,62 @@ describe('RxList', () => {
         expect(mapRuns).toBe(5)
     })
 
+    test('map does not retain dependency-free item effects', () => {
+        const list = new RxList<number>([1,2,3])
+        const cleanups: number[] = []
+        const list2 = list.map((item, _index, {onCleanup}) => {
+            onCleanup(() => cleanups.push(item))
+            return item * 2
+        }, { ignoreIndex: true })
+
+        expect(list2.toArray()).toMatchObject([2,4,6])
+        expect(list2.effectFramesArray).toEqual([[], [], []])
+
+        list.push(4, 5)
+        expect(list2.toArray()).toMatchObject([2,4,6,8,10])
+        expect(list2.effectFramesArray).toEqual([[], [], [], [], []])
+
+        list.splice(1, 2)
+        expect(list2.toArray()).toMatchObject([2,8,10])
+        expect(cleanups).toEqual([2, 3])
+    })
+
+    test('map can skip item effect probing for known static factories', () => {
+        const list = new RxList<number>([1,2,3])
+        let mapRuns = 0
+        const list2 = list.map((item) => {
+            mapRuns++
+            return item * 2
+        }, { skipItemEffect: true })
+
+        expect(list2.toArray()).toMatchObject([2,4,6])
+        expect(list2.effectFramesArray).toEqual([[], [], []])
+        expect(mapRuns).toBe(3)
+
+        list.push(4)
+        expect(list2.toArray()).toMatchObject([2,4,6,8])
+        expect(list2.effectFramesArray).toEqual([[], [], [], []])
+        expect(mapRuns).toBe(4)
+
+        expect(() => list.map((item, index) => item + index(), { skipItemEffect: true })).toThrow('skipItemEffect can not be used with index')
+    })
+
+    test('map retains item effects with dependencies or child computeds', () => {
+        const list = new RxList<number>([1,2])
+        const base = atom(1)
+        const withExternalDep = list.map((item) => item * base())
+
+        expect(withExternalDep.effectFramesArray.map(frame => frame.length)).toEqual([1, 1])
+        base(2)
+        expect(withExternalDep.toArray()).toMatchObject([2,4])
+
+        const withChildComputed = list.map((item) => computed(() => item * base()))
+        expect(withChildComputed.effectFramesArray.map(frame => frame.length)).toEqual([1, 1])
+        expect(withChildComputed.toArray().map(item => item())).toMatchObject([2,4])
+        base(3)
+        expect(withChildComputed.toArray().map(item => item())).toMatchObject([3,6])
+    })
+
     test('map to another list with index', () => {
         const list = new RxList<number>([1,2,3])
         let mapRuns = 0
