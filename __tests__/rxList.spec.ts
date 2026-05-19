@@ -73,6 +73,31 @@ describe('RxList', () => {
         expect(() => list.map((item, index) => item + index(), { skipItemEffect: true })).toThrow('skipItemEffect can not be used with index')
     })
 
+    test('append and clear without index dependencies keep map patch path', () => {
+        const list = new RxList<number>([1, 2])
+        const patches: { method?: string, argv?: any[], methodResult?: any }[] = []
+        const list2 = list.map((item) => item * 2, {
+            skipItemEffect: true,
+            beforePatch: (info) => {
+                patches.push({
+                    method: info.method,
+                    argv: info.argv,
+                    methodResult: info.methodResult,
+                })
+            },
+        })
+
+        list.push(3, 4)
+        expect(list2.toArray()).toMatchObject([2, 4, 6, 8])
+
+        list.splice(0, Infinity)
+        expect(list2.toArray()).toMatchObject([])
+        expect(patches).toMatchObject([
+            { method: 'splice', argv: [2, 0, 3, 4], methodResult: [] },
+            { method: 'splice', argv: [0, Infinity], methodResult: [1, 2, 3, 4] },
+        ])
+    })
+
     test('map retains item effects with dependencies or child computeds', () => {
         const list = new RxList<number>([1,2])
         const base = atom(1)

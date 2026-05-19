@@ -125,14 +125,29 @@ export class RxList<T> extends Computed {
 
         const originLength = this.data.length
         const deleteItemsCount = Math.min(deleteCount, originLength - start)
+        const hasIndexKeyDeps = this.indexKeyDeps?.size > 0
+        const hasAtomIndexes = !!this.atomIndexes
+        const canUseMetadataFastPath = !hasIndexKeyDeps && !hasAtomIndexes
+        const isPureAppend = start === originLength && deleteCount === 0
+        const isPureClear = start === 0 && deleteCount >= originLength && items.length === 0
+
+        if (canUseMetadataFastPath && (isPureAppend || isPureClear)) {
+            const result = this.data.splice(start, deleteCount, ...items)
+            this.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
+            this.sendTriggerInfos()
+            this.resetAutoTrack()
+            return result
+        }
 
 
         // CAUTION 不需要触发 length 的变化，因为获取  length 的时候得到就已经是个 computed 了。
         const newLength = originLength - deleteItemsCount + items.length
         const changedIndexEnd = deleteItemsCount !== items.length ? newLength : start + items.length
-        const oldValues = []
-        for (let i = start; i < changedIndexEnd; i++) {
-            oldValues[i] = this.data[i]
+        const oldValues: T[] | undefined = hasIndexKeyDeps ? [] : undefined
+        if (hasIndexKeyDeps) {
+            for (let i = start; i < changedIndexEnd; i++) {
+                oldValues![i] = this.data[i]
+            }
         }
         const result = this.data.splice(start, deleteCount, ...items)
 
@@ -142,9 +157,9 @@ export class RxList<T> extends Computed {
         //  CAUTION 一定先 trigger method，这样可能后面某些被删除的 atomIndexes 变化就不需要了。
         this.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [start, deleteCount, ...items], methodResult: result })
         // 只有当有 indexKeyDeps 的时候才需要手动查找 dep 和触发，这样效率更高
-        if (this.indexKeyDeps?.size > 0){
+        if (hasIndexKeyDeps){
             for (let i = start; i < changedIndexEnd; i++) {
-                this.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues[i]})
+                this.trigger(this, TriggerOpTypes.SET, { key: i, newValue: this.data[i], oldValue: oldValues![i]})
             }
         }
 
