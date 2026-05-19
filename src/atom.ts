@@ -3,6 +3,7 @@ import {TrackOpTypes, TriggerOpTypes} from './operations'
 import {def, isPlainObject, isStringOrNumber} from "./util";
 import {ReactiveFlags} from "./flags";
 import {setDebugName} from "./debug";
+import {ReactiveEffect} from "./reactiveEffect.js";
 
 export type UpdateFn<T> = (prev: T) => T
 
@@ -21,6 +22,12 @@ export type AtomInterceptor<T>  = (updater: Updater<T>, h: Handler) => [Updater<
 
 type Updater<T> = (newValue?: T | UpdateFn<T>) => any
 type Handler = ProxyHandler<object>
+const PRIMITIVE_ATOM_VALUE = Symbol('primitive atom value')
+
+type PrimitiveAtomUpdater<T> = ((newValue?: T) => T | void) & {
+    [PRIMITIVE_ATOM_VALUE]: T
+    [Symbol.toPrimitive]: (hint: string) => string | number | null | unknown
+}
 
 /**
  * @category Basic
@@ -29,13 +36,16 @@ export function atom<T>(initValue: T, interceptor? : AtomInterceptor<typeof init
 export function atom<T>(initValue: null, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<T|null>
 export function atom<T>(initValue?: T | undefined, interceptor? : AtomInterceptor<typeof initValue>, name?: string): Atom<T|undefined>
 export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<typeof initValue>, name?: string)  {
+    if (!interceptor && isPrimitiveAtomValue(initValue)) {
+        return createPrimitiveAtom(initValue, name)
+    }
 
     let value: typeof initValue|undefined  = initValue
 
     // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
     function updater (newValue?: typeof initValue) {
         if (arguments.length === 0) {
-            Notifier.instance.track(finalProxy, TrackOpTypes.ATOM, 'value')
+            trackAtomValue(finalProxy)
             return value
         }
 
@@ -63,7 +73,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
             // TODO 是不是也要像 reactive 一样层层包装才行？？？，不然当把这个值传给 dom 元素的时候，它就已经不能被识别出来，也就不能 reactive 了。
             if (isPlainObject(value)) {
-                Notifier.instance.track(finalProxy, TrackOpTypes.ATOM, 'value')
+                trackAtomValue(finalProxy)
             }
             // CAUTION 针对非  class 的对象提供深度的获取的能力
             return Reflect.get(isPlainObject(value) ? value : finalUpdater, key)
@@ -90,7 +100,7 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
 
     Object.assign( finalUpdater, {
         [Symbol.toPrimitive](hint: string) {
-            Notifier.instance.track(finalProxy, TrackOpTypes.ATOM, 'value')
+            trackAtomValue(finalProxy)
             if ((!hint || hint === 'default') && isStringOrNumber(value)) {
                 return value
             } else if (hint === 'number' && typeof value === 'number' ) {
@@ -111,6 +121,66 @@ export function atom(initValue: AtomInitialType, interceptor? : AtomInterceptor<
     def(finalUpdater, ReactiveFlags.IS_ATOM, true)
     const finalProxy = new Proxy(finalUpdater, finalHandler) as Atom<typeof initValue>
     return finalProxy
+}
+
+function isPrimitiveAtomValue(value: unknown) {
+    return value === null || (typeof value !== 'object' && typeof value !== 'function')
+}
+
+function createPrimitiveAtom<T>(initValue: T, name?: string) {
+    // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
+    const updater = function(newValue?: T): T | void {
+        if (arguments.length === 0) {
+            trackAtomValue(updater)
+            return updater[PRIMITIVE_ATOM_VALUE]
+        }
+
+        // CAUTION 和 Proxy atom 保持一致，不再支持 newValue 为 function 的 updater 语义。
+        if (updater[PRIMITIVE_ATOM_VALUE] === newValue) return
+        const oldValue = updater[PRIMITIVE_ATOM_VALUE]
+        updater[PRIMITIVE_ATOM_VALUE] = newValue as T
+        Notifier.instance.trigger(updater, TriggerOpTypes.ATOM, { key: 'value', newValue, oldValue})
+    } as PrimitiveAtomUpdater<T>
+
+    updater[PRIMITIVE_ATOM_VALUE] = initValue
+    updater[Symbol.toPrimitive] = primitiveAtomToPrimitive
+    Object.defineProperty(updater, 'raw', {
+        configurable: true,
+        enumerable: false,
+        get: getPrimitiveAtomRaw
+    })
+
+    if (name) {
+        setDebugName(updater, name)
+    }
+
+    def(updater, ReactiveFlags.IS_ATOM, true)
+    return updater as unknown as Atom<T>
+}
+
+function getPrimitiveAtomRaw<T>(this: PrimitiveAtomUpdater<T>) {
+    return this[PRIMITIVE_ATOM_VALUE]
+}
+
+function primitiveAtomToPrimitive(this: PrimitiveAtomUpdater<unknown>, hint: string) {
+    trackAtomValue(this)
+    const value = this[PRIMITIVE_ATOM_VALUE]
+    if ((!hint || hint === 'default') && isStringOrNumber(value)) {
+        return value
+    } else if (hint === 'number' && typeof value === 'number' ) {
+        // CAUTION 不支持 string 隐式转 number
+        return value;
+    } else if (hint === 'string'){
+        return isStringOrNumber(value) ? value.toString() : Object.prototype.toString.call(value)
+    }
+
+    return null;
+}
+
+function trackAtomValue(target: object) {
+    const notifier = Notifier.instance
+    if (!notifier.shouldTrack || !ReactiveEffect.activeScopes.length) return
+    notifier.track(target, TrackOpTypes.ATOM, 'value')
 }
 
 atom.fixed = function<T>(initValue: T) {
