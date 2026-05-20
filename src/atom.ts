@@ -127,11 +127,15 @@ function isPrimitiveAtomValue(value: unknown) {
     return value === null || (typeof value !== 'object' && typeof value !== 'function')
 }
 
+export function isPrimitiveAtom(r: unknown) {
+    return typeof r === 'function' && Object.prototype.hasOwnProperty.call(r, PRIMITIVE_ATOM_VALUE)
+}
+
 function createPrimitiveAtom<T>(initValue: T, name?: string) {
     // CAUTION 只能这样写才能支持 arguments.length === 0 ，否则就永远不会 为 0
     const updater = function(newValue?: T): T | void {
         if (arguments.length === 0) {
-            trackAtomValue(updater)
+            trackAtomValue(updater, true)
             return updater[PRIMITIVE_ATOM_VALUE]
         }
 
@@ -139,7 +143,7 @@ function createPrimitiveAtom<T>(initValue: T, name?: string) {
         if (updater[PRIMITIVE_ATOM_VALUE] === newValue) return
         const oldValue = updater[PRIMITIVE_ATOM_VALUE]
         updater[PRIMITIVE_ATOM_VALUE] = newValue as T
-        Notifier.instance.trigger(updater, TriggerOpTypes.ATOM, { key: 'value', newValue, oldValue})
+        Notifier.instance.triggerPrimitiveAtomValue(updater, { key: 'value', newValue, oldValue})
     } as PrimitiveAtomUpdater<T>
 
     updater[PRIMITIVE_ATOM_VALUE] = initValue
@@ -163,7 +167,7 @@ function getPrimitiveAtomRaw<T>(this: PrimitiveAtomUpdater<T>) {
 }
 
 function primitiveAtomToPrimitive(this: PrimitiveAtomUpdater<unknown>, hint: string) {
-    trackAtomValue(this)
+    trackAtomValue(this, true)
     const value = this[PRIMITIVE_ATOM_VALUE]
     if ((!hint || hint === 'default') && isStringOrNumber(value)) {
         return value
@@ -177,9 +181,13 @@ function primitiveAtomToPrimitive(this: PrimitiveAtomUpdater<unknown>, hint: str
     return null;
 }
 
-function trackAtomValue(target: object) {
+function trackAtomValue(target: object, primitive = false) {
     const notifier = Notifier.instance
     if (!notifier.shouldTrack || !ReactiveEffect.activeScopes.length) return
+    if (primitive) {
+        notifier.trackPrimitiveAtomValue(target)
+        return
+    }
     notifier.track(target, TrackOpTypes.ATOM, 'value')
 }
 

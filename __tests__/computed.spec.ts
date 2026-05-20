@@ -1,8 +1,8 @@
-import {arrayComputed, computed, objectComputed, scheduleNextMicroTask} from "../src/computed";
+import {arrayComputed, Computed, computed, destroyComputed, objectComputed, scheduleNextMicroTask} from "../src/computed";
 import {atom} from "../src/atom";
 import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
-import {autorun, batch} from "../src";
+import {autorun, batch, ReactiveEffect} from "../src";
 
 
 describe('computed basic', () => {
@@ -89,6 +89,88 @@ describe('computed basic', () => {
 describe('computed life cycle', () => {
     beforeEach(() => {
     })
+    test('reactive effect creates low-frequency collections lazily', () => {
+        const effect = new ReactiveEffect(() => undefined)
+
+        expect((effect as any)._eventToCallbacks).toBeUndefined()
+        expect((effect as any)._asyncTracks).toBeUndefined()
+        expect((effect as any)._children).toBeUndefined()
+
+        effect.dispatch('destroy')
+        expect((effect as any)._eventToCallbacks).toBeUndefined()
+
+        expect(effect.hasChildren()).toBe(false)
+        expect((effect as any)._children).toBeUndefined()
+
+        const child = new ReactiveEffect(() => undefined)
+        expect(effect.addChild(child)).toBe(0)
+        expect(effect.hasChildren()).toBe(true)
+        expect((effect as any)._children).toHaveLength(1)
+
+        effect.destroyChildren()
+        expect(effect.hasChildren()).toBe(false)
+
+        effect.queueAsyncTrack(() => undefined)
+        expect((effect as any)._asyncTracks).toHaveLength(1)
+
+        effect.on('destroy', () => undefined)
+        expect((effect as any)._eventToCallbacks).toBeInstanceOf(Map)
+    })
+
+    test('reactive effect destroy event fires once from instance destroy', () => {
+        const effect = new ReactiveEffect(() => undefined)
+        let destroyCalls = 0
+        effect.on('destroy', () => {
+            destroyCalls++
+        })
+
+        effect.destroy()
+        effect.destroy()
+
+        expect(destroyCalls).toBe(1)
+    })
+
+    test('reactive effect destroy event fires once from static destroy', () => {
+        const effect = new ReactiveEffect(() => undefined)
+        let destroyCalls = 0
+        effect.on('destroy', () => {
+            destroyCalls++
+        })
+
+        ReactiveEffect.destroy(effect)
+        ReactiveEffect.destroy(effect)
+
+        expect(destroyCalls).toBe(1)
+    })
+
+    test('computed onDestroy callback fires once from instance destroy', () => {
+        let destroyCalls = 0
+        const item = new Computed(() => 1, undefined, true, {
+            onDestroy() {
+                destroyCalls++
+            }
+        })
+
+        item.destroy()
+        item.destroy()
+
+        expect(destroyCalls).toBe(1)
+    })
+
+    test('computed onDestroy callback fires once from destroyComputed', () => {
+        let destroyCalls = 0
+        const item = computed(() => 1, undefined, true, {
+            onDestroy() {
+                destroyCalls++
+            }
+        })
+
+        destroyComputed(item)
+        destroyComputed(item)
+
+        expect(destroyCalls).toBe(1)
+    })
+
     test('should destroy inner computed', () => {
         let innerRuns = 0
         const a = atom(0)

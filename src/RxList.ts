@@ -5,7 +5,8 @@ import {
     Computed,
     destroyComputed,
     DirtyCallback,
-    GetterType
+    GetterType,
+    setComputedRetainedDiagnosticSource
 } from "./computed.js";
 import {Atom, atom, isAtom} from "./atom.js";
 import {Dep} from "./dep.js";
@@ -31,7 +32,7 @@ type MapContext = {
 }
 
 function shouldKeepMapItemEffect(effect: ReactiveEffect) {
-    return effect.deps.length > 0 || effect.children.length > 0
+    return effect.deps.length > 0 || effect.hasChildren()
 }
 
 export type Order = [number, number]
@@ -47,14 +48,30 @@ export type ReorderPatchInfo = {
 }
 
 function createReorderPatchInfo(kind: ReorderKind, newOrder: Order[], details: Partial<ReorderPatchInfo> = {}): ReorderPatchInfo {
-    const movedIndexes = newOrder.flatMap(([oldIndex, newIndex]) => oldIndex === newIndex ? [] : [oldIndex, newIndex])
+    let minMovedIndex = Infinity
+    let maxMovedIndex = -Infinity
+    let movedCount = 0
+    const oldIndexToNewIndex = new Map<number, number>()
+
+    for (let i = 0; i < newOrder.length; i++) {
+        const [oldIndex, newIndex] = newOrder[i]!
+        oldIndexToNewIndex.set(oldIndex, newIndex)
+        if (oldIndex === newIndex) continue
+
+        movedCount++
+        if (oldIndex < minMovedIndex) minMovedIndex = oldIndex
+        if (newIndex < minMovedIndex) minMovedIndex = newIndex
+        if (oldIndex > maxMovedIndex) maxMovedIndex = oldIndex
+        if (newIndex > maxMovedIndex) maxMovedIndex = newIndex
+    }
+
     return {
         kind,
-        affectedRange: movedIndexes.length
-            ? [Math.min(...movedIndexes), Math.max(...movedIndexes)]
+        affectedRange: movedCount
+            ? [minMovedIndex, maxMovedIndex]
             : null,
-        movedCount: newOrder.filter(([oldIndex, newIndex]) => oldIndex !== newIndex).length,
-        oldIndexToNewIndex: new Map(newOrder),
+        movedCount,
+        oldIndexToNewIndex,
         ...details,
     }
 }
@@ -109,6 +126,21 @@ export class RxList<T> extends Computed {
 
     push(...items: T[]) {
         return this.splice(this.data.length, 0, ...items)
+    }
+    clear() {
+        const length = this.data.length
+        if (length === 0) return []
+        const hasIndexKeyDeps = this.indexKeyDeps?.size > 0
+        const hasAtomIndexes = !!this.atomIndexes
+        if (length === 1 || hasIndexKeyDeps || hasAtomIndexes) return this.splice(0, length)
+
+        this.pauseAutoTrack()
+        const deletedItems = this.data.slice()
+        this.data.length = 0
+        this.trigger(this, TriggerOpTypes.METHOD, { method:'splice', key: ITERATE_KEY, argv: [0, length], methodResult: deletedItems })
+        this.sendTriggerInfos()
+        this.resetAutoTrack()
+        return deletedItems
     }
     pop( ) {
         return this.splice(this.data.length - 1, 1)[0]
@@ -251,11 +283,16 @@ export class RxList<T> extends Computed {
         return this.reorder(newOrder, createReorderPatchInfo('swap', newOrder, { start, newStart, limit }))
     }
     sortSelf(compare: (a: T, b:T)=> number) {
-        const wrappedItems = this.data.map(value => ({value}))
-        const itemToIndex = new Map(wrappedItems.map((item, index) => [item, index]))
-        const newItems = wrappedItems.sort((a, b) => compare(a.value, b.value))
-        const itemToNewIndex = new Map(newItems.map((item, index) => [item, index]))
-        const newOrder: Order[] = newItems.map(item => [itemToIndex.get(item)!, itemToNewIndex.get(item)!])
+        const sortedOldIndexes = new Array<number>(this.data.length)
+        for (let index = 0; index < this.data.length; index++) {
+            sortedOldIndexes[index] = index
+        }
+        sortedOldIndexes.sort((a, b) => compare(this.data[a]!, this.data[b]!))
+
+        const newOrder = new Array<Order>(sortedOldIndexes.length)
+        for (let newIndex = 0; newIndex < sortedOldIndexes.length; newIndex++) {
+            newOrder[newIndex] = [sortedOldIndexes[newIndex]!, newIndex]
+        }
         return this.reorder(newOrder, createReorderPatchInfo('sort', newOrder))
     }
     private static binarySearchInsert<S>(arr: S[], item: S, compare: (a: S, b: S) => number): number {
@@ -1099,6 +1136,7 @@ export class RxList<T> extends Computed {
                 data(source.data.length)
             }
         )
+        setComputedRetainedDiagnosticSource(this.length, 'RxList.length')
     }
 
     // FIXME onUntrack 的时候要把 indexKeyDeps 里面的 dep 都删掉。因为 Effect 没管这种情况。
@@ -1109,6 +1147,7 @@ export class RxList<T> extends Computed {
 
     }
     destroy() {
+        destroyComputed(this.length)
         super.destroy()
         this.effectFramesArray?.forEach((frames) => {
           frames.forEach((frame) => {

@@ -9,6 +9,7 @@ export {
     AtomComputed,
     type ComputedData,
     destroyComputed,
+    setComputedRetainedDiagnosticSource,
     recompute,
     Computed,
     scheduleNextTick,
@@ -32,3 +33,4 @@ export {AsyncRxSlice} from "./AsyncRxSlice.js";
 export {ManualCleanup} from "./manualCleanup.js";
 export * from "./common";
 export * from './debug.js'
+export * from './retainedDiagnostics'

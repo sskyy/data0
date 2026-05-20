@@ -1,6 +1,14 @@
 import {createSelection, RxList} from "../src/RxList.js";
 import {describe, expect, test} from "vitest";
-import {Atom, AtomComputed, computed, once} from "../src/index.js";
+import {
+    Atom,
+    AtomComputed,
+    computed,
+    disableData0RetainedObjectDiagnostics,
+    enableData0RetainedObjectDiagnostics,
+    getData0RetainedObjectDiagnosticsSnapshot,
+    once
+} from "../src/index.js";
 import {autorun} from "../src/common";
 import {atom} from "../src/atom.js";
 import {RxSet} from "../src/RxSet";
@@ -31,6 +39,22 @@ describe('RxList', () => {
         list.set(1, 4)
         expect(list2.toArray()).toMatchObject([2,8,6])
         expect(mapRuns).toBe(5)
+    })
+
+    test('destroy releases length computed retained diagnostics', () => {
+        enableData0RetainedObjectDiagnostics({ reset: true })
+        try {
+            const list = new RxList<number>([1, 2, 3])
+            const afterCreate = getData0RetainedObjectDiagnosticsSnapshot()
+            expect(afterCreate.reactiveEffects.activeBySource['RxList.length']).toBe(1)
+
+            list.destroy()
+            const afterDestroy = getData0RetainedObjectDiagnosticsSnapshot()
+            expect(afterDestroy.reactiveEffects.totalActive).toBe(0)
+            expect(afterDestroy.reactiveEffects.destroyedBySource['RxList.length']).toBe(1)
+        } finally {
+            disableData0RetainedObjectDiagnostics()
+        }
     })
 
     test('map does not retain dependency-free item effects', () => {
@@ -95,6 +119,28 @@ describe('RxList', () => {
         expect(patches).toMatchObject([
             { method: 'splice', argv: [2, 0, 3, 4], methodResult: [] },
             { method: 'splice', argv: [0, Infinity], methodResult: [1, 2, 3, 4] },
+        ])
+    })
+
+    test('clear removes all items without a single full-length splice', () => {
+        const list = new RxList<number>([1, 2, 3])
+        const patches: { method?: string, argv?: any[], methodResult?: any }[] = []
+        const list2 = list.map((item) => item * 2, {
+            skipItemEffect: true,
+            beforePatch: (info) => {
+                patches.push({
+                    method: info.method,
+                    argv: info.argv,
+                    methodResult: info.methodResult,
+                })
+            },
+        })
+
+        expect(list.clear()).toMatchObject([1, 2, 3])
+        expect(list.toArray()).toMatchObject([])
+        expect(list2.toArray()).toMatchObject([])
+        expect(patches).toMatchObject([
+            { method: 'splice', argv: [0, 3], methodResult: [1, 2, 3] },
         ])
     })
 

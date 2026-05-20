@@ -1,9 +1,13 @@
-import {createDep, Dep, newTracked, wasTracked} from "./dep";
+import {createCompactDep, createDep, Dep, newTracked, wasTracked} from "./dep";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Computed, getComputedInternal} from "./computed";
 import {toRaw} from "./reactive";
 import {assert, extend, isArray, isIntegerKey, isIntegerKeyQuick, toNumber} from "./util";
 import {ReactiveEffect} from "./reactiveEffect.js";
+import {
+  trackRetainedDepEffectAdded,
+  trackRetainedPrimitiveAtomDepCreated
+} from "./retainedDiagnostics";
 
 
 type KeyItemPair = {
@@ -17,6 +21,10 @@ export type TriggerResult = {
   remove?: KeyItemPair[]
 }
 type KeyToDepMap = Map<any, Dep>
+const PRIMITIVE_ATOM_DEP = Symbol('primitive atom dep')
+type PrimitiveAtomDepTarget = object & {
+  [PRIMITIVE_ATOM_DEP]?: Dep
+}
 
 export type TriggerStack = {type?: string, debugTarget: any, opType?: TriggerOpTypes, key?:unknown, oldValue?: unknown, newValue?: unknown, targetLoc: [string, string][]}[]
 export type InputTriggerInfo<T = unknown> = {
@@ -126,6 +134,46 @@ export class Notifier {
       return frame
     }
   }
+  getPrimitiveAtomDep(target: object) {
+    return (target as PrimitiveAtomDepTarget)[PRIMITIVE_ATOM_DEP]
+  }
+  getOrCreatePrimitiveAtomDep(target: object) {
+    let dep = this.getPrimitiveAtomDep(target)
+    if (!dep) {
+      Object.defineProperty(target, PRIMITIVE_ATOM_DEP, {
+        configurable: true,
+        enumerable: false,
+        value: dep = createCompactDep(),
+      })
+      trackRetainedPrimitiveAtomDepCreated(dep)
+    }
+    return dep
+  }
+  trackPrimitiveAtomValue = (target: object) => {
+    // 为了触发 dirty computed 的 recompute
+    const computedInternal = getComputedInternal(target)
+    const activeEffect = ReactiveEffect.activeScopes.at(-1)
+    if (computedInternal && computedInternal !== activeEffect) {
+      // CAUTION 这里即使没有 activeEffect 也要执行，因为 onTrack 要触发 computed 计算。
+      computedInternal.onTrack(activeEffect)
+    }
+
+    if (!activeEffect || !this.shouldTrack) return
+    if (__DEV__) {
+      assert(!(activeEffect instanceof Computed && target === toRaw(activeEffect.data)), 'should not read self in computed')
+    }
+
+    const dep = this.getOrCreatePrimitiveAtomDep(target)
+    const eventInfo = __DEV__
+        ? { effect: activeEffect, target, type: TrackOpTypes.ATOM, key: 'value' }
+        : undefined
+
+    // 手动收集的场景。
+    this.trackTargetFrames.at(-1)?.push(target)
+
+    this.trackEffects(dep, eventInfo)
+    return dep
+  }
   track = (target: object, type: TrackOpTypes, key: unknown) => {
     // 为了触发 dirty computed 的 recompute
     const computedInternal = target instanceof Computed ? target: getComputedInternal(target)
@@ -197,12 +245,14 @@ export class Notifier {
       //  这样不管是因为老的 dep 变化，还是新  track 到一半的 dep 变化，都会触发 recompute。
       //  这才是合理的，因为不管哪种都说明 dirty。
       dep.add(activeEffect!)
+      trackRetainedDepEffectAdded(dep)
       activeEffect!.deps.push(dep)
       // 如果是 async 的任务，那么在最后 complete 的时候应该应该用新的 dep 完全替换旧的 dep
       if (activeEffect.isAsync) {
-        activeEffect.asyncTracks.push(() => {
+        activeEffect.queueAsyncTrack(() => {
           if(!dep.has(activeEffect!)) {
             dep.add(activeEffect!)
+            trackRetainedDepEffectAdded(dep)
             activeEffect!.deps.push(dep)
           }
         })
@@ -327,15 +377,44 @@ export class Notifier {
     //   this.triggerStack.pop()
     // }
   }
+  triggerPrimitiveAtomValue(
+      source: object,
+      inputInfo: InputTriggerInfo
+  ) {
+    if (!this.shouldTrigger) return
+
+    const dep = this.getPrimitiveAtomDep(source)
+    if (!dep) return
+
+    const info: TriggerInfo = {...inputInfo, source, type: TriggerOpTypes.ATOM}
+    const {key, newValue, oldValue} = info
+    const eventInfo = __DEV__
+        ? { target: source, type: TriggerOpTypes.ATOM, key, newValue, oldValue }
+        : undefined
+
+    if (__DEV__) {
+      this.triggerEffects(dep, info, eventInfo)
+    } else {
+      this.triggerEffects(dep, info)
+    }
+  }
   getDepEffects(target: object) {
     const depsMap = this.targetMap.get(target)
-    if (!depsMap) return
+    const primitiveAtomDep = this.getPrimitiveAtomDep(target)
+    if (!depsMap && !primitiveAtomDep) return
 
     // CAUTION 一定要利用 set 去重，不然外部拿到的结果可能引发问题。
     const result = new Set<ReactiveEffect>()
-    for(const [_, deps] of depsMap) {
-      for(const effect of deps) {
+    if (primitiveAtomDep) {
+      for(const effect of primitiveAtomDep) {
         result.add(effect)
+      }
+    }
+    if (depsMap) {
+      for(const [_, deps] of depsMap) {
+        for(const effect of deps) {
+          result.add(effect)
+        }
       }
     }
     return result

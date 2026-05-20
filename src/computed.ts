@@ -2,10 +2,11 @@ import {createDebug, createDebugWithName, getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
 import {reactive, toRaw, toRawObject, UnwrapReactive} from './reactive'
 import {assert, isAsync, isGenerator, nextTick, replace, uuid, warn} from "./util";
-import {Atom, atom, isAtom} from "./atom";
+import {Atom, atom, isAtom, isPrimitiveAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
 import {CleanupFrame} from "./manualCleanup";
+import {markRetainedReactiveEffectKind, setRetainedReactiveEffectSource} from "./retainedDiagnostics";
 
 export const computedToInternal = new WeakMap<any, Computed>()
 
@@ -48,6 +49,11 @@ export function destroyComputed(computedItem: ComputedData) {
 
 export function getComputedInternal(computedItem: ComputedData) {
     return computedToInternal.get(toRawObject(computedItem))
+}
+
+export function setComputedRetainedDiagnosticSource(computedItem: ComputedData, source: string) {
+    const internal = computedToInternal.get(toRawObject(computedItem))
+    if (internal) setRetainedReactiveEffectSource(internal, source)
 }
 
 const queuedRecomputes = new WeakSet<Computed>()
@@ -139,6 +145,7 @@ export class Computed extends ReactiveEffect {
         public preventEffectSession = false
     ) {
         super(getter)
+        markRetainedReactiveEffectKind(this, 'Computed', this.getRetainedDiagnosticSource())
         this.status = atom(typeof getter === 'function' ? STATUS_DIRTY : STATUS_CLEAN)
 
         // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
@@ -182,6 +189,11 @@ export class Computed extends ReactiveEffect {
         if (callbacks?.onTrack) this.on('track', callbacks.onTrack)
         if (callbacks?.onRecompute) this.on('recompute', callbacks.onRecompute)
         if (callbacks?.onCleanup) this.on('cleanup', callbacks.onCleanup)
+    }
+    getRetainedDiagnosticSource() {
+        const constructorName = this.constructor?.name || 'Computed'
+        const getterName = this.getter?.name
+        return getterName ? `${constructorName}.${getterName}` : constructorName
     }
     public cleanPromise?: Promise<any>
     runEffect() {
@@ -571,7 +583,9 @@ export class Computed extends ReactiveEffect {
     manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {
         Notifier.instance.enableTracking()
         // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
-        const dep = Notifier.instance.track(isAtom(target) ? target : toRaw(target), type, key)
+        const dep = isPrimitiveAtom(target) && type === TrackOpTypes.ATOM && key === 'value'
+            ? Notifier.instance.trackPrimitiveAtomValue(target)
+            : Notifier.instance.track(isAtom(target) ? target : toRaw(target), type, key)
         Notifier.instance.resetTracking()
         return dep
     }

@@ -1,6 +1,14 @@
 import {atom, isAtom} from "../src/atom";
 import {autorun} from "../src/common";
 import {Notifier} from "../src/notify";
+import {Computed} from "../src/computed";
+import {TrackOpTypes} from "../src/operations";
+import {
+    batch,
+    disableData0RetainedObjectDiagnostics,
+    enableData0RetainedObjectDiagnostics,
+    getData0RetainedObjectDiagnosticsSnapshot
+} from "../src";
 import {beforeEach, describe, expect, test, vi} from "vitest";
 
 
@@ -15,7 +23,7 @@ describe('atom basic', () => {
 
     test('atom reads skip tracking outside reactive scopes', () => {
         const value = atom(1)
-        const track = vi.spyOn(Notifier.instance, 'track')
+        const track = vi.spyOn(Notifier.instance, 'trackPrimitiveAtomValue')
 
         expect(value()).toBe(1)
         expect(`${value}`).toBe('1')
@@ -60,6 +68,105 @@ describe('atom basic', () => {
 
         expect(seen).toEqual([1, 2, 3])
         stop()
+    })
+
+    test('primitive atom stores value dep without target map entry', () => {
+        const value = atom(1)
+        const seen: number[] = []
+        const stop = autorun(() => {
+            seen.push(value())
+        }, true)
+
+        expect(seen).toEqual([1])
+        expect(Notifier.instance.targetMap.has(value)).toBe(false)
+        expect(Notifier.instance.getDepEffects(value)?.size).toBe(1)
+
+        value(2)
+        expect(seen).toEqual([1, 2])
+
+        stop()
+        expect(Notifier.instance.getDepEffects(value)?.size).toBe(0)
+        value(3)
+        expect(seen).toEqual([1, 2])
+    })
+
+    test('primitive atom dep stays compact for single subscriber and supports overflow', () => {
+        const value = atom(1)
+        const firstSeen: number[] = []
+        const secondSeen: number[] = []
+        const stopFirst = autorun(() => {
+            firstSeen.push(value())
+        }, true)
+
+        const dep = Notifier.instance.getPrimitiveAtomDep(value)
+        expect(dep).toBeTruthy()
+        expect(dep).not.toBeInstanceOf(Set)
+        expect([...dep!]).toHaveLength(1)
+
+        const stopSecond = autorun(() => {
+            secondSeen.push(value())
+        }, true)
+        expect([...dep!]).toHaveLength(2)
+
+        value(2)
+        expect(firstSeen).toEqual([1, 2])
+        expect(secondSeen).toEqual([1, 2])
+
+        stopSecond()
+        expect([...dep!]).toHaveLength(1)
+        value(3)
+        expect(firstSeen).toEqual([1, 2, 3])
+        expect(secondSeen).toEqual([1, 2])
+
+        stopFirst()
+        expect([...dep!]).toHaveLength(0)
+    })
+
+    test('retained diagnostics count primitive atom deps and effects', () => {
+        enableData0RetainedObjectDiagnostics({reset: true})
+        try {
+            const value = atom(1)
+            const stop = autorun(() => {
+                value()
+            }, true)
+
+            const afterTrack = getData0RetainedObjectDiagnosticsSnapshot()
+            expect(afterTrack.enabled).toBe(true)
+            expect(afterTrack.reactiveEffects.totalActive).toBe(1)
+            expect(afterTrack.primitiveAtomDeps.activeDeps).toBe(1)
+            expect(afterTrack.primitiveAtomDeps.activeEffects).toBe(1)
+
+            stop()
+            const afterStop = getData0RetainedObjectDiagnosticsSnapshot()
+            expect(afterStop.reactiveEffects.totalActive).toBe(0)
+            expect(afterStop.primitiveAtomDeps.activeDeps).toBe(0)
+            expect(afterStop.primitiveAtomDeps.activeEffects).toBe(0)
+        } finally {
+            disableData0RetainedObjectDiagnostics()
+        }
+    })
+
+    test('primitive atom fast dep supports manual track and batched triggers', () => {
+        const value = atom(1)
+        const seen: number[] = []
+        const effect = new Computed(function(this: Computed) {
+            this.manualTrack(value, TrackOpTypes.ATOM, 'value')
+            seen.push(value.raw)
+        }, undefined, true)
+
+        effect.run([], true)
+        expect(seen).toEqual([1])
+        expect(Notifier.instance.targetMap.has(value)).toBe(false)
+
+        batch(() => {
+            value(2)
+            value(3)
+        })
+        expect(seen).toEqual([1, 3])
+
+        effect.destroy()
+        value(4)
+        expect(seen).toEqual([1, 3])
     })
 
     test('primitive atom keeps call and primitive conversion behavior', () => {

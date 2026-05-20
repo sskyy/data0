@@ -2,37 +2,46 @@ import {Dep, finalizeDepMarkers, initDepMarkers} from "./dep.js";
 import {maxMarkerBits, Notifier} from "./notify.js";
 import {ManualCleanup} from "./manualCleanup.js";
 import {isAsync, isGenerator} from "./util.js";
+import {
+    trackRetainedDepEffectRemoved,
+    trackRetainedReactiveEffectCreated,
+    trackRetainedReactiveEffectDestroyed
+} from "./retainedDiagnostics";
 
 
 export class ReactiveEffect extends ManualCleanup {
     static activeScopes: ReactiveEffect[] = []
     public active = true
     public isRunningAsync = false
-    public eventToCallbacks: Map<string, Set<Function>> = new Map()
-    public asyncTracks : Array<() => void> = []
+    private _eventToCallbacks?: Map<string, Set<Function>>
+    private _asyncTracks?: Array<() => void>
+    private _children?: ReactiveEffect[]
     static destroy(effect: ReactiveEffect, fromParent = false, ignoreChildren = false) {
         if (!effect.active) return
 
         effect.cleanup()
         effect.active = false
+        trackRetainedReactiveEffectDestroyed(effect)
 
         // 如果不是 fromParent，就要从父亲中移除。如果是，父亲会自己清空 children
         if (effect.parent && !fromParent) {
             // 要把自己从 parent.children 中移除掉。直接用 last 替换掉当前的要上出的，提升删除速度。
-            const last = effect.parent.children.pop()!
-            if (last !== effect) {
-                effect.parent.children[effect.index!] = last
-                last.index = effect.index
+            const siblings = effect.parent._children
+            if (siblings) {
+                const last = siblings.pop()!
+                if (last !== effect) {
+                    siblings[effect.index!] = last
+                    last.index = effect.index
+                }
             }
         }
 
         delete effect.parent
         if (!ignoreChildren) {
-            effect.children.forEach(child => {
-                ReactiveEffect.destroy(child, true)
-            })
+            effect.destroyChildren()
+        } else if (effect._children) {
+            effect._children.length = 0
         }
-        effect.children = []
         effect.dispatch('destroy')
     }
 
@@ -40,7 +49,6 @@ export class ReactiveEffect extends ManualCleanup {
     // 有增量计算的情况会 manual track dep，这时不要做 dep marker，因为不需要 finalize 自动对比的计算的过程。
     useDepMarker = true
     parent?: ReactiveEffect
-    children: ReactiveEffect[] = []
     index = 0
     isAsync?:boolean
     shouldCollectChild = true
@@ -49,15 +57,45 @@ export class ReactiveEffect extends ManualCleanup {
         super();
         this.active = !!getter
         this.isAsync = this.getter && (isAsync(this.getter!) || isGenerator(this.getter!))
+        if (this.active) trackRetainedReactiveEffectCreated(this)
 
         if (ReactiveEffect.activeScopes.length) {
             const parent = ReactiveEffect.activeScopes.at(-1)
             if (parent?.shouldCollectChild) {
                 this.parent = parent
-                this.parent!.children.push(this)
-                this.index = this.parent!.children.length - 1
+                this.index = parent.addChild(this)
             }
         }
+    }
+    get eventToCallbacks() {
+        return this._eventToCallbacks ?? (this._eventToCallbacks = new Map())
+    }
+    get asyncTracks() {
+        return this._asyncTracks ?? (this._asyncTracks = [])
+    }
+    get children() {
+        return this._children ?? (this._children = [])
+    }
+    hasChildren() {
+        return !!this._children?.length
+    }
+    addChild(child: ReactiveEffect) {
+        const children = this._children ?? (this._children = [])
+        children.push(child)
+        return children.length - 1
+    }
+    destroyChildren() {
+        const children = this._children
+        if (!children) return
+        if (children.length) {
+            children.forEach(child => {
+                ReactiveEffect.destroy(child, true)
+            })
+        }
+        this._children = undefined
+    }
+    queueAsyncTrack(track: () => void) {
+        (this._asyncTracks ?? (this._asyncTracks = [])).push(track)
     }
     pauseCollectChild = () => {
         this.shouldCollectChild = false
@@ -67,21 +105,21 @@ export class ReactiveEffect extends ManualCleanup {
     }
 
     on(event: string, callback: Function) {
-        let callbacks = this.eventToCallbacks.get(event)
+        let callbacks = this._eventToCallbacks?.get(event)
         if (!callbacks) {
             callbacks = new Set()
-            this.eventToCallbacks.set(event, callbacks)
+            ;(this._eventToCallbacks ?? (this._eventToCallbacks = new Map())).set(event, callbacks)
         }
         callbacks.add(callback)
     }
     off(event: string, callback: Function) {
-        let callbacks = this.eventToCallbacks.get(event)
+        let callbacks = this._eventToCallbacks?.get(event)
         if (callbacks) {
             callbacks.delete(callback)
         }
     }
     dispatch = (event: string, ...args: any[]) => {
-        const callbacks = this.eventToCallbacks.get(event)
+        const callbacks = this._eventToCallbacks?.get(event)
         if (callbacks) {
             callbacks.forEach(callback => callback.call(this, ...args))
         }
@@ -104,17 +142,15 @@ export class ReactiveEffect extends ManualCleanup {
                 this.cleanup()
             }
 
-            this.children.forEach(child => ReactiveEffect.destroy(child, true))
-            this.children.length = 0
+            this.destroyChildren()
 
         } else {
             // async 模式下是通过暂存一个 track 函数到 asyncTracks 中，然后在 completeTracking 时执行。
             // 所以这里只需要 push scope 就行了。
             ReactiveEffect.activeScopes.push(this)
             if (isFirst) {
-                this.asyncTracks.length = 0
-                this.children.forEach(child => ReactiveEffect.destroy(child, true))
-                this.children.length = 0
+                if (this._asyncTracks) this._asyncTracks.length = 0
+                this.destroyChildren()
             }
         }
     }
@@ -131,8 +167,10 @@ export class ReactiveEffect extends ManualCleanup {
         } else {
             if (isLast) {
                 this.cleanup()
-                this.asyncTracks.forEach(track => track())
-                this.asyncTracks.length = 0
+                if (this._asyncTracks) {
+                    this._asyncTracks.forEach(track => track())
+                    this._asyncTracks.length = 0
+                }
             }
 
             ReactiveEffect.activeScopes.pop()
@@ -195,13 +233,13 @@ export class ReactiveEffect extends ManualCleanup {
         const {deps} = this
         if (deps.length) {
             for (let i = 0; i < deps.length; i++) {
-                deps[i].delete(this)
+                const dep = deps[i]
+                if (dep.delete(this)) trackRetainedDepEffectRemoved(dep)
             }
             deps.length = 0
         }
     }
     destroy(ignoreChildren = false) {
-        this.dispatch('destroy')
         ReactiveEffect.destroy(this, false, ignoreChildren)
     }
     async runGenerator(generator: Generator<any, string, boolean>, beforeRun: (isFirst?:boolean) => any, afterRun: (isLast?:boolean) => any)   {
