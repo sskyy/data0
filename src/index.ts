@@ -1,11 +1,6 @@
-export {reactive, isReactive, rawStructureClone, toRaw, type UnwrapReactive} from './reactive'
 export {atom, isAtom, type AtomBase, type Atom} from './atom'
 export {
     computed,
-    arrayComputed,
-    objectComputed,
-    mapComputed,
-    setComputed,
     AtomComputed,
     type ComputedData,
     destroyComputed,
@@ -21,7 +16,6 @@ export {
 } from './computed'
 export * from './notify'
 export {TrackOpTypes, TriggerOpTypes} from "./operations";
-export * from './incremental'
 export {isReactivableType, replace} from './util'
 export {LinkedList} from './LinkedList'
 export {ReactiveEffect} from "./reactiveEffect.js";

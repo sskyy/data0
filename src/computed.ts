@@ -1,7 +1,6 @@
-import {createDebug, createDebugWithName, getDebugName,} from "./debug";
+import {getDebugName,} from "./debug";
 import {Notifier, TriggerInfo} from './notify'
-import {reactive, toRaw, toRawObject, UnwrapReactive} from './reactive'
-import {assert, isAsync, isGenerator, nextTick, replace, uuid, warn} from "./util";
+import {assert, isAsync, isGenerator, nextTick, uuid, warn} from "./util";
 import {Atom, atom, isAtom, isPrimitiveAtom} from "./atom";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {TrackOpTypes} from "./operations.js";
@@ -19,9 +18,7 @@ export type CallbacksType = {
 }
 
 
-export type ComputedResult<T extends GetterType> = ReturnType<T> extends object ? UnwrapReactive<ReturnType<T>> : Atom<ReturnType<T>>
-
-export type ComputedData<T = any> = Atom<T> | UnwrapReactive<T>
+export type ComputedData<T = any> = Atom<T> | T
 export type SimpleApplyPatchType<T> = (computedData: ComputedData, info: TriggerInfo[]) => any
 export type AsyncApplyPatchType<T> = (computedData: ComputedData, info: TriggerInfo[]) => Promise<any>
 export type GeneratorApplyPatchType<T> = (computedData: ComputedData, info: TriggerInfo[]) => Generator<any, string, boolean>
@@ -43,16 +40,16 @@ export type SkipIndicator = { skip: boolean }
 
 
 export function destroyComputed(computedItem: ComputedData) {
-    const internal = computedToInternal.get(toRawObject(computedItem))!
+    const internal = computedToInternal.get(computedItem)!
     ReactiveEffect.destroy(internal)
 }
 
 export function getComputedInternal(computedItem: ComputedData) {
-    return computedToInternal.get(toRawObject(computedItem))
+    return computedToInternal.get(computedItem)
 }
 
 export function setComputedRetainedDiagnosticSource(computedItem: ComputedData, source: string) {
-    const internal = computedToInternal.get(toRawObject(computedItem))
+    const internal = computedToInternal.get(computedItem)
     if (internal) setRetainedReactiveEffectSource(internal, source)
 }
 
@@ -141,23 +138,13 @@ export class Computed extends ReactiveEffect {
         scheduleRecompute?: DirtyCallback|true,
         public callbacks?: CallbacksType,
         public skipIndicator?: SkipIndicator,
-        public dataType: ComputedDataType = 'atom',
         public preventEffectSession = false
     ) {
         super(getter)
         markRetainedReactiveEffectKind(this, 'Computed', this.getRetainedDiagnosticSource())
         this.status = atom(typeof getter === 'function' ? STATUS_DIRTY : STATUS_CLEAN)
 
-        // 这是为了支持有的数据结构想写成 source/computed 都支持的情况，比如 RxList。它会继承 Computed
         if (!getter) return
-
-
-        this.data = this.dataType === 'atom' ?
-            atom(null) :
-            this.dataType === 'array' ? reactive([]) :
-            this.dataType === 'object' ? reactive({}) :
-            this.dataType === 'map' ? reactive(new Map()) :
-            reactive(new Set())
 
         this.isAsyncGetter = isAsync(getter)
         this.isGeneratorGetter = isGenerator(getter)
@@ -582,10 +569,9 @@ export class Computed extends ReactiveEffect {
     // 给继承者在 apply catch 中用的 工具函数
     manualTrack = (target: object, type: TrackOpTypes, key: unknown) => {
         Notifier.instance.enableTracking()
-        // CAUTION，为了方便手动 track 写法，这里会自动 toRaw，这样用户就不需要使用 toRaw 了。
         const dep = isPrimitiveAtom(target) && type === TrackOpTypes.ATOM && key === 'value'
             ? Notifier.instance.trackPrimitiveAtomValue(target)
-            : Notifier.instance.track(isAtom(target) ? target : toRaw(target), type, key)
+            : Notifier.instance.track(target, type, key)
         Notifier.instance.resetTracking()
         return dep
     }
@@ -619,28 +605,6 @@ export class Computed extends ReactiveEffect {
     }
 }
 
-// export function computed<T extends GetterType>(getter: T, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback, callbacks? : CallbacksType) : ComputedResult<T>
-export type ComputedDataType = 'atom'|'array'|'object'|'map'|'set'
-function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T
-function legacyComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator, dataType?: ComputedDataType): T {
-    const internal = new Computed(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, dataType)
-
-    internal.replaceData = function(newData: any) {
-        Notifier.instance.pauseTracking()
-        if (isAtom(this.data)) {
-            this.data(newData)
-        } else {
-            replace(this.data, newData)
-        }
-        Notifier.instance.resetTracking()
-    }
-
-    internal.run([], true)
-
-    computedToInternal.set(toRawObject(internal.data), internal)
-    return internal.data
-}
-
 /**
  * @category Basic
  */
@@ -650,25 +614,9 @@ export function computed<T>(getter: GetterType<T>, applyPatch?: ApplyPatchType<T
     return internal.data as Atom<T>
 }
 
-export function arrayComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return legacyComputed<UnwrapReactive<T[]>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'array')
-}
-
-export function objectComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return legacyComputed<UnwrapReactive<T>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'object')
-}
-
-export function mapComputed<K, V>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return legacyComputed<UnwrapReactive<Map<K, V>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'map')
-}
-
-export function setComputed<T>(getter: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-    return legacyComputed<UnwrapReactive<Set<T>>>(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'set')
-}
-
 export class AtomComputed extends Computed{
     constructor(getter?: GetterType, applyPatch?: ApplyPatchType, dirtyCallback?: DirtyCallback|true, callbacks?: CallbacksType, skipIndicator?: SkipIndicator) {
-        super(getter, applyPatch, dirtyCallback, callbacks, skipIndicator, 'atom')
+        super(getter, applyPatch, dirtyCallback, callbacks, skipIndicator)
         this.data = atom(null)
         this.run([], true)
     }
@@ -681,22 +629,19 @@ export class AtomComputed extends Computed{
     }
 }
 
-legacyComputed.as = createDebugWithName(legacyComputed)
-legacyComputed.debug = createDebug(legacyComputed)
-
 // 强制重算
 export function recompute(computedItem: ComputedData, force = false) {
-    const internal = computedToInternal.get(toRawObject(computedItem))!
+    const internal = computedToInternal.get(computedItem)!
     internal.recompute(force)
 }
 
 // 目前 debug 用的
 export function isComputed(target: any) {
-    return !!computedToInternal.get(toRawObject(target))
+    return !!computedToInternal.get(target)
 }
 
 // debug 时用的
 export function getComputedGetter(target: any) {
-    return computedToInternal.get(toRawObject(target))?.getter
+    return computedToInternal.get(target)?.getter
 }
 

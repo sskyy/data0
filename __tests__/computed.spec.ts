@@ -1,6 +1,5 @@
-import {arrayComputed, Computed, computed, destroyComputed, objectComputed, scheduleNextMicroTask} from "../src/computed";
+import {Computed, computed, destroyComputed, scheduleNextMicroTask} from "../src/computed";
 import {atom} from "../src/atom";
-import {reactive} from "../src/reactive";
 import {beforeEach, describe, expect, test} from "vitest";
 import {autorun, batch, ReactiveEffect} from "../src";
 
@@ -25,65 +24,6 @@ describe('computed basic', () => {
 
     })
 
-    test('reactive & computed', () => {
-        const x2 = reactive(Array(5).fill(0))
-        const c2 = arrayComputed(() => {
-            return x2.map(item => (item+1))
-        })
-        x2.unshift(1)
-        expect(c2.length).toBe(6)
-        expect(c2).toShallowMatchObject([2,1,1,1,1,1])
-    })
-
-
-    test('reactive leaf & computed', () => {
-        const data = reactive({
-            l1: 1,
-            l2: 2
-        })
-
-        const data2 = reactive( {
-            l1: 3,
-            l2: 4
-        })
-
-        const num = computed(() => data.l1 + data.l2 + data2.l1 + data2.l2)
-        expect(num).toShallowEqual(10)
-
-        data.l1 = 5
-        expect(num).toShallowEqual(14)
-
-        data2.l2 = 5
-        expect(num).toShallowEqual(15)
-
-    })
-
-    test('reactive leaf & object computed', () => {
-        const data = reactive({
-            l1: 1,
-            l2: 2
-        })
-
-        const data2 = reactive( {
-            l1: 3,
-            l2: 4
-        })
-
-        const num = objectComputed<{result:any}>(() => {
-            return {
-                result: data.l1 + data.l2 + data2.l1 + data2.l2
-            }
-        })
-
-        expect(num.result).toShallowEqual(10)
-
-        data.l1 = 5
-
-        expect(num.result).toShallowEqual(14)
-
-        data2.l2 = 5
-        expect(num.result).toShallowEqual(15)
-    })
 })
 
 describe('computed life cycle', () => {

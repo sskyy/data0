@@ -61,6 +61,15 @@ describe('RxMap', () => {
         expect(values.toArray()).toMatchObject([4])
     })
 
+    test('iterator yields each entry once in key-value order', () => {
+        const map = new RxMap<string, number>({a: 1, b: 2})
+        const iterator = map[Symbol.iterator]()
+
+        expect(iterator.next()).toEqual({value: ['a', 1], done: false})
+        expect(iterator.next()).toEqual({value: ['b', 2], done: false})
+        expect(iterator.next()).toEqual({done: true})
+    })
+
     test('chained computed', () => {
         const rawEdges = [
             {id: 1, from: '1', to: '2'},

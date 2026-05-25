@@ -15,7 +15,7 @@ export class RxSet<T> extends Computed {
         const source = typeof sourceOrGetter !== 'function' ? sourceOrGetter : undefined
 
         // 自己可能是 computed，也可能是最初的 reactive
-        super(getter, applyPatch, scheduleRecompute, callbacks, undefined, undefined)
+        super(getter, applyPatch, scheduleRecompute, callbacks)
         this.getter = getter
 
         // 自己是 source

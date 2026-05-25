@@ -44,7 +44,7 @@ describe('map and unshift', () => {
         c1.value
     })
 
-    bench('data0 incMap', () => {
+    bench('data0 RxList Map', () => {
         x3.unshift({value:0})
     })
 })

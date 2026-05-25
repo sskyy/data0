@@ -17,7 +17,7 @@ const nextJob = (run:(...args:[]) => any) => Promise.resolve().then(() => {
  * @category Miscellaneous
  */
 export function autorun(fn: (context: GetterContext) => any, scheduleRerun: DirtyCallback|true = nextJob) {
-    const instance = new Computed(fn, undefined, scheduleRerun, undefined, undefined, undefined, true)
+    const instance = new Computed(fn, undefined, scheduleRerun, undefined, undefined, true)
     instance.run([], true)
     // const instance = new Autorun(fn)
     return () => {
@@ -40,7 +40,7 @@ export function once(fn:() => any, scheduleRerun: DirtyCallback|true = nextJob) 
             //  不能正确完成 completeTracking。这会使得 dep 上的 n/w 计数无法正确清清除。
             nextJob(() => stopFn!())
         }
-    }, undefined, scheduleRerun, undefined, undefined, undefined, true)
+    }, undefined, scheduleRerun, undefined, undefined, true)
     // }, undefined, true, undefined, undefined, undefined, true)
 
     stopFn = () => {

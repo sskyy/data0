@@ -27,7 +27,7 @@ export class RxMap<K, V> extends Computed{
         const getter = typeof sourceOrGetter === 'function' ? sourceOrGetter as GetterType : undefined
         const source = typeof sourceOrGetter === 'function' ? undefined : sourceOrGetter
         // 自己可能是 computed，也可能是最初的 reactive
-        super(getter, applyPatch, scheduleRecompute, callbacks, skipIndicator, 'map')
+        super(getter, applyPatch, scheduleRecompute, callbacks, skipIndicator)
         this.getter = getter
         // 自己是 source
         if (source) {
@@ -140,8 +140,9 @@ export class RxMap<K, V> extends Computed{
             next: () => {
                 if (index < keys.length) {
                     // 转发到 at 上实现 track index
-                    const value = this.get(keys[index])
-                    return { value: [value, keys[index]], done: false };
+                    const key = keys[index++]
+                    const value = this.get(key)
+                    return { value: [key, value], done: false };
                 } else {
                     return { done: true };
                 }

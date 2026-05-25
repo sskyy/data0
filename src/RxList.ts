@@ -106,7 +106,7 @@ export class RxList<T> extends Computed {
         const source = typeof sourceOrGetter !== 'function' ? sourceOrGetter : undefined
 
         // 自己可能是 computed，也可能是最初的 reactive
-        super(getter, applyPatch, scheduleRecompute, callbacks, undefined, undefined)
+        super(getter, applyPatch, scheduleRecompute, callbacks)
         this.getter = getter
 
         // 自己是 source
@@ -1551,7 +1551,7 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxS
             if (deleteCount !== insertCount) {
                 const startIndex = argv![0] as number
 
-                const selectedValues = isAtom(currentValues) ? (currentValues.raw ? [currentValues.raw] : []) : [...currentValues.data]
+                const selectedValues = isAtom(currentValues) ? (currentValues.raw !== null ? [currentValues.raw] : []) : [...currentValues.data]
                 // 因为 index 产生了变化，所以要更新 indicator
                 selectedValues.forEach((value) => {
                     const index = value as number
@@ -1591,10 +1591,10 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxS
 
 
             (deleteItems as number[]).forEach((item) => {
-                list.data[item][1](false)
+                list.data[item]?.[1](false)
             })
             insertItems.forEach((item:number) => {
-                list.data[item][1](true)
+                list.data[item]?.[1](true)
             })
         }
     }
@@ -1614,7 +1614,7 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxS
                     assert(method === 'splice', 'currentValues can only support splice')
                     const newLength = source.data.length
                     if (isAtom(currentValues)) {
-                        if (currentValues.raw && currentValues.raw >= newLength) {
+                        if (currentValues.raw !== null && currentValues.raw >= newLength) {
                             currentValues(null)
                         }
                     } else {
@@ -1630,6 +1630,8 @@ export function createIndexKeySelection<T>(source: RxList<T>, currentValues: RxS
             true
         ) :
         undefined
+
+    autoResetValueEffect?.run([], true)
 
     return new RxList<[T, Atom<boolean>]>(
         function  computation(this: Computed) {

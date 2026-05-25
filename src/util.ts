@@ -1,5 +1,3 @@
-import {toRaw} from "./reactive";
-
 export function makeMap(
     str: string,
     expectsLowerCase?: boolean
@@ -226,7 +224,7 @@ export function uuid() {
 } // CAUTION 为了一般场景中的新能，不深度 replace!
 //  用户可以通过 computed 的再封装实现对某个 computed 结果的深度监听。
 export function replace(source: any, nextSourceValue: any) {
-    const rawSource = toRaw(source)
+    const rawSource = source
     if (Array.isArray(source)) {
         source.splice(0, Infinity, ...nextSourceValue)
     } else if (isPlainObject(source)) {

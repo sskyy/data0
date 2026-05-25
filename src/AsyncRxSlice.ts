@@ -71,7 +71,7 @@ export class AsyncRxSlice<T> extends RxList<T>{
     }
     destroy() {
         if (this.autoFetchPromise) {
-            destroyComputed(this.autoFetchPromise())
+            destroyComputed(this.autoFetchPromise)
         }
         super.destroy()
     }

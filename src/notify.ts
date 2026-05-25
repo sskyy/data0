@@ -1,7 +1,6 @@
 import {createCompactDep, createDep, Dep, newTracked, wasTracked} from "./dep";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import {Computed, getComputedInternal} from "./computed";
-import {toRaw} from "./reactive";
 import {assert, extend, isArray, isIntegerKey, isIntegerKeyQuick, toNumber} from "./util";
 import {ReactiveEffect} from "./reactiveEffect.js";
 import {
@@ -160,7 +159,7 @@ export class Notifier {
 
     if (!activeEffect || !this.shouldTrack) return
     if (__DEV__) {
-      assert(!(activeEffect instanceof Computed && target === toRaw(activeEffect.data)), 'should not read self in computed')
+      assert(!(activeEffect instanceof Computed && target === activeEffect.data), 'should not read self in computed')
     }
 
     const dep = this.getOrCreatePrimitiveAtomDep(target)
@@ -186,7 +185,7 @@ export class Notifier {
     if (!activeEffect || !this.shouldTrack) return
     // CAUTION 不能 track 自己。computed 在第二次执行的时候会有一个 replace 行为，会
     if (__DEV__) {
-      assert(!(activeEffect instanceof Computed && target ===toRaw(activeEffect.data)), 'should not read self in computed')
+      assert(!(activeEffect instanceof Computed && target === activeEffect.data), 'should not read self in computed')
     }
 
     // FIXME 对 async 的 reactive，要暂存，complete 的时候才确认。因为它是可以被打断重算的。

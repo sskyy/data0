@@ -7,7 +7,10 @@ export default defineConfig({
     },
     test: {
         include: ['__tests__/**/*.spec.ts'],
-        setupFiles: ['./setupVitestEnv.ts']
+        setupFiles: ['./setupVitestEnv.ts'],
+        coverage: {
+            include: ['src/**/*.ts'],
+        },
     },
     plugins: [tsconfigPaths()],
 })
